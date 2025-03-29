@@ -18,22 +18,37 @@ overlay.style.borderRadius = "10px";
 overlay.style.boxShadow = "0px 0px 10px rgba(0, 0, 0, 0.5)";
 overlay.style.backgroundImage = "url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg')";
 overlay.style.backgroundSize = "cover";
+overlay.style.backgroundPosition = "center";
 overlay.style.color = "white";
 overlay.style.fontFamily = "Arial, sans-serif";
 overlay.style.zIndex = "9999";
 overlay.style.display = "none";
-overlay.style.overflow = "auto"; // Permitir rolagem caso o conteúdo seja grande
+overlay.style.overflow = "hidden";
+overlay.style.backgroundColor = "rgba(0, 0, 0, 0.7)"; // Fundo semi-transparente para melhor contraste
+
+// Criar conteúdo do overlay
+const content = document.createElement("div");
+content.style.position = "relative";
+content.style.zIndex = "10";
+content.style.textAlign = "center";
+overlay.appendChild(content);
 
 document.body.appendChild(overlay);
 
-// Criar botão flutuante
+// Criar botão flutuante com imagem de fundo
 const floatingButton = document.createElement("div");
-floatingButton.innerHTML = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/240px-User-avatar.svg.png' width='50' height='50' style='border-radius: 50%; border: 2px solid white;'>";
+floatingButton.style.width = "60px";
+floatingButton.style.height = "60px";
+floatingButton.style.borderRadius = "50%";
+floatingButton.style.border = "2px solid white";
 floatingButton.style.position = "fixed";
 floatingButton.style.bottom = "20px";
 floatingButton.style.right = "20px";
 floatingButton.style.cursor = "pointer";
 floatingButton.style.zIndex = "9999";
+floatingButton.style.backgroundImage = "url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg')";
+floatingButton.style.backgroundSize = "cover";
+floatingButton.style.backgroundPosition = "center";
 
 document.body.appendChild(floatingButton);
 
@@ -60,7 +75,7 @@ async function gerarPrevisao() {
 
 async function atualizarJanela() {
     const previsao = await gerarPrevisao();
-    overlay.innerHTML = `
+    content.innerHTML = `
         <h3>Status do Jogo</h3>
         <p id='resultado'>Carregando...</p>
         <h4>Previsão para esta rodada:</h4>
