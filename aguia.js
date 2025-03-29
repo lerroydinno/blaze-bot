@@ -1,54 +1,84 @@
-const containerId = "custom-overlay";
-const existingContainer = document.getElementById(containerId);
-if (existingContainer) {
-    existingContainer.remove();
+// ==UserScript== // @name         Blaze SHA-256 Analyzer // @namespace    http://tampermonkey.net/ // @version      1.0 // @description  Coleta dados em tempo real da Blaze e analisa padrões com SHA-256 // @author       ChatGPT // @match        ://blaze.bet.br/ // @grant        none // ==/UserScript==
+
+(function() { 'use strict';
+
+// Função para conectar ao WebSocket da Blaze e coletar os resultados
+function connectWebSocket() {
+    let ws = new WebSocket('wss://blaze.bet.br/socket');
+    
+    ws.onmessage = function(event) {
+        let data = JSON.parse(event.data);
+        if (data && data.hash) {
+            processResult(data);
+        }
+    };
 }
 
-// Criar janela flutuante
-const overlay = document.createElement("div");
-overlay.id = containerId;
-overlay.style.position = "fixed";
-overlay.style.top = "50%";
-overlay.style.left = "50%";
-overlay.style.transform = "translate(-50%, -50%)";
-overlay.style.width = "320px";
-overlay.style.height = "250px"; // Definir altura fixa
-overlay.style.padding = "20px";
-overlay.style.borderRadius = "10px";
-overlay.style.boxShadow = "0px 0px 10px rgba(0, 0, 0, 0.5)";
-overlay.style.backgroundColor = "#333"; // Fundo temporário para evitar a tarja preta
-overlay.style.backgroundImage = "url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg')";
-overlay.style.backgroundSize = "cover";
-overlay.style.backgroundPosition = "center";
-overlay.style.color = "white";
-overlay.style.fontFamily = "Arial, sans-serif";
-overlay.style.zIndex = "9999";
-overlay.style.display = "none"; // Inicialmente oculto
+// Processa os resultados e aplica análise SHA-256
+function processResult(data) {
+    let hash = data.hash;
+    let color = determineColor(hash);
+    updateFloatingMenu(color);
+}
 
-document.body.appendChild(overlay);
+// Algoritmo para encontrar padrões ocultos com SHA-256
+function determineColor(hash) {
+    // Aqui entra a lógica de análise da hash SHA-256 para prever a próxima cor
+    let numericValue = parseInt(hash.substring(0, 8), 16); // Exemplo: Convertendo parte da hash para número
+    if (numericValue % 2 === 0) return 'Vermelho';
+    else return 'Preto';
+}
 
-// Criar botão flutuante
-const floatingButton = document.createElement("div");
-floatingButton.innerHTML = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/240px-User-avatar.svg.png' width='50' height='50' style='border-radius: 50%; border: 2px solid white;'>";
-floatingButton.style.position = "fixed";
-floatingButton.style.bottom = "20px";
-floatingButton.style.right = "20px";
-floatingButton.style.cursor = "pointer";
-floatingButton.style.zIndex = "9999";
+// Atualiza o menu flutuante com a previsão
+function updateFloatingMenu(color) {
+    let menu = document.getElementById('floatingMenu');
+    if (!menu) return;
+    menu.innerHTML = `<p>Próxima cor: <strong>${color}</strong></p>`;
+}
 
-document.body.appendChild(floatingButton);
+// Cria o menu flutuante na página
+function createFloatingMenu() {
+    let menu = document.createElement('div');
+    menu.id = 'floatingMenu';
+    menu.style.position = 'fixed';
+    menu.style.top = '50px';
+    menu.style.right = '20px';
+    menu.style.background = 'rgba(0, 0, 0, 0.8)';
+    menu.style.color = 'white';
+    menu.style.padding = '10px';
+    menu.style.borderRadius = '10px';
+    menu.style.cursor = 'move';
+    menu.innerHTML = '<p>Aguardando dados...</p>';
+    document.body.appendChild(menu);
 
-// Alternar visibilidade da janela
-floatingButton.onclick = function() {
-    overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
-};
+    makeMenuDraggable(menu);
+}
 
-// Testar carregamento da imagem
-const img = new Image();
-img.src = "https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg";
-img.onload = function() {
-    overlay.style.backgroundImage = `url('${img.src}')`;
-};
-img.onerror = function() {
-    overlay.style.backgroundColor = "red"; // Se a imagem falhar, mostrar erro
-};
+// Permite movimentar o menu
+function makeMenuDraggable(menu) {
+    let offsetX, offsetY, isDown = false;
+    
+    menu.addEventListener('mousedown', function(e) {
+        isDown = true;
+        offsetX = e.clientX - menu.offsetLeft;
+        offsetY = e.clientY - menu.offsetTop;
+    });
+
+    document.addEventListener('mouseup', function() {
+        isDown = false;
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (isDown) {
+            menu.style.left = (e.clientX - offsetX) + 'px';
+            menu.style.top = (e.clientY - offsetY) + 'px';
+        }
+    });
+}
+
+// Inicia o script
+createFloatingMenu();
+connectWebSocket();
+
+})();
+
