@@ -24,13 +24,15 @@ overlay.style.fontFamily = "Arial, sans-serif";
 overlay.style.zIndex = "9999";
 overlay.style.display = "none";
 overlay.style.overflow = "hidden";
-overlay.style.backgroundColor = "rgba(0, 0, 0, 0.7)"; // Fundo semi-transparente para melhor contraste
 
-// Criar conteúdo do overlay
+// Criar container interno para conteúdo
 const content = document.createElement("div");
 content.style.position = "relative";
 content.style.zIndex = "10";
 content.style.textAlign = "center";
+content.style.background = "rgba(0, 0, 0, 0.7)";
+content.style.padding = "15px";
+content.style.borderRadius = "10px";
 overlay.appendChild(content);
 
 document.body.appendChild(overlay);
