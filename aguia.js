@@ -11,8 +11,8 @@ overlay.style.position = "fixed";
 overlay.style.top = "50%";
 overlay.style.left = "50%";
 overlay.style.transform = "translate(-50%, -50%)";
-overlay.style.width = "400px"; // Aumentado para 400px
-overlay.style.height = "300px"; // Definindo altura fixa
+overlay.style.width = "400px";
+overlay.style.height = "300px";
 overlay.style.padding = "20px";
 overlay.style.borderRadius = "10px";
 overlay.style.boxShadow = "0px 0px 10px rgba(0, 0, 0, 0.5)";
@@ -22,6 +22,7 @@ overlay.style.color = "white";
 overlay.style.fontFamily = "Arial, sans-serif";
 overlay.style.zIndex = "9999";
 overlay.style.display = "none";
+overlay.style.overflow = "auto"; // Permitir rolagem caso o conteúdo seja grande
 
 document.body.appendChild(overlay);
 
@@ -39,6 +40,9 @@ document.body.appendChild(floatingButton);
 // Alternar visibilidade da janela
 floatingButton.onclick = function() {
     overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
+    if (overlay.style.display === "block") {
+        atualizarJanela();
+    }
 };
 
 async function gerarPrevisao() {
@@ -78,5 +82,3 @@ async function atualizarResultado() {
     
     document.getElementById("resultado").innerHTML = `<div style='padding: 10px; background: ${ganhou ? "green" : "red"}; color: white; text-align: center; border-radius: 5px;'>${ganhou ? "GANHOU! 🎉" : "PERDEU! ❌"}</div>`;
 }
-
-atualizarJanela();
