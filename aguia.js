@@ -11,7 +11,8 @@ overlay.style.position = "fixed";
 overlay.style.top = "50%";
 overlay.style.left = "50%";
 overlay.style.transform = "translate(-50%, -50%)";
-overlay.style.width = "320px";
+overlay.style.width = "400px"; // Aumentado para 400px
+overlay.style.height = "300px"; // Definindo altura fixa
 overlay.style.padding = "20px";
 overlay.style.borderRadius = "10px";
 overlay.style.boxShadow = "0px 0px 10px rgba(0, 0, 0, 0.5)";
@@ -20,7 +21,7 @@ overlay.style.backgroundSize = "cover";
 overlay.style.color = "white";
 overlay.style.fontFamily = "Arial, sans-serif";
 overlay.style.zIndex = "9999";
-overlay.style.display = "none"; // Inicialmente oculto
+overlay.style.display = "none";
 
 document.body.appendChild(overlay);
 
@@ -40,7 +41,6 @@ floatingButton.onclick = function() {
     overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
 };
 
-// Lógica de previsão usando SHA-256
 async function gerarPrevisao() {
     const response = await fetch("https://blaze.bet/api/double/recent");
     const data = await response.json();
@@ -49,7 +49,7 @@ async function gerarPrevisao() {
     const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(lastRoll.toString()));
     const hashArray = Array.from(new Uint8Array(hash));
     const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    const prediction = parseInt(hashHex.substring(0, 2), 16) % 3; // 0 = vermelho, 1 = preto, 2 = branco
+    const prediction = parseInt(hashHex.substring(0, 2), 16) % 3;
 
     return prediction === 0 ? "Vermelho" : prediction === 1 ? "Preto" : "Branco";
 }
@@ -63,7 +63,7 @@ async function atualizarJanela() {
         <div style='text-align:center; font-size: 20px; padding: 10px; border-radius: 5px; background: ${previsao === "Branco" ? "white" : previsao.toLowerCase()}; color: ${previsao === "Branco" ? "black" : "white"};'>${previsao}</div>
         <button id='gerarPrevisao' style='width: 100%; padding: 10px; margin-top: 10px; background: blue; color: white; border: none; border-radius: 5px; cursor: pointer;'>Gerar Nova Previsão</button>
     `;
-
+    
     document.getElementById('gerarPrevisao').onclick = atualizarJanela;
     setTimeout(atualizarResultado, 5000);
 }
