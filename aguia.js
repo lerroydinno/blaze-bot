@@ -1,126 +1,106 @@
-(async function() {
-    const containerId = "custom-overlay";
-    const existingContainer = document.getElementById(containerId);
-    if (existingContainer) {
-        existingContainer.remove();
-    }
+(async function() { const containerId = "custom-overlay"; const existingContainer = document.getElementById(containerId); if (existingContainer) { existingContainer.remove(); }
 
-    // Criar janela flutuante com imagem de fundo
-    const overlay = document.createElement("div");
-    overlay.id = containerId;
-    overlay.style.position = "fixed";
-    overlay.style.top = "50%";
-    overlay.style.left = "50%";
-    overlay.style.transform = "translate(-50%, -50%)";
-    overlay.style.width = "350px";
-    overlay.style.height = "400px";
-    overlay.style.padding = "20px";
-    overlay.style.borderRadius = "10px";
-    overlay.style.boxShadow = "0px 0px 15px rgba(0, 0, 0, 0.7)";
-    overlay.style.background = "url('https://example.com/background.jpg') no-repeat center center";
-    overlay.style.backgroundSize = "cover";
-    overlay.style.color = "white";
-    overlay.style.fontFamily = "Arial, sans-serif";
-    overlay.style.zIndex = "9999";
-    overlay.style.textAlign = "center";
-    overlay.style.display = "none";
-    document.body.appendChild(overlay);
+// Criar janela flutuante com imagem de fundo
+const overlay = document.createElement("div");
+overlay.id = containerId;
+Object.assign(overlay.style, {
+    position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+    width: "350px", height: "400px", padding: "20px", borderRadius: "10px",
+    boxShadow: "0px 0px 15px rgba(0, 0, 0, 0.7)", background: "#222",
+    color: "white", fontFamily: "Arial, sans-serif", zIndex: "9999",
+    textAlign: "center", display: "none"
+});
+document.body.appendChild(overlay);
 
-    // Criar botão movível
-    const floatingButton = document.createElement("div");
-    floatingButton.innerHTML = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/240px-User-avatar.svg.png' width='50' height='50' style='border-radius: 50%; border: 2px solid white;'>";
-    floatingButton.style.position = "fixed";
-    floatingButton.style.bottom = "20px";
-    floatingButton.style.right = "20px";
-    floatingButton.style.cursor = "pointer";
-    floatingButton.style.zIndex = "9999";
-    document.body.appendChild(floatingButton);
+// Criar botão flutuante
+const floatingButton = document.createElement("div");
+floatingButton.innerHTML = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/240px-User-avatar.svg.png' width='50' height='50' style='border-radius: 50%; border: 2px solid white;'>";
+Object.assign(floatingButton.style, {
+    position: "fixed", bottom: "20px", right: "20px", cursor: "pointer", zIndex: "9999"
+});
+document.body.appendChild(floatingButton);
 
-    floatingButton.addEventListener("click", function() {
-        overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
+floatingButton.addEventListener("click", () => {
+    overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
+});
+
+// Criar displays
+function createDisplay(size, fontSize, bgColor) {
+    const div = document.createElement("div");
+    Object.assign(div.style, {
+        margin: "10px auto", width: size, height: size, lineHeight: size,
+        borderRadius: "50%", fontSize, color: "white", fontWeight: "bold",
+        backgroundColor: bgColor
     });
+    div.textContent = "-";
+    overlay.appendChild(div);
+    return div;
+}
 
-    // Exibir resultado em tempo real
-    const resultadoDisplay = document.createElement("div");
-    resultadoDisplay.style.margin = "10px auto";
-    resultadoDisplay.style.width = "50px";
-    resultadoDisplay.style.height = "50px";
-    resultadoDisplay.style.lineHeight = "50px";
-    resultadoDisplay.style.borderRadius = "50%";
-    resultadoDisplay.style.fontSize = "18px";
-    resultadoDisplay.style.color = "white";
-    resultadoDisplay.style.fontWeight = "bold";
-    resultadoDisplay.style.backgroundColor = "gray";
-    resultadoDisplay.textContent = "-";
-    overlay.appendChild(resultadoDisplay);
+const resultadoDisplay = createDisplay("50px", "18px", "gray");
+const previsaoDisplay = createDisplay("80px", "20px", "gray");
 
-    // Exibir previsão
-    const previsaoDisplay = document.createElement("div");
-    previsaoDisplay.style.margin = "10px auto";
-    previsaoDisplay.style.width = "80px";
-    previsaoDisplay.style.height = "80px";
-    previsaoDisplay.style.lineHeight = "80px";
-    previsaoDisplay.style.borderRadius = "50%";
-    previsaoDisplay.style.fontSize = "20px";
-    previsaoDisplay.style.color = "white";
-    previsaoDisplay.style.fontWeight = "bold";
-    previsaoDisplay.style.backgroundColor = "gray";
-    previsaoDisplay.textContent = "-";
-    overlay.appendChild(previsaoDisplay);
+// Criar botão para gerar previsão
+const generateButton = document.createElement("button");
+generateButton.textContent = "Gerar Nova Previsão";
+Object.assign(generateButton.style, {
+    width: "100%", padding: "10px", border: "none", borderRadius: "5px",
+    backgroundColor: "#007bff", color: "white", fontSize: "16px",
+    cursor: "pointer", marginTop: "10px"
+});
+overlay.appendChild(generateButton);
 
-    // Botão para gerar previsão
-    const generateButton = document.createElement("button");
-    generateButton.textContent = "Gerar Nova Previsão";
-    generateButton.style.width = "100%";
-    generateButton.style.padding = "10px";
-    generateButton.style.border = "none";
-    generateButton.style.borderRadius = "5px";
-    generateButton.style.backgroundColor = "#007bff";
-    generateButton.style.color = "white";
-    generateButton.style.fontSize = "16px";
-    generateButton.style.cursor = "pointer";
-    generateButton.style.marginTop = "10px";
-    overlay.appendChild(generateButton);
+// Criar display de porcentagem
+const porcentagemDisplay = document.createElement("div");
+Object.assign(porcentagemDisplay.style, {
+    marginTop: "10px", fontSize: "16px", fontWeight: "bold"
+});
+porcentagemDisplay.textContent = "Chance: -";
+overlay.appendChild(porcentagemDisplay);
 
-    let historicoResultados = [];
-    async function carregarHistorico() {
+let historicoResultados = [];
+
+async function carregarHistorico() {
+    try {
         const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743397349837.csv");
+        if (!response.ok) throw new Error("Falha ao carregar histórico");
         const text = await response.text();
-        historicoResultados = text.split("\n").slice(-50).map(linha => linha.split(",")[1]);
+        historicoResultados = text.split("\n").slice(-50).map(linha => linha.split(",")[1] || "").filter(Boolean);
+    } catch (err) {
+        console.error("Erro ao carregar histórico:", err);
     }
-    await carregarHistorico();
+}
+await carregarHistorico();
 
-    async function coletarDados() {
-        let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white");
-        let resultados = [...elementos].map(e => e.textContent.trim());
-    
-        console.log("📊 Resultados Capturados:", resultados);
-    
-        if (resultados.length > 0) {
-            let resultadoAtual = resultados[0];
-            resultadoDisplay.textContent = resultadoAtual;
-            historicoResultados.push(resultadoAtual);
-            if (historicoResultados.length > 50) historicoResultados.shift();
-    
-            let elementoEncontrado = elementos[0];
-            if (elementoEncontrado.classList.contains("black")) {
-                resultadoDisplay.style.backgroundColor = "black";
-            } else if (elementoEncontrado.classList.contains("red")) {
-                resultadoDisplay.style.backgroundColor = "red";
-            } else {
-                resultadoDisplay.style.backgroundColor = "white";
-            }
-        }
+async function coletarDados() {
+    const elemento = document.querySelector(".sm-box.black, .sm-box.red, .sm-box.white");
+    if (elemento) {
+        let resultadoAtual = elemento.textContent.trim();
+        resultadoDisplay.textContent = resultadoAtual;
+        resultadoDisplay.style.backgroundColor = elemento.classList.contains("black") ? "black" : elemento.classList.contains("red") ? "red" : "white";
+        historicoResultados.push(resultadoAtual);
+        if (historicoResultados.length > 50) historicoResultados.shift();
     }
+}
 
-    async function gerarPrevisao() {
-        let padrao = historicoResultados.slice(-5).join("-");
-        let ocorrencias = historicoResultados.filter(h => h === padrao).length;
-        let corPrevisao = ocorrencias > 1 ? historicoResultados[historicoResultados.length - 1] : (Math.random() < 0.5 ? "Vermelho" : "Preto");
-        previsaoDisplay.textContent = corPrevisao;
-        previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : (corPrevisao === "Preto" ? "black" : "white");
+function gerarPrevisao() {
+    if (historicoResultados.length < 5) {
+        previsaoDisplay.textContent = "N/A";
+        previsaoDisplay.style.backgroundColor = "gray";
+        porcentagemDisplay.textContent = "Chance: -";
+        return;
     }
+    let ultimos5 = historicoResultados.slice(-5).join("-");
+    let ocorrencias = historicoResultados.filter(h => h === ultimos5).length;
+    let probabilidade = ((ocorrencias / historicoResultados.length) * 100).toFixed(2);
+    let corPrevisao = ocorrencias > 1 ? historicoResultados[historicoResultados.length - 1] : (Math.random() < 0.55 ? "Vermelho" : "Preto");
+    previsaoDisplay.textContent = corPrevisao;
+    previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : "black";
+    porcentagemDisplay.textContent = `Chance: ${probabilidade}%`;
+}
 
-    generateButton.addEventListener("click", gerarPrevisao);
-    setInterval(coletarDados, 5000);
+generateButton.addEventListener("click", gerarPrevisao);
+setInterval(coletarDados, 5000);
+
 })();
+
