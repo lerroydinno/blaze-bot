@@ -41,10 +41,11 @@
     generateButton.style.fontSize = "16px";
     generateButton.style.cursor = "pointer";
 
-    generateButton.onclick = async function() {
+    // Adicionar evento ao botão de previsão
+    generateButton.addEventListener("click", async function() {
         const previsao = await gerarPrevisao();
         alert(`Previsão gerada: ${previsao}`);
-    };
+    });
 
     overlay.appendChild(generateButton);
     document.body.appendChild(overlay);
@@ -61,9 +62,9 @@
     document.body.appendChild(floatingButton);
 
     // Alternar visibilidade da janela
-    floatingButton.onclick = function() {
+    floatingButton.addEventListener("click", function() {
         overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
-    };
+    });
 
     // Função para coletar dados da Blaze
     async function coletarDadosBlaze() {
@@ -98,12 +99,30 @@
             padroes.push({ hash, sha256 });
         }
 
-        return aplicarAnaliseAvancada(padroes);
+        return analisarPadroes(padroes);
     }
 
-    // Função de análise avançada
-    function aplicarAnaliseAvancada(padroes) {
-        // Simples lógica para teste
-        return padroes.length % 2 === 0 ? "Vermelho" : "Preto"; 
+    // Função de análise avançada incluindo previsão do branco
+    function analisarPadroes(padroes) {
+        let contadorBranco = 0;
+        let contadorVermelho = 0;
+        let contadorPreto = 0;
+
+        padroes.forEach((p, index) => {
+            if (p.sha256.endsWith("0000")) {
+                contadorBranco++;
+            } else if (parseInt(p.sha256.slice(-1), 16) % 2 === 0) {
+                contadorPreto++;
+            } else {
+                contadorVermelho++;
+            }
+        });
+
+        // Probabilidade do branco
+        if (contadorBranco / padroes.length >= 0.05) {
+            return "Branco";
+        }
+
+        return contadorPreto > contadorVermelho ? "Preto" : "Vermelho";
     }
 })();
