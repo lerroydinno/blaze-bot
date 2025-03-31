@@ -1,110 +1,119 @@
-(async function() { const containerId = "custom-overlay"; const existingContainer = document.getElementById(containerId); if (existingContainer) existingContainer.remove();
-
-// Criar janela flutuante
-const overlay = document.createElement("div");
-overlay.id = containerId;
-Object.assign(overlay.style, {
-    position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-    width: "400px", height: "450px", padding: "20px", borderRadius: "10px",
-    boxShadow: "0px 0px 15px rgba(0, 0, 0, 0.7)", background: "#222",
-    color: "white", fontFamily: "Arial, sans-serif", zIndex: "9999",
-    textAlign: "center", display: "none"
-});
-document.body.appendChild(overlay);
-
-// Criar botão flutuante
-const floatingButton = document.createElement("div");
-floatingButton.innerHTML = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/240px-User-avatar.svg.png' width='50' height='50' style='border-radius: 50%; border: 2px solid white;'>";
-Object.assign(floatingButton.style, {
-    position: "fixed", bottom: "20px", right: "20px", cursor: "pointer", zIndex: "9999"
-});
-document.body.appendChild(floatingButton);
-floatingButton.addEventListener("click", () => {
-    overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
-});
-
-// Criar displays
-function createDisplay(size, fontSize, bgColor) {
-    const div = document.createElement("div");
-    Object.assign(div.style, {
-        margin: "10px auto", width: size, height: size, lineHeight: size,
-        borderRadius: "50%", fontSize, color: "white", fontWeight: "bold",
-        backgroundColor: bgColor
-    });
-    div.textContent = "-";
-    overlay.appendChild(div);
-    return div;
-}
-
-const resultadoDisplay = createDisplay("50px", "18px", "gray");
-const previsaoDisplay = createDisplay("80px", "20px", "gray");
-
-// Criar botão para gerar previsão
-const generateButton = document.createElement("button");
-generateButton.textContent = "Gerar Nova Previsão";
-Object.assign(generateButton.style, {
-    width: "100%", padding: "10px", border: "none", borderRadius: "5px",
-    backgroundColor: "#007bff", color: "white", fontSize: "16px",
-    cursor: "pointer", marginTop: "10px"
-});
-overlay.appendChild(generateButton);
-
-// Criar display de porcentagem
-const porcentagemDisplay = document.createElement("div");
-Object.assign(porcentagemDisplay.style, {
-    marginTop: "10px", fontSize: "16px", fontWeight: "bold"
-});
-porcentagemDisplay.textContent = "Chance: -";
-overlay.appendChild(porcentagemDisplay);
-
-let historicoResultados = [];
-
-async function carregarHistorico() {
-    try {
-        const response = await fetch("https://www.tipminer.com/br/historico/blaze/double");
-        const text = await response.text();
-        const matches = text.match(/<td class='.*?'>(\d+)<\/td>/g);
-        historicoResultados = matches ? matches.slice(-1000).map(m => m.replace(/<.*?>/g, '')) : [];
-    } catch (err) {
-        console.error("Erro ao carregar histórico:", err);
-    }
-}
-await carregarHistorico();
-
-function sha256(input) {
-    return crypto.subtle.digest("SHA-256", new TextEncoder().encode(input))
-        .then(hashBuffer => {
-            return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
-        });
-}
-
-async function gerarPrevisao() {
-    if (historicoResultados.length < 50) {
-        previsaoDisplay.textContent = "N/A";
-        previsaoDisplay.style.backgroundColor = "gray";
-        porcentagemDisplay.textContent = "Chance: -";
-        return;
+(async function() {
+    const containerId = "custom-overlay";
+    const existingContainer = document.getElementById(containerId);
+    if (existingContainer) {
+        existingContainer.remove();
     }
 
-    let ultimosResultados = historicoResultados.slice(-100);
-    let contagem = { "Preto": 0, "Vermelho": 0, "Branco": 0 };
-    ultimosResultados.forEach(cor => {
-        if (cor in contagem) contagem[cor]++;
+    // Criar janela flutuante
+    const overlay = document.createElement("div");
+    overlay.id = containerId;
+    overlay.style.position = "fixed";
+    overlay.style.top = "50%";
+    overlay.style.left = "50%";
+    overlay.style.transform = "translate(-50%, -50%)";
+    overlay.style.width = "320px";
+    overlay.style.height = "250px";
+    overlay.style.padding = "20px";
+    overlay.style.borderRadius = "10px";
+    overlay.style.boxShadow = "0px 0px 10px rgba(0, 0, 0, 0.5)";
+    overlay.style.backgroundColor = "#333";
+    overlay.style.color = "white";
+    overlay.style.fontFamily = "Arial, sans-serif";
+    overlay.style.zIndex = "9999";
+    overlay.style.display = "none";
+
+    // Criar botão "Gerar Previsão"
+    const generateButton = document.createElement("button");
+    generateButton.textContent = "Gerar Previsão";
+    generateButton.style.position = "absolute";
+    generateButton.style.bottom = "10px";
+    generateButton.style.left = "50%";
+    generateButton.style.transform = "translateX(-50%)";
+    generateButton.style.padding = "10px 20px";
+    generateButton.style.border = "none";
+    generateButton.style.borderRadius = "5px";
+    generateButton.style.backgroundColor = "#ff4500";
+    generateButton.style.color = "white";
+    generateButton.style.fontSize = "16px";
+    generateButton.style.cursor = "pointer";
+
+    // Adicionar evento ao botão de previsão
+    generateButton.addEventListener("click", async function() {
+        const previsao = await gerarPrevisao();
+        alert(`Previsão gerada: ${previsao}`);
     });
-    
-    let total = ultimosResultados.length;
-    let probabilidadePreto = ((contagem["Preto"] / total) * 100).toFixed(2);
-    let probabilidadeVermelho = ((contagem["Vermelho"] / total) * 100).toFixed(2);
-    let probabilidadeBranco = ((contagem["Branco"] / total) * 100).toFixed(2);
 
-    let hashAtual = await sha256(ultimosResultados.join(""));
-    let corPrevisao = Object.keys(contagem).reduce((a, b) => (contagem[a] > contagem[b] ? a : b));
-    previsaoDisplay.textContent = corPrevisao;
-    previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : corPrevisao === "Preto" ? "black" : "white";
-    porcentagemDisplay.textContent = `Preto: ${probabilidadePreto}% | Vermelho: ${probabilidadeVermelho}% | Branco: ${probabilidadeBranco}% | Hash: ${hashAtual.substring(0, 8)}`;
-}
+    overlay.appendChild(generateButton);
+    document.body.appendChild(overlay);
 
-generateButton.addEventListener("click", gerarPrevisao);
+    // Criar botão flutuante
+    const floatingButton = document.createElement("div");
+    floatingButton.innerHTML = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/240px-User-avatar.svg.png' width='50' height='50' style='border-radius: 50%; border: 2px solid white;'>";
+    floatingButton.style.position = "fixed";
+    floatingButton.style.bottom = "20px";
+    floatingButton.style.right = "20px";
+    floatingButton.style.cursor = "pointer";
+    floatingButton.style.zIndex = "9999";
 
+    document.body.appendChild(floatingButton);
+
+    // Alternar visibilidade da janela
+    floatingButton.addEventListener("click", function() {
+        overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
+    });
+
+    // Função para coletar os últimos resultados direto do HTML
+    function coletarDadosBlaze() {
+        try {
+            let resultados = [];
+            let elementos = document.querySelectorAll(".sm-box.history-item"); // Classe correta para os últimos resultados
+
+            elementos.forEach(el => {
+                let numero = el.textContent.trim();
+                resultados.push(numero);
+            });
+
+            return resultados.slice(0, 10); // Pegamos os últimos 10 números
+        } catch (error) {
+            console.error("Erro ao coletar dados da Blaze:", error);
+            return [];
+        }
+    }
+
+    // Função para calcular SHA-256
+    async function calcularSHA256(texto) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(texto);
+        const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+        return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    // Função para gerar previsão
+    async function gerarPrevisao() {
+        const dados = coletarDadosBlaze();
+        if (!dados || dados.length === 0) return "Erro ao obter dados";
+
+        let padroes = [];
+
+        for (const numero of dados) {
+            const sha256 = await calcularSHA256(numero);
+            padroes.push({ numero, sha256 });
+        }
+
+        return aplicarAnaliseAvancada(padroes);
+    }
+
+    // Função de análise avançada incluindo o branco
+    function aplicarAnaliseAvancada(padroes) {
+        const ultimoHash = padroes[padroes.length - 1].sha256;
+
+        // Verifica se o SHA-256 segue um padrão que pode indicar branco
+        if (ultimoHash.endsWith("00") || ultimoHash.endsWith("ff")) {
+            return "Branco";
+        }
+
+        // Simples lógica baseada na paridade do hash
+        return parseInt(ultimoHash.charAt(0), 16) % 2 === 0 ? "Vermelho" : "Preto";
+    }
 })();
-
