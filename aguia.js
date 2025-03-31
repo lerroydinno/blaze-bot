@@ -23,7 +23,9 @@
     overlay.style.fontFamily = "Arial, sans-serif";
     overlay.style.zIndex = "9999";
     overlay.style.textAlign = "center";
-    overlay.style.display = "none";
+    overlay.style.display = "block"; // Garante que a janela flutuante seja visível
+
+    document.body.appendChild(overlay);
 
     // Criar botão movível
     const floatingButton = document.createElement("div");
@@ -54,7 +56,7 @@
     overlay.appendChild(resultadoDisplay);
 
     async function coletarDados() {
-        let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white"); // Inclui a classe para Branco
+        let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white"); // Inclui o branco
         let resultados = [...elementos].map(e => e.textContent.trim());
     
         console.log("📊 Resultados Capturados:", resultados); // Log para depuração
@@ -71,7 +73,7 @@
                 resultadoDisplay.style.backgroundColor = "red";
             } else if (elementoEncontrado.classList.contains("white")) {
                 resultadoDisplay.style.backgroundColor = "white";
-                resultadoDisplay.style.color = "black"; // Ajusta a cor do texto para contraste
+                resultadoDisplay.style.color = "black"; // Ajusta cor do texto para visibilidade
             }
         }
     }
