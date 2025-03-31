@@ -89,11 +89,12 @@
     });
 
     async function coletarDados() {
-        let elementos = document.querySelectorAll(".sm-box.history-item");
+        let elementos = document.querySelectorAll(".div.number"); // Atualize conforme necessário
         let resultados = [...elementos].map(e => e.textContent.trim());
         if (resultados.length > 0) {
-            resultadoDisplay.textContent = resultados[0];
-            resultadoDisplay.style.backgroundColor = "red";
+            let resultadoAtual = resultados[0];
+            resultadoDisplay.textContent = resultadoAtual;
+            resultadoDisplay.style.backgroundColor = parseInt(resultadoAtual) % 2 === 0 ? "red" : "black";
         }
     }
 
