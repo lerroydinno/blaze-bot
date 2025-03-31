@@ -53,36 +53,8 @@
     resultadoDisplay.textContent = "-";
     overlay.appendChild(resultadoDisplay);
 
-    // Exibir previsão
-    const previsaoDisplay = document.createElement("div");
-    previsaoDisplay.style.margin = "10px auto";
-    previsaoDisplay.style.width = "80px";
-    previsaoDisplay.style.height = "80px";
-    previsaoDisplay.style.lineHeight = "80px";
-    previsaoDisplay.style.borderRadius = "50%";
-    previsaoDisplay.style.fontSize = "20px";
-    previsaoDisplay.style.color = "white";
-    previsaoDisplay.style.fontWeight = "bold";
-    previsaoDisplay.style.backgroundColor = "gray";
-    previsaoDisplay.textContent = "-";
-    overlay.appendChild(previsaoDisplay);
-
-    // Botão para gerar previsão
-    const generateButton = document.createElement("button");
-    generateButton.textContent = "Gerar Nova Previsão";
-    generateButton.style.width = "100%";
-    generateButton.style.padding = "10px";
-    generateButton.style.border = "none";
-    generateButton.style.borderRadius = "5px";
-    generateButton.style.backgroundColor = "#007bff";
-    generateButton.style.color = "white";
-    generateButton.style.fontSize = "16px";
-    generateButton.style.cursor = "pointer";
-    generateButton.style.marginTop = "10px";
-    overlay.appendChild(generateButton);
-
     async function coletarDados() {
-        let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red"); // Seleciona os números visíveis
+        let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white"); // Inclui a classe para Branco
         let resultados = [...elementos].map(e => e.textContent.trim());
     
         console.log("📊 Resultados Capturados:", resultados); // Log para depuração
@@ -97,28 +69,12 @@
                 resultadoDisplay.style.backgroundColor = "black";
             } else if (elementoEncontrado.classList.contains("red")) {
                 resultadoDisplay.style.backgroundColor = "red";
-            } else {
-                resultadoDisplay.style.backgroundColor = "white"; // Para casos de Branco
+            } else if (elementoEncontrado.classList.contains("white")) {
+                resultadoDisplay.style.backgroundColor = "white";
+                resultadoDisplay.style.color = "black"; // Ajusta a cor do texto para contraste
             }
         }
     }
 
-    async function calcularSHA256(texto) {
-        const encoder = new TextEncoder();
-        const data = encoder.encode(texto);
-        const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-        return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
-    }
-
-    async function gerarPrevisao() {
-        let resultadoHash = await calcularSHA256(resultadoDisplay.textContent);
-        let corPrevisao = resultadoHash.endsWith("00") ? "Branco" : (Math.random() < 0.6 ? "Vermelho" : "Preto");
-        previsaoDisplay.textContent = corPrevisao;
-        previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : corPrevisao === "Preto" ? "black" : "white";
-    }
-
-    generateButton.addEventListener("click", gerarPrevisao);
-
-    document.body.appendChild(overlay);
     setInterval(coletarDados, 5000);
 })();
