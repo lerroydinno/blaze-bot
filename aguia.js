@@ -81,8 +81,6 @@
     generateButton.style.marginTop = "10px";
     overlay.appendChild(generateButton);
 
-    generateButton.addEventListener("click", gerarPrevisao);
-
     async function coletarDados() {
         let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red"); // Seleciona os números visíveis
         let resultados = [...elementos].map(e => e.textContent.trim());
@@ -105,11 +103,21 @@
         }
     }
 
-    async function gerarPrevisao() {
-        let corPrevisao = Math.random() < 0.5 ? "Vermelho" : "Preto";
-        previsaoDisplay.textContent = corPrevisao;
-        previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : "black";
+    async function calcularSHA256(texto) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(texto);
+        const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+        return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
     }
+
+    async function gerarPrevisao() {
+        let resultadoHash = await calcularSHA256(resultadoDisplay.textContent);
+        let corPrevisao = resultadoHash.endsWith("00") ? "Branco" : (Math.random() < 0.6 ? "Vermelho" : "Preto");
+        previsaoDisplay.textContent = corPrevisao;
+        previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : corPrevisao === "Preto" ? "black" : "white";
+    }
+
+    generateButton.addEventListener("click", gerarPrevisao);
 
     document.body.appendChild(overlay);
     setInterval(coletarDados, 5000);
