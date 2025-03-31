@@ -73,11 +73,11 @@ async function carregarHistorico() {
 await carregarHistorico();
 
 async function coletarDados() {
-    const elemento = document.querySelector(".sm-box.black, .sm-box.red, .sm-box.white");
-    if (elemento) {
-        let resultadoAtual = elemento.textContent.trim();
+    const elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white");
+    if (elementos.length > 0) {
+        let resultadoAtual = elementos[0].textContent.trim();
         resultadoDisplay.textContent = resultadoAtual;
-        resultadoDisplay.style.backgroundColor = elemento.classList.contains("black") ? "black" : elemento.classList.contains("red") ? "red" : "white";
+        resultadoDisplay.style.backgroundColor = elementos[0].classList.contains("black") ? "black" : elementos[0].classList.contains("red") ? "red" : "white";
         historicoResultados.push(resultadoAtual);
         if (historicoResultados.length > 50) historicoResultados.shift();
     }
@@ -90,14 +90,19 @@ function gerarPrevisao() {
         porcentagemDisplay.textContent = "Chance: -";
         return;
     }
-    let ultimos5 = historicoResultados.slice(-5).join("-");
-    let ocorrencias = historicoResultados.filter(h => h === historicoResultados[historicoResultados.length - 1]).length;
-    let probabilidade = ((ocorrencias / historicoResultados.length) * 100).toFixed(2);
-    let cores = ["Vermelho", "Preto", "Branco"];
-    let corPrevisao = ocorrencias > 1 ? historicoResultados[historicoResultados.length - 1] : cores[Math.floor(Math.random() * cores.length)];
+    let ultimosResultados = historicoResultados.slice(-10);
+    let contagem = { "Preto": 0, "Vermelho": 0, "Branco": 0 };
+    ultimosResultados.forEach(cor => {
+        if (cor in contagem) contagem[cor]++;
+    });
+    let total = ultimosResultados.length;
+    let probabilidadePreto = ((contagem["Preto"] / total) * 100).toFixed(2);
+    let probabilidadeVermelho = ((contagem["Vermelho"] / total) * 100).toFixed(2);
+    let probabilidadeBranco = ((contagem["Branco"] / total) * 100).toFixed(2);
+    let corPrevisao = Object.keys(contagem).reduce((a, b) => (contagem[a] > contagem[b] ? a : b));
     previsaoDisplay.textContent = corPrevisao;
     previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : corPrevisao === "Preto" ? "black" : "white";
-    porcentagemDisplay.textContent = `Chance: ${probabilidade}%`;
+    porcentagemDisplay.textContent = `Preto: ${probabilidadePreto}% | Vermelho: ${probabilidadeVermelho}% | Branco: ${probabilidadeBranco}%`;
 }
 
 generateButton.addEventListener("click", gerarPrevisao);
