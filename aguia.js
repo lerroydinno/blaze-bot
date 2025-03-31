@@ -1,11 +1,11 @@
-(async function() { const containerId = "custom-overlay"; const existingContainer = document.getElementById(containerId); if (existingContainer) { existingContainer.remove(); }
+(async function() { const containerId = "custom-overlay"; const existingContainer = document.getElementById(containerId); if (existingContainer) existingContainer.remove();
 
-// Criar janela flutuante com imagem de fundo
+// Criar janela flutuante
 const overlay = document.createElement("div");
 overlay.id = containerId;
 Object.assign(overlay.style, {
     position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-    width: "350px", height: "400px", padding: "20px", borderRadius: "10px",
+    width: "400px", height: "450px", padding: "20px", borderRadius: "10px",
     boxShadow: "0px 0px 15px rgba(0, 0, 0, 0.7)", background: "#222",
     color: "white", fontFamily: "Arial, sans-serif", zIndex: "9999",
     textAlign: "center", display: "none"
@@ -19,7 +19,6 @@ Object.assign(floatingButton.style, {
     position: "fixed", bottom: "20px", right: "20px", cursor: "pointer", zIndex: "9999"
 });
 document.body.appendChild(floatingButton);
-
 floatingButton.addEventListener("click", () => {
     overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
 });
@@ -62,51 +61,50 @@ let historicoResultados = [];
 
 async function carregarHistorico() {
     try {
-        const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743397349837.csv");
-        if (!response.ok) throw new Error("Falha ao carregar histórico");
+        const response = await fetch("https://www.tipminer.com/br/historico/blaze/double");
         const text = await response.text();
-        historicoResultados = text.split("\n").slice(-50).map(linha => linha.split(",")[1] || "").filter(Boolean);
+        const matches = text.match(/<td class='.*?'>(\d+)<\/td>/g);
+        historicoResultados = matches ? matches.slice(-1000).map(m => m.replace(/<.*?>/g, '')) : [];
     } catch (err) {
         console.error("Erro ao carregar histórico:", err);
     }
 }
 await carregarHistorico();
 
-async function coletarDados() {
-    const elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white");
-    if (elementos.length > 0) {
-        let resultadoAtual = elementos[0].textContent.trim();
-        resultadoDisplay.textContent = resultadoAtual;
-        resultadoDisplay.style.backgroundColor = elementos[0].classList.contains("black") ? "black" : elementos[0].classList.contains("red") ? "red" : "white";
-        historicoResultados.push(resultadoAtual);
-        if (historicoResultados.length > 50) historicoResultados.shift();
-    }
+function sha256(input) {
+    return crypto.subtle.digest("SHA-256", new TextEncoder().encode(input))
+        .then(hashBuffer => {
+            return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+        });
 }
 
-function gerarPrevisao() {
-    if (historicoResultados.length < 5) {
+async function gerarPrevisao() {
+    if (historicoResultados.length < 50) {
         previsaoDisplay.textContent = "N/A";
         previsaoDisplay.style.backgroundColor = "gray";
         porcentagemDisplay.textContent = "Chance: -";
         return;
     }
-    let ultimosResultados = historicoResultados.slice(-10);
+
+    let ultimosResultados = historicoResultados.slice(-100);
     let contagem = { "Preto": 0, "Vermelho": 0, "Branco": 0 };
     ultimosResultados.forEach(cor => {
         if (cor in contagem) contagem[cor]++;
     });
+    
     let total = ultimosResultados.length;
     let probabilidadePreto = ((contagem["Preto"] / total) * 100).toFixed(2);
     let probabilidadeVermelho = ((contagem["Vermelho"] / total) * 100).toFixed(2);
     let probabilidadeBranco = ((contagem["Branco"] / total) * 100).toFixed(2);
+
+    let hashAtual = await sha256(ultimosResultados.join(""));
     let corPrevisao = Object.keys(contagem).reduce((a, b) => (contagem[a] > contagem[b] ? a : b));
     previsaoDisplay.textContent = corPrevisao;
     previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : corPrevisao === "Preto" ? "black" : "white";
-    porcentagemDisplay.textContent = `Preto: ${probabilidadePreto}% | Vermelho: ${probabilidadeVermelho}% | Branco: ${probabilidadeBranco}%`;
+    porcentagemDisplay.textContent = `Preto: ${probabilidadePreto}% | Vermelho: ${probabilidadeVermelho}% | Branco: ${probabilidadeBranco}% | Hash: ${hashAtual.substring(0, 8)}`;
 }
 
 generateButton.addEventListener("click", gerarPrevisao);
-setInterval(coletarDados, 5000);
 
 })();
 
