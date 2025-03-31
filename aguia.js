@@ -63,18 +63,21 @@
         overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
     });
 
+    // Armazena o histórico dos resultados
+    let historico = [];
+
     // Função para coletar os últimos resultados direto do HTML
     function coletarDadosBlaze() {
         try {
             let resultados = [];
-            let elementos = document.querySelectorAll(".sm-box.history-item"); // Classe correta para os últimos resultados
+            let elementos = document.querySelectorAll(".sm-box.history-item"); // Seleciona os últimos números
 
             elementos.forEach(el => {
                 let numero = el.textContent.trim();
                 resultados.push(numero);
             });
 
-            return resultados.slice(0, 10); // Pegamos os últimos 10 números
+            return resultados.slice(0, 20); // Pegamos os últimos 20 números
         } catch (error) {
             console.error("Erro ao coletar dados da Blaze:", error);
             return [];
@@ -89,14 +92,16 @@
         return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
     }
 
-    // Função para gerar previsão
-    async function gerarPrevisao() {
+    // Função para analisar padrões no histórico
+    async function analisarPadroes() {
         const dados = coletarDadosBlaze();
-        if (!dados || dados.length === 0) return "Erro ao obter dados";
+        if (dados.length === 0) return "Erro ao obter dados";
+
+        // Atualiza o histórico sem duplicar
+        historico = [...new Set([...dados, ...historico])].slice(0, 50);
 
         let padroes = [];
-
-        for (const numero of dados) {
+        for (const numero of historico) {
             const sha256 = await calcularSHA256(numero);
             padroes.push({ numero, sha256 });
         }
@@ -116,4 +121,16 @@
         // Simples lógica baseada na paridade do hash
         return parseInt(ultimoHash.charAt(0), 16) % 2 === 0 ? "Vermelho" : "Preto";
     }
+
+    // Função para gerar previsão
+    async function gerarPrevisao() {
+        return await analisarPadroes();
+    }
+
+    // Atualizar os dados automaticamente a cada 10 segundos
+    setInterval(async () => {
+        console.log("🔄 Atualizando dados...");
+        await gerarPrevisao();
+    }, 10000);
+
 })();
