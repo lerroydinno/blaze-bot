@@ -1,10 +1,10 @@
+// Criar a janela flutuante
 const containerId = "custom-overlay";
 const existingContainer = document.getElementById(containerId);
 if (existingContainer) {
     existingContainer.remove();
 }
 
-// Criar janela flutuante
 const overlay = document.createElement("div");
 overlay.id = containerId;
 overlay.style.position = "fixed";
@@ -16,7 +16,6 @@ overlay.style.height = "250px";
 overlay.style.padding = "20px";
 overlay.style.borderRadius = "10px";
 overlay.style.boxShadow = "0px 0px 10px rgba(0, 0, 0, 0.5)";
-overlay.style.backgroundColor = "#333";
 overlay.style.backgroundImage = "url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg')";
 overlay.style.backgroundSize = "cover";
 overlay.style.backgroundPosition = "center";
@@ -24,7 +23,6 @@ overlay.style.color = "white";
 overlay.style.fontFamily = "Arial, sans-serif";
 overlay.style.zIndex = "9999";
 overlay.style.display = "none";
-overlay.style.cursor = "move"; // Define o cursor de movimentação
 
 // Criar botão "Gerar Previsão"
 const generateButton = document.createElement("button");
@@ -41,9 +39,9 @@ generateButton.style.color = "white";
 generateButton.style.fontSize = "16px";
 generateButton.style.cursor = "pointer";
 
-// Adicionar função ao botão
-generateButton.onclick = function() {
-    alert("Previsão gerada! (A lógica de previsão deve ser implementada aqui)");
+generateButton.onclick = async function() {
+    const previsao = await gerarPrevisao();
+    alert(`Previsão gerada: ${previsao}`);
 };
 
 overlay.appendChild(generateButton);
@@ -57,7 +55,6 @@ floatingButton.style.bottom = "20px";
 floatingButton.style.right = "20px";
 floatingButton.style.cursor = "pointer";
 floatingButton.style.zIndex = "9999";
-floatingButton.style.cursor = "move"; // Permitir movimentação
 
 document.body.appendChild(floatingButton);
 
@@ -66,41 +63,41 @@ floatingButton.onclick = function() {
     overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
 };
 
-// Testar carregamento da imagem do avatar
-const avatarImg = new Image();
-avatarImg.src = "https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/240px-User-avatar.svg.png";
-avatarImg.onload = function() {
-    floatingButton.innerHTML = `<img src="${avatarImg.src}" width="50" height="50" style="border-radius: 50%; border: 2px solid white;">`;
-};
-avatarImg.onerror = function() {
-    console.error("Erro ao carregar imagem do avatar.");
-};
-
-// Função para permitir movimentação de um elemento
-function makeDraggable(element) {
-    let offsetX = 0, offsetY = 0, isDragging = false;
-
-    element.addEventListener("mousedown", function(e) {
-        isDragging = true;
-        offsetX = e.clientX - element.getBoundingClientRect().left;
-        offsetY = e.clientY - element.getBoundingClientRect().top;
-        element.style.zIndex = "10000"; // Coloca o elemento na frente
-    });
-
-    document.addEventListener("mousemove", function(e) {
-        if (isDragging) {
-            element.style.left = `${e.clientX - offsetX}px`;
-            element.style.top = `${e.clientY - offsetY}px`;
-            element.style.transform = "none"; // Remove o translate para posicionar corretamente
-        }
-    });
-
-    document.addEventListener("mouseup", function() {
-        isDragging = false;
-        element.style.zIndex = "9999"; // Volta ao nível normal
-    });
+// Função para coletar dados em tempo real da Blaze e capturar hashes
+async function coletarDadosBlaze() {
+    try {
+        const response = await fetch('https://api.blaze.com/v1/endpoint'); // Ajuste conforme necessário
+        const data = await response.json();
+        return data.map(jogo => jogo.hash);
+    } catch (error) {
+        console.error("Erro ao coletar dados da Blaze:", error);
+        return [];
+    }
 }
 
-// Tornar a janela flutuante e o botão arrastáveis
-makeDraggable(overlay);
-makeDraggable(floatingButton);
+// Função para calcular SHA-256\async function calcularSHA256(texto) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(texto);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Função para gerar previsão baseada nos hashes
+async function gerarPrevisao() {
+    const hashes = await coletarDadosBlaze();
+    if (hashes.length === 0) return "Erro ao coletar dados.";
+    
+    let padroes = [];
+    for (const hash of hashes) {
+        const sha256 = await calcularSHA256(hash);
+        padroes.push(sha256);
+    }
+    
+    return aplicarAnaliseAvancada(padroes);
+}
+
+// Função de análise avançada
+function aplicarAnaliseAvancada(padroes) {
+    // Aqui você pode implementar lógica, probabilidade e tendência
+    return padroes[Math.floor(Math.random() * padroes.length)]; // Exemplo simples
+}
