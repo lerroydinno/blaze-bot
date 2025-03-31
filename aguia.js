@@ -23,8 +23,7 @@
     overlay.style.fontFamily = "Arial, sans-serif";
     overlay.style.zIndex = "9999";
     overlay.style.textAlign = "center";
-    overlay.style.display = "block"; // Garante que a janela flutuante seja visível
-
+    overlay.style.display = "none";
     document.body.appendChild(overlay);
 
     // Criar botão movível
@@ -55,6 +54,34 @@
     resultadoDisplay.textContent = "-";
     overlay.appendChild(resultadoDisplay);
 
+    // Exibir previsão
+    const previsaoDisplay = document.createElement("div");
+    previsaoDisplay.style.margin = "10px auto";
+    previsaoDisplay.style.width = "80px";
+    previsaoDisplay.style.height = "80px";
+    previsaoDisplay.style.lineHeight = "80px";
+    previsaoDisplay.style.borderRadius = "50%";
+    previsaoDisplay.style.fontSize = "20px";
+    previsaoDisplay.style.color = "white";
+    previsaoDisplay.style.fontWeight = "bold";
+    previsaoDisplay.style.backgroundColor = "gray";
+    previsaoDisplay.textContent = "-";
+    overlay.appendChild(previsaoDisplay);
+
+    // Botão para gerar previsão
+    const generateButton = document.createElement("button");
+    generateButton.textContent = "Gerar Nova Previsão";
+    generateButton.style.width = "100%";
+    generateButton.style.padding = "10px";
+    generateButton.style.border = "none";
+    generateButton.style.borderRadius = "5px";
+    generateButton.style.backgroundColor = "#007bff";
+    generateButton.style.color = "white";
+    generateButton.style.fontSize = "16px";
+    generateButton.style.cursor = "pointer";
+    generateButton.style.marginTop = "10px";
+    overlay.appendChild(generateButton);
+
     async function coletarDados() {
         let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white"); // Inclui o branco
         let resultados = [...elementos].map(e => e.textContent.trim());
@@ -73,10 +100,18 @@
                 resultadoDisplay.style.backgroundColor = "red";
             } else if (elementoEncontrado.classList.contains("white")) {
                 resultadoDisplay.style.backgroundColor = "white";
-                resultadoDisplay.style.color = "black"; // Ajusta cor do texto para visibilidade
+                resultadoDisplay.style.color = "black"; // Ajustar cor do texto
             }
         }
     }
+
+    generateButton.addEventListener("click", function() {
+        let cores = ["Vermelho", "Preto", "Branco"];
+        let corPrevisao = cores[Math.floor(Math.random() * cores.length)];
+        previsaoDisplay.textContent = corPrevisao;
+        previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : corPrevisao === "Preto" ? "black" : "white";
+        previsaoDisplay.style.color = corPrevisao === "Branco" ? "black" : "white";
+    });
 
     setInterval(coletarDados, 5000);
 })();
