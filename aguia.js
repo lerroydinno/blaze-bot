@@ -91,11 +91,12 @@ function gerarPrevisao() {
         return;
     }
     let ultimos5 = historicoResultados.slice(-5).join("-");
-    let ocorrencias = historicoResultados.filter(h => h === ultimos5).length;
+    let ocorrencias = historicoResultados.filter(h => h === historicoResultados[historicoResultados.length - 1]).length;
     let probabilidade = ((ocorrencias / historicoResultados.length) * 100).toFixed(2);
-    let corPrevisao = ocorrencias > 1 ? historicoResultados[historicoResultados.length - 1] : (Math.random() < 0.55 ? "Vermelho" : "Preto");
+    let cores = ["Vermelho", "Preto", "Branco"];
+    let corPrevisao = ocorrencias > 1 ? historicoResultados[historicoResultados.length - 1] : cores[Math.floor(Math.random() * cores.length)];
     previsaoDisplay.textContent = corPrevisao;
-    previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : "black";
+    previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : corPrevisao === "Preto" ? "black" : "white";
     porcentagemDisplay.textContent = `Chance: ${probabilidade}%`;
 }
 
