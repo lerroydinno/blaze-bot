@@ -25,6 +25,8 @@
     overlay.style.textAlign = "center";
     overlay.style.display = "none";
 
+    document.body.appendChild(overlay);
+
     // Criar botão movível
     const floatingButton = document.createElement("div");
     floatingButton.innerHTML = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/240px-User-avatar.svg.png' width='50' height='50' style='border-radius: 50%; border: 2px solid white;'>";
@@ -54,10 +56,10 @@
     overlay.appendChild(resultadoDisplay);
 
     async function coletarDados() {
-        let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red"); // Seleciona os números visíveis
+        let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white"); // Seleciona os números visíveis
         let resultados = [...elementos].map(e => e.textContent.trim());
     
-        console.log("\ud83d\udcca Resultados Capturados:", resultados); // Log para depuração
+        console.log("📊 Resultados Capturados:", resultados); // Log para depuração
     
         if (resultados.length > 0) {
             let resultadoAtual = resultados[0];
@@ -69,8 +71,9 @@
                 resultadoDisplay.style.backgroundColor = "black";
             } else if (elementoEncontrado.classList.contains("red")) {
                 resultadoDisplay.style.backgroundColor = "red";
-            } else {
-                resultadoDisplay.style.backgroundColor = "white"; // Para casos de Branco
+            } else if (elementoEncontrado.classList.contains("white")) {
+                resultadoDisplay.style.backgroundColor = "white";
+                resultadoDisplay.style.color = "black"; // Ajustar a cor do texto para visibilidade
             }
         }
     }
