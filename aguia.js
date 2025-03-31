@@ -24,9 +24,9 @@
     overlay.style.textAlign = "center";
     overlay.style.display = "none";
 
-    // Adicionar status do jogo
+    // Status do Jogo
     const statusText = document.createElement("p");
-    statusText.innerHTML = "<strong>Status do Jogo</strong><br>Completo";
+    statusText.innerHTML = "<strong>Status do Jogo</strong>";
     statusText.style.fontSize = "18px";
     overlay.appendChild(statusText);
 
@@ -39,8 +39,8 @@
     resultadoDisplay.style.fontSize = "18px";
     resultadoDisplay.style.color = "white";
     resultadoDisplay.style.fontWeight = "bold";
-    resultadoDisplay.style.backgroundColor = "red";
-    resultadoDisplay.textContent = "1";
+    resultadoDisplay.style.backgroundColor = "gray";
+    resultadoDisplay.textContent = "-";
     overlay.appendChild(resultadoDisplay);
 
     const previsaoText = document.createElement("p");
@@ -56,15 +56,10 @@
     previsaoDisplay.style.fontSize = "20px";
     previsaoDisplay.style.color = "white";
     previsaoDisplay.style.fontWeight = "bold";
-    previsaoDisplay.style.backgroundColor = "red";
-    previsaoDisplay.textContent = "Vermelho";
+    previsaoDisplay.style.backgroundColor = "gray";
+    previsaoDisplay.textContent = "-";
     overlay.appendChild(previsaoDisplay);
 
-    const assertividadeText = document.createElement("p");
-    assertividadeText.textContent = "Assertividade: 99.99%";
-    overlay.appendChild(assertividadeText);
-
-    // Criar botão "Gerar Nova Previsão"
     const generateButton = document.createElement("button");
     generateButton.textContent = "Gerar Nova Previsão";
     generateButton.style.width = "100%";
@@ -77,20 +72,6 @@
     generateButton.style.cursor = "pointer";
     generateButton.style.marginTop = "10px";
     overlay.appendChild(generateButton);
-
-    // Criar botão "Ganhou!"
-    const winButton = document.createElement("button");
-    winButton.textContent = "GANHOU! 🎉";
-    winButton.style.width = "100%";
-    winButton.style.padding = "10px";
-    winButton.style.border = "none";
-    winButton.style.borderRadius = "5px";
-    winButton.style.backgroundColor = "#28a745";
-    winButton.style.color = "white";
-    winButton.style.fontSize = "16px";
-    winButton.style.cursor = "pointer";
-    winButton.style.marginTop = "10px";
-    overlay.appendChild(winButton);
 
     document.body.appendChild(overlay);
 
@@ -106,4 +87,23 @@
     floatingButton.addEventListener("click", function() {
         overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
     });
+
+    async function coletarDados() {
+        let elementos = document.querySelectorAll(".sm-box.history-item");
+        let resultados = [...elementos].map(e => e.textContent.trim());
+        if (resultados.length > 0) {
+            resultadoDisplay.textContent = resultados[0];
+            resultadoDisplay.style.backgroundColor = "red";
+        }
+    }
+
+    async function gerarPrevisao() {
+        let corPrevisao = Math.random() < 0.5 ? "Vermelho" : "Preto";
+        previsaoDisplay.textContent = corPrevisao;
+        previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : "black";
+    }
+
+    generateButton.addEventListener("click", gerarPrevisao);
+
+    setInterval(coletarDados, 5000);
 })();
