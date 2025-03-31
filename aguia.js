@@ -18,9 +18,6 @@
     overlay.style.borderRadius = "10px";
     overlay.style.boxShadow = "0px 0px 10px rgba(0, 0, 0, 0.5)";
     overlay.style.backgroundColor = "#333";
-    overlay.style.backgroundImage = "url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg')";
-    overlay.style.backgroundSize = "cover";
-    overlay.style.backgroundPosition = "center";
     overlay.style.color = "white";
     overlay.style.fontFamily = "Arial, sans-serif";
     overlay.style.zIndex = "9999";
@@ -66,12 +63,18 @@
         overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
     });
 
-    // Função para coletar dados da Blaze
-    async function coletarDadosBlaze() {
+    // Função para coletar os últimos resultados direto do HTML
+    function coletarDadosBlaze() {
         try {
-            const response = await fetch("https://api.blaze.com/v1/endpoint"); // Substituir pelo endpoint correto
-            const data = await response.json();
-            return data;
+            let resultados = [];
+            let elementos = document.querySelectorAll(".sm-box.history-item"); // Classe correta para os últimos resultados
+
+            elementos.forEach(el => {
+                let numero = el.textContent.trim();
+                resultados.push(numero);
+            });
+
+            return resultados.slice(0, 10); // Pegamos os últimos 10 números
         } catch (error) {
             console.error("Erro ao coletar dados da Blaze:", error);
             return [];
@@ -88,41 +91,29 @@
 
     // Função para gerar previsão
     async function gerarPrevisao() {
-        const dados = await coletarDadosBlaze();
+        const dados = coletarDadosBlaze();
         if (!dados || dados.length === 0) return "Erro ao obter dados";
 
-        const hashes = dados.map(jogo => jogo.hash);
         let padroes = [];
 
-        for (const hash of hashes) {
-            const sha256 = await calcularSHA256(hash);
-            padroes.push({ hash, sha256 });
+        for (const numero of dados) {
+            const sha256 = await calcularSHA256(numero);
+            padroes.push({ numero, sha256 });
         }
 
-        return analisarPadroes(padroes);
+        return aplicarAnaliseAvancada(padroes);
     }
 
-    // Função de análise avançada incluindo previsão do branco
-    function analisarPadroes(padroes) {
-        let contadorBranco = 0;
-        let contadorVermelho = 0;
-        let contadorPreto = 0;
+    // Função de análise avançada incluindo o branco
+    function aplicarAnaliseAvancada(padroes) {
+        const ultimoHash = padroes[padroes.length - 1].sha256;
 
-        padroes.forEach((p, index) => {
-            if (p.sha256.endsWith("0000")) {
-                contadorBranco++;
-            } else if (parseInt(p.sha256.slice(-1), 16) % 2 === 0) {
-                contadorPreto++;
-            } else {
-                contadorVermelho++;
-            }
-        });
-
-        // Probabilidade do branco
-        if (contadorBranco / padroes.length >= 0.05) {
+        // Verifica se o SHA-256 segue um padrão que pode indicar branco
+        if (ultimoHash.endsWith("00") || ultimoHash.endsWith("ff")) {
             return "Branco";
         }
 
-        return contadorPreto > contadorVermelho ? "Preto" : "Vermelho";
+        // Simples lógica baseada na paridade do hash
+        return parseInt(ultimoHash.charAt(0), 16) % 2 === 0 ? "Vermelho" : "Preto";
     }
 })();
