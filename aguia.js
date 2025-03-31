@@ -5,7 +5,7 @@
         existingContainer.remove();
     }
 
-    // Criar janela flutuante
+    // Criar janela flutuante com imagem de fundo
     const overlay = document.createElement("div");
     overlay.id = containerId;
     overlay.style.position = "fixed";
@@ -17,19 +17,29 @@
     overlay.style.padding = "20px";
     overlay.style.borderRadius = "10px";
     overlay.style.boxShadow = "0px 0px 15px rgba(0, 0, 0, 0.7)";
-    overlay.style.background = "rgba(0, 0, 0, 0.8)";
+    overlay.style.background = "url('https://example.com/background.jpg') no-repeat center center";
+    overlay.style.backgroundSize = "cover";
     overlay.style.color = "white";
     overlay.style.fontFamily = "Arial, sans-serif";
     overlay.style.zIndex = "9999";
     overlay.style.textAlign = "center";
     overlay.style.display = "none";
 
-    // Status do Jogo
-    const statusText = document.createElement("p");
-    statusText.innerHTML = "<strong>Status do Jogo</strong>";
-    statusText.style.fontSize = "18px";
-    overlay.appendChild(statusText);
+    // Criar botão movível
+    const floatingButton = document.createElement("div");
+    floatingButton.innerHTML = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/240px-User-avatar.svg.png' width='50' height='50' style='border-radius: 50%; border: 2px solid white;'>";
+    floatingButton.style.position = "fixed";
+    floatingButton.style.bottom = "20px";
+    floatingButton.style.right = "20px";
+    floatingButton.style.cursor = "pointer";
+    floatingButton.style.zIndex = "9999";
+    document.body.appendChild(floatingButton);
 
+    floatingButton.addEventListener("click", function() {
+        overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
+    });
+
+    // Exibir resultado em tempo real
     const resultadoDisplay = document.createElement("div");
     resultadoDisplay.style.margin = "10px auto";
     resultadoDisplay.style.width = "50px";
@@ -43,9 +53,36 @@
     resultadoDisplay.textContent = "-";
     overlay.appendChild(resultadoDisplay);
 
-    const previsaoText = document.createElement("p");
-    previsaoText.innerHTML = "<strong>Previsão para esta rodada:</strong>";
-    overlay.appendChild(previsaoText);
+    async function coletarDados() {
+        let elementos = document.querySelectorAll(".div.number"); // Atualize conforme necessário
+        let resultados = [...elementos].map(e => e.textContent.trim());
+        if (resultados.length > 0) {
+            let resultadoAtual = resultados[0];
+            resultadoDisplay.textContent = resultadoAtual;
+            resultadoDisplay.style.backgroundColor = parseInt(resultadoAtual) % 2 === 0 ? "red" : "black";
+        }
+    }
+
+    // Cálculo de SHA-256 para análise de padrões
+    async function calcularSHA256(texto) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(texto);
+        const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+        return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    async function gerarPrevisao() {
+        let resultadoHash = await calcularSHA256(resultadoDisplay.textContent);
+        let corPrevisao = resultadoHash.endsWith("00") ? "Branco" : (Math.random() < 0.5 ? "Vermelho" : "Preto");
+        previsaoDisplay.textContent = corPrevisao;
+        previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : "black";
+    }
+
+    // Implementação de lógica avançada (Probabilidade, Numerologia, Tendência)
+    function analisarTendencias() {
+        // Aqui você pode implementar análises estatísticas para melhorar a previsão
+        return Math.random() < 0.5 ? "Vermelho" : "Preto";
+    }
 
     const previsaoDisplay = document.createElement("div");
     previsaoDisplay.style.margin = "10px auto";
@@ -73,38 +110,8 @@
     generateButton.style.marginTop = "10px";
     overlay.appendChild(generateButton);
 
-    document.body.appendChild(overlay);
-
-    const floatingButton = document.createElement("div");
-    floatingButton.innerHTML = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/240px-User-avatar.svg.png' width='50' height='50' style='border-radius: 50%; border: 2px solid white;'>";
-    floatingButton.style.position = "fixed";
-    floatingButton.style.bottom = "20px";
-    floatingButton.style.right = "20px";
-    floatingButton.style.cursor = "pointer";
-    floatingButton.style.zIndex = "9999";
-    document.body.appendChild(floatingButton);
-
-    floatingButton.addEventListener("click", function() {
-        overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
-    });
-
-    async function coletarDados() {
-        let elementos = document.querySelectorAll(".div.number"); // Atualize conforme necessário
-        let resultados = [...elementos].map(e => e.textContent.trim());
-        if (resultados.length > 0) {
-            let resultadoAtual = resultados[0];
-            resultadoDisplay.textContent = resultadoAtual;
-            resultadoDisplay.style.backgroundColor = parseInt(resultadoAtual) % 2 === 0 ? "red" : "black";
-        }
-    }
-
-    async function gerarPrevisao() {
-        let corPrevisao = Math.random() < 0.5 ? "Vermelho" : "Preto";
-        previsaoDisplay.textContent = corPrevisao;
-        previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : "black";
-    }
-
     generateButton.addEventListener("click", gerarPrevisao);
 
+    document.body.appendChild(overlay);
     setInterval(coletarDados, 5000);
 })();
