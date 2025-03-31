@@ -1,4 +1,4 @@
-(async function() {
+(async function () {
     const containerId = "custom-overlay";
     const existingContainer = document.getElementById(containerId);
     if (existingContainer) {
@@ -12,8 +12,8 @@
     overlay.style.top = "50%";
     overlay.style.left = "50%";
     overlay.style.transform = "translate(-50%, -50%)";
-    overlay.style.width = "320px";
-    overlay.style.height = "250px";
+    overlay.style.width = "350px";
+    overlay.style.height = "300px";
     overlay.style.padding = "20px";
     overlay.style.borderRadius = "10px";
     overlay.style.boxShadow = "0px 0px 10px rgba(0, 0, 0, 0.5)";
@@ -22,6 +22,20 @@
     overlay.style.fontFamily = "Arial, sans-serif";
     overlay.style.zIndex = "9999";
     overlay.style.display = "none";
+
+    // Criar botão de fechar (X)
+    const closeButton = document.createElement("span");
+    closeButton.innerHTML = "&#10006;";
+    closeButton.style.position = "absolute";
+    closeButton.style.top = "10px";
+    closeButton.style.right = "15px";
+    closeButton.style.cursor = "pointer";
+    closeButton.style.fontSize = "20px";
+    overlay.appendChild(closeButton);
+    
+    closeButton.addEventListener("click", () => {
+        overlay.style.display = "none";
+    });
 
     // Criar botão "Gerar Previsão"
     const generateButton = document.createElement("button");
@@ -38,10 +52,16 @@
     generateButton.style.fontSize = "16px";
     generateButton.style.cursor = "pointer";
 
-    // Adicionar evento ao botão de previsão
-    generateButton.addEventListener("click", async function() {
+    // Exibir resultado dentro do modal
+    const resultDisplay = document.createElement("div");
+    resultDisplay.style.marginTop = "15px";
+    resultDisplay.style.fontSize = "18px";
+    resultDisplay.style.textAlign = "center";
+    overlay.appendChild(resultDisplay);
+
+    generateButton.addEventListener("click", async function () {
         const previsao = await gerarPrevisao();
-        alert(`Previsão gerada: ${previsao}`);
+        resultDisplay.textContent = `Previsão: ${previsao}`;
     });
 
     overlay.appendChild(generateButton);
@@ -58,33 +78,36 @@
 
     document.body.appendChild(floatingButton);
 
-    // Alternar visibilidade da janela
-    floatingButton.addEventListener("click", function() {
-        overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
+    floatingButton.addEventListener("click", function () {
+        overlay.style.display = overlay.style.display === "none" ? "block" : "none";
     });
 
-    // Armazena o histórico dos resultados
     let historico = [];
 
-    // Função para coletar os últimos resultados direto do HTML
+    async function carregarHistoricoCSV(url) {
+        try {
+            const response = await fetch(url);
+            const csvText = await response.text();
+            const linhas = csvText.split("\n").map(l => l.trim()).filter(l => l);
+            historico = linhas.slice(-1000); 
+            console.log("📊 Histórico de 1000 jogos carregado!");
+        } catch (error) {
+            console.error("Erro ao carregar CSV:", error);
+        }
+    }
+
     function coletarDadosBlaze() {
         try {
             let resultados = [];
-            let elementos = document.querySelectorAll(".sm-box.history-item"); // Seleciona os últimos números
-
-            elementos.forEach(el => {
-                let numero = el.textContent.trim();
-                resultados.push(numero);
-            });
-
-            return resultados.slice(0, 20); // Pegamos os últimos 20 números
+            let elementos = document.querySelectorAll(".sm-box.history-item");
+            elementos.forEach(el => resultados.push(el.textContent.trim()));
+            return resultados.slice(0, 20);
         } catch (error) {
             console.error("Erro ao coletar dados da Blaze:", error);
             return [];
         }
     }
 
-    // Função para calcular SHA-256
     async function calcularSHA256(texto) {
         const encoder = new TextEncoder();
         const data = encoder.encode(texto);
@@ -92,45 +115,41 @@
         return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
     }
 
-    // Função para analisar padrões no histórico
     async function analisarPadroes() {
         const dados = coletarDadosBlaze();
         if (dados.length === 0) return "Erro ao obter dados";
 
-        // Atualiza o histórico sem duplicar
-        historico = [...new Set([...dados, ...historico])].slice(0, 50);
-
+        historico = [...new Set([...dados, ...historico])].slice(0, 1000);
         let padroes = [];
         for (const numero of historico) {
             const sha256 = await calcularSHA256(numero);
             padroes.push({ numero, sha256 });
         }
-
         return aplicarAnaliseAvancada(padroes);
     }
 
-    // Função de análise avançada incluindo o branco
     function aplicarAnaliseAvancada(padroes) {
         const ultimoHash = padroes[padroes.length - 1].sha256;
-
-        // Verifica se o SHA-256 segue um padrão que pode indicar branco
         if (ultimoHash.endsWith("00") || ultimoHash.endsWith("ff")) {
             return "Branco";
         }
-
-        // Simples lógica baseada na paridade do hash
         return parseInt(ultimoHash.charAt(0), 16) % 2 === 0 ? "Vermelho" : "Preto";
     }
 
-    // Função para gerar previsão
     async function gerarPrevisao() {
         return await analisarPadroes();
     }
 
-    // Atualizar os dados automaticamente a cada 10 segundos
+    let atualizando = false;
     setInterval(async () => {
-        console.log("🔄 Atualizando dados...");
-        await gerarPrevisao();
+        if (!atualizando) {
+            atualizando = true;
+            console.log("🔄 Atualizando dados...");
+            await gerarPrevisao();
+            atualizando = false;
+        }
     }, 10000);
+
+    carregarHistoricoCSV("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743389410494.csv");
 
 })();
