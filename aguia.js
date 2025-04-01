@@ -1,128 +1,48 @@
-(async function() {
-const containerId = "custom-overlay";
-const existingContainer = document.getElementById(containerId);
-if (existingContainer) {
-existingContainer.remove();
+const containerId = "custom-overlay"; const existingContainer = document.getElementById(containerId); if (existingContainer) { existingContainer.remove(); }
+
+// Criar janela flutuante const overlay = document.createElement("div"); overlay.id = containerId; overlay.style.position = "fixed"; overlay.style.top = "50%"; overlay.style.left = "50%"; overlay.style.transform = "translate(-50%, -50%)"; overlay.style.width = "350px"; overlay.style.padding = "20px"; overlay.style.borderRadius = "10px"; overlay.style.boxShadow = "0px 0px 10px rgba(0, 0, 0, 0.5)"; overlay.style.backgroundImage = "url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg')"; overlay.style.backgroundSize = "cover"; overlay.style.color = "white"; overlay.style.fontFamily = "Arial, sans-serif"; overlay.style.zIndex = "9999"; overlay.style.textAlign = "center";
+
+document.body.appendChild(overlay);
+
+// Criar botão flutuante const floatingButton = document.createElement("div"); floatingButton.innerHTML = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/240px-User-avatar.svg.png' width='50' height='50' style='border-radius: 50%; border: 2px solid white;'>"; floatingButton.style.position = "fixed"; floatingButton.style.bottom = "20px"; floatingButton.style.right = "20px"; floatingButton.style.cursor = "pointer"; floatingButton.style.zIndex = "9999";
+
+document.body.appendChild(floatingButton);
+
+// Alternar visibilidade da janela floatingButton.onclick = function() { overlay.style.display = (overlay.style.display === "none" ? "block" : "none"); };
+
+// Função para calcular SHA-256 tasync function gerarPrevisao() { try { const response = await fetch("https://blaze.bet/api/double/recent"); const data = await response.json(); const lastRoll = data[0].roll;
+
+const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(lastRoll.toString()));
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    const prediction = parseInt(hashHex.substring(0, 2), 16) % 3; // 0 = vermelho, 1 = preto, 2 = branco
+
+    return prediction === 0 ? "Vermelho" : prediction === 1 ? "Preto" : "Branco";
+} catch (error) {
+    console.error("Erro ao obter previsão:", error);
+    return "Erro";
 }
 
-// Criar janela flutuante com imagem de fundo  
-const overlay = document.createElement("div");  
-overlay.id = containerId;  
-overlay.style.position = "fixed";  
-overlay.style.top = "50%";  
-overlay.style.left = "50%";  
-overlay.style.transform = "translate(-50%, -50%)";  
-overlay.style.width = "350px";  
-overlay.style.height = "400px";  
-overlay.style.padding = "20px";  
-overlay.style.borderRadius = "10px";  
-overlay.style.boxShadow = "0px 0px 15px rgba(0, 0, 0, 0.7)";  
-overlay.style.background = "url('https://example.com/background.jpg') no-repeat center center";  
-overlay.style.backgroundSize = "cover";  
-overlay.style.color = "white";  
-overlay.style.fontFamily = "Arial, sans-serif";  
-overlay.style.zIndex = "9999";  
-overlay.style.textAlign = "center";  
-overlay.style.display = "none";  
-document.body.appendChild(overlay);  
+}
 
-// Criar botão movível  
-const floatingButton = document.createElement("div");  
-floatingButton.innerHTML = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/240px-User-avatar.svg.png' width='50' height='50' style='border-radius: 50%; border: 2px solid white;'>";  
-floatingButton.style.position = "fixed";  
-floatingButton.style.bottom = "20px";  
-floatingButton.style.right = "20px";  
-floatingButton.style.cursor = "pointer";  
-floatingButton.style.zIndex = "9999";  
-document.body.appendChild(floatingButton);  
+async function atualizarJanela() { const previsao = await gerarPrevisao(); overlay.innerHTML = <h3>Status do Jogo</h3> <p id='resultado'>Carregando...</p> <h4>Previsão para esta rodada:</h4> <div style='text-align:center; font-size: 20px; padding: 10px; border-radius: 5px; background: ${previsao === "Branco" ? "white" : previsao.toLowerCase()}; color: ${previsao === "Branco" ? "black" : "white"};'>${previsao}</div> <button id='gerarPrevisao' style='width: 100%; padding: 10px; margin-top: 10px; background: blue; color: white; border: none; border-radius: 5px; cursor: pointer;'>Gerar Nova Previsão</button>;
 
-floatingButton.addEventListener("click", function() {  
-    overlay.style.display = (overlay.style.display === "none" ? "block" : "none");  
-});  
+document.getElementById('gerarPrevisao').onclick = atualizarJanela;
+setTimeout(atualizarResultado, 5000);
 
-// Exibir resultado em tempo real  
-const resultadoDisplay = document.createElement("div");  
-resultadoDisplay.style.margin = "10px auto";  
-resultadoDisplay.style.width = "50px";  
-resultadoDisplay.style.height = "50px";  
-resultadoDisplay.style.lineHeight = "50px";  
-resultadoDisplay.style.borderRadius = "50%";  
-resultadoDisplay.style.fontSize = "18px";  
-resultadoDisplay.style.color = "white";  
-resultadoDisplay.style.fontWeight = "bold";  
-resultadoDisplay.style.backgroundColor = "gray";  
-resultadoDisplay.textContent = "-";  
-overlay.appendChild(resultadoDisplay);  
+}
 
-// Exibir previsão  
-const previsaoDisplay = document.createElement("div");  
-previsaoDisplay.style.margin = "10px auto";  
-previsaoDisplay.style.width = "80px";  
-previsaoDisplay.style.height = "80px";  
-previsaoDisplay.style.lineHeight = "80px";  
-previsaoDisplay.style.borderRadius = "50%";  
-previsaoDisplay.style.fontSize = "20px";  
-previsaoDisplay.style.color = "white";  
-previsaoDisplay.style.fontWeight = "bold";  
-previsaoDisplay.style.backgroundColor = "gray";  
-previsaoDisplay.textContent = "-";  
-overlay.appendChild(previsaoDisplay);  
+async function atualizarResultado() { try { const response = await fetch("https://blaze.bet/api/double/recent"); const data = await response.json(); const resultado = data[0].color === "red" ? "Vermelho" : data[0].color === "black" ? "Preto" : "Branco";
 
-// Botão para gerar previsão  
-const generateButton = document.createElement("button");  
-generateButton.textContent = "Gerar Nova Previsão";  
-generateButton.style.width = "100%";  
-generateButton.style.padding = "10px";  
-generateButton.style.border = "none";  
-generateButton.style.borderRadius = "5px";  
-generateButton.style.backgroundColor = "#007bff";  
-generateButton.style.color = "white";  
-generateButton.style.fontSize = "16px";  
-generateButton.style.cursor = "pointer";  
-generateButton.style.marginTop = "10px";  
-overlay.appendChild(generateButton);  
+const previsaoAtual = document.querySelector("#custom-overlay div").innerText;
+    const ganhou = previsaoAtual.includes(resultado);
+    
+    document.getElementById("resultado").innerHTML = `<div style='padding: 10px; background: ${ganhou ? "green" : "red"}; color: white; text-align: center; border-radius: 5px;'>${ganhou ? "GANHOU! 🎉" : "PERDEU! ❌"}</div>`;
+} catch (error) {
+    console.error("Erro ao obter resultado:", error);
+}
 
-let historicoResultados = [];  
-async function carregarHistorico() {  
-    const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743397349837.csv");  
-    const text = await response.text();  
-    historicoResultados = text.split("\n").slice(-50).map(linha => linha.split(",")[1]);  
-}  
-await carregarHistorico();  
+}
 
-async function coletarDados() {  
-    let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white");  
-    let resultados = [...elementos].map(e => e.textContent.trim());  
-  
-    console.log("📊 Resultados Capturados:", resultados);  
-  
-    if (resultados.length > 0) {  
-        let resultadoAtual = resultados[0];  
-        resultadoDisplay.textContent = resultadoAtual;  
-        historicoResultados.push(resultadoAtual);  
-        if (historicoResultados.length > 50) historicoResultados.shift();  
-  
-        let elementoEncontrado = elementos[0];  
-        if (elementoEncontrado.classList.contains("black")) {  
-            resultadoDisplay.style.backgroundColor = "black";  
-        } else if (elementoEncontrado.classList.contains("red")) {  
-            resultadoDisplay.style.backgroundColor = "red";  
-        } else {  
-            resultadoDisplay.style.backgroundColor = "white";  
-        }  
-    }  
-}  
-
-async function gerarPrevisao() {  
-    let padrao = historicoResultados.slice(-5).join("-");  
-    let ocorrencias = historicoResultados.filter(h => h === padrao).length;  
-    let corPrevisao = ocorrencias > 1 ? historicoResultados[historicoResultados.length - 1] : (Math.random() < 0.5 ? "Vermelho" : "Preto");  
-    previsaoDisplay.textContent = corPrevisao;  
-    previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : (corPrevisao === "Preto" ? "black" : "white");  
-}  
-
-generateButton.addEventListener("click", gerarPrevisao);  
-setInterval(coletarDados, 5000);
-
-})();
+atualizarJanela();
 
