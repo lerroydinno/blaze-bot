@@ -5,7 +5,7 @@
         existingContainer.remove();
     }
 
-    // Criar janela flutuante com imagem de fundo
+    // Criar janela flutuante
     const overlay = document.createElement("div");
     overlay.id = containerId;
     overlay.style.position = "fixed";
@@ -17,8 +17,7 @@
     overlay.style.padding = "20px";
     overlay.style.borderRadius = "10px";
     overlay.style.boxShadow = "0px 0px 15px rgba(0, 0, 0, 0.7)";
-    overlay.style.background = "url('https://example.com/background.jpg') no-repeat center center";
-    overlay.style.backgroundSize = "cover";
+    overlay.style.backgroundColor = "#1e1e1e";
     overlay.style.color = "white";
     overlay.style.fontFamily = "Arial, sans-serif";
     overlay.style.zIndex = "9999";
@@ -26,7 +25,7 @@
     overlay.style.display = "none";
     document.body.appendChild(overlay);
 
-    // Criar botão movível
+    // Botão flutuante
     const floatingButton = document.createElement("div");
     floatingButton.innerHTML = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/240px-User-avatar.svg.png' width='50' height='50' style='border-radius: 50%; border: 2px solid white;'>";
     floatingButton.style.position = "fixed";
@@ -40,7 +39,7 @@
         overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
     });
 
-    // Exibir resultado em tempo real
+    // Resultado em tempo real
     const resultadoDisplay = document.createElement("div");
     resultadoDisplay.style.margin = "10px auto";
     resultadoDisplay.style.width = "50px";
@@ -48,13 +47,12 @@
     resultadoDisplay.style.lineHeight = "50px";
     resultadoDisplay.style.borderRadius = "50%";
     resultadoDisplay.style.fontSize = "18px";
-    resultadoDisplay.style.color = "white";
     resultadoDisplay.style.fontWeight = "bold";
     resultadoDisplay.style.backgroundColor = "gray";
     resultadoDisplay.textContent = "-";
     overlay.appendChild(resultadoDisplay);
 
-    // Exibir previsão
+    // Previsão
     const previsaoDisplay = document.createElement("div");
     previsaoDisplay.style.margin = "10px auto";
     previsaoDisplay.style.width = "80px";
@@ -62,7 +60,6 @@
     previsaoDisplay.style.lineHeight = "80px";
     previsaoDisplay.style.borderRadius = "50%";
     previsaoDisplay.style.fontSize = "20px";
-    previsaoDisplay.style.color = "white";
     previsaoDisplay.style.fontWeight = "bold";
     previsaoDisplay.style.backgroundColor = "gray";
     previsaoDisplay.textContent = "-";
@@ -83,6 +80,13 @@
     overlay.appendChild(generateButton);
 
     let historicoResultados = [];
+    async function carregarHistorico() {
+        const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743606817291.csv");
+        const text = await response.text();
+        historicoResultados = text.split("\n").slice(-50).map(linha => linha.split(",")[1]);
+    }
+    await carregarHistorico();
+
     async function coletarDados() {
         let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white");
         let resultados = [...elementos].map(e => e.textContent.trim());
@@ -91,40 +95,25 @@
             let resultadoAtual = resultados[0];
             resultadoDisplay.textContent = resultadoAtual;
             historicoResultados.push(resultadoAtual);
-            if (historicoResultados.length > 100) historicoResultados.shift();
+            if (historicoResultados.length > 50) historicoResultados.shift();
     
             let elementoEncontrado = elementos[0];
-            if (elementoEncontrado.classList.contains("black")) {
-                resultadoDisplay.style.backgroundColor = "black";
-            } else if (elementoEncontrado.classList.contains("red")) {
-                resultadoDisplay.style.backgroundColor = "red";
-            } else {
-                resultadoDisplay.style.backgroundColor = "white";
-            }
+            resultadoDisplay.style.backgroundColor = elementoEncontrado.classList.contains("black") ? "black" : 
+                                                     elementoEncontrado.classList.contains("red") ? "red" : "white";
         }
     }
-    
+
     function gerarPrevisao() {
-        if (historicoResultados.length === 0) return;
-        let frequencias = historicoResultados.reduce((acc, cor) => {
+        let ocorrencias = historicoResultados.reduce((acc, cor) => {
             acc[cor] = (acc[cor] || 0) + 1;
             return acc;
         }, {});
-        
-        let maiorFrequencia = Math.max(...Object.values(frequencias));
-        let coresProvaveis = Object.keys(frequencias).filter(cor => frequencias[cor] === maiorFrequencia);
-        let corPrevisao = coresProvaveis[Math.floor(Math.random() * coresProvaveis.length)];
-
+    
+        let corPrevisao = Object.keys(ocorrencias).reduce((a, b) => ocorrencias[a] > ocorrencias[b] ? a : b);
         previsaoDisplay.textContent = corPrevisao;
-        previsaoDisplay.style.backgroundColor = corPrevisao.toLowerCase();
+        previsaoDisplay.style.backgroundColor = corPrevisao === "Preto" ? "black" : corPrevisao === "Vermelho" ? "red" : "white";
     }
 
-    generateButton.addEventListener("click", () => {
-        coletarDados();
-        gerarPrevisao();
-    });
-    setInterval(() => {
-        coletarDados();
-        gerarPrevisao();
-    }, 5000);
+    generateButton.addEventListener("click", gerarPrevisao);
+    setInterval(coletarDados, 5000);
 })();
