@@ -52,7 +52,7 @@
     resultadoDisplay.style.fontWeight = "bold";
     overlay.appendChild(resultadoDisplay);
 
-    // Criar exibição da previsão
+    // Criar exibição da previsão (inicialmente vazia)
     const previsaoDisplay = document.createElement("div");
     previsaoDisplay.style.margin = "10px auto";
     previsaoDisplay.style.width = "80px";
@@ -110,7 +110,10 @@
     }
 
     function gerarPrevisao() {
-        if (historicoResultados.length < 5) return;
+        if (historicoResultados.length < 5) {
+            alert("Ainda não há dados suficientes para prever!");
+            return;
+        }
 
         let padrao = historicoResultados.slice(-5).join("-");
         let ocorrencias = historicoResultados.filter(h => h === padrao).length;
@@ -119,7 +122,7 @@
         if (ocorrencias > 1) {
             corPrevisao = historicoResultados[historicoResultados.length - 1]; // Repete padrão detectado
         } else {
-            // Usa lógica, probabilidade, numerologia, SHA-256 e tendência
+            // Usa lógica de tendência
             let preto = historicoResultados.filter(x => x.toLowerCase() === "preto").length;
             let vermelho = historicoResultados.filter(x => x.toLowerCase() === "vermelho").length;
             let branco = historicoResultados.filter(x => x.toLowerCase() === "branco").length;
@@ -138,6 +141,7 @@
         previsaoDisplay.style.color = corPrevisao === "Branco" ? "black" : "white";
     }
 
+    // Adiciona evento no botão para gerar previsão manualmente
     generateButton.addEventListener("click", gerarPrevisao);
 
     // Atualiza os dados a cada 5 segundos
