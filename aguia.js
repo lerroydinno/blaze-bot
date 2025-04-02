@@ -1,21 +1,24 @@
 (async function() {
     const containerId = "custom-overlay";
     const existingContainer = document.getElementById(containerId);
-    if (existingContainer) existingContainer.remove();
+    if (existingContainer) {
+        existingContainer.remove();
+    }
 
-    // Criar menu flutuante
+    // Criar janela flutuante com imagem de fundo personalizada
     const overlay = document.createElement("div");
     overlay.id = containerId;
     overlay.style.position = "fixed";
     overlay.style.top = "50%";
     overlay.style.left = "50%";
     overlay.style.transform = "translate(-50%, -50%)";
-    overlay.style.width = "350px";
-    overlay.style.height = "400px";
+    overlay.style.width = "400px";
+    overlay.style.height = "250px";
     overlay.style.padding = "20px";
     overlay.style.borderRadius = "10px";
     overlay.style.boxShadow = "0px 0px 15px rgba(0, 0, 0, 0.7)";
-    overlay.style.background = "black";
+    overlay.style.background = "url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg') no-repeat center center";
+    overlay.style.backgroundSize = "cover";
     overlay.style.color = "white";
     overlay.style.fontFamily = "Arial, sans-serif";
     overlay.style.zIndex = "9999";
@@ -23,97 +26,86 @@
     overlay.style.display = "none";
     document.body.appendChild(overlay);
 
+    // Criar botão flutuante
     const floatingButton = document.createElement("div");
-    floatingButton.innerHTML = "🔮";
+    floatingButton.innerHTML = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/240px-User-avatar.svg.png' width='50' height='50' style='border-radius: 50%; border: 2px solid white;'>";
     floatingButton.style.position = "fixed";
     floatingButton.style.bottom = "20px";
     floatingButton.style.right = "20px";
-    floatingButton.style.fontSize = "30px";
     floatingButton.style.cursor = "pointer";
     floatingButton.style.zIndex = "9999";
     document.body.appendChild(floatingButton);
-    floatingButton.addEventListener("click", () => {
-        overlay.style.display = overlay.style.display === "none" ? "block" : "none";
+
+    floatingButton.addEventListener("click", function() {
+        overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
     });
 
-    const resultadoDisplay = document.createElement("div");
-    resultadoDisplay.style.margin = "10px auto";
-    resultadoDisplay.style.width = "50px";
-    resultadoDisplay.style.height = "50px";
-    resultadoDisplay.style.lineHeight = "50px";
-    resultadoDisplay.style.borderRadius = "50%";
-    resultadoDisplay.style.fontSize = "18px";
-    resultadoDisplay.style.backgroundColor = "gray";
-    resultadoDisplay.textContent = "-";
-    overlay.appendChild(resultadoDisplay);
+    // Exibir status e previsão
+    const statusText = document.createElement("p");
+    statusText.innerHTML = "<strong>Status do Jogo</strong><br>Carregando...";
+    overlay.appendChild(statusText);
 
     const previsaoDisplay = document.createElement("div");
     previsaoDisplay.style.margin = "10px auto";
-    previsaoDisplay.style.width = "80px";
-    previsaoDisplay.style.height = "80px";
-    previsaoDisplay.style.lineHeight = "80px";
+    previsaoDisplay.style.width = "100px";
+    previsaoDisplay.style.height = "100px";
+    previsaoDisplay.style.lineHeight = "100px";
     previsaoDisplay.style.borderRadius = "50%";
     previsaoDisplay.style.fontSize = "20px";
+    previsaoDisplay.style.color = "white";
+    previsaoDisplay.style.fontWeight = "bold";
     previsaoDisplay.style.backgroundColor = "gray";
-    previsaoDisplay.textContent = "-";
+    previsaoDisplay.textContent = "Erro";
     overlay.appendChild(previsaoDisplay);
 
+    // Botão para gerar previsão manualmente
+    const generateButton = document.createElement("button");
+    generateButton.textContent = "Gerar Nova Previsão";
+    generateButton.style.width = "100%";
+    generateButton.style.padding = "10px";
+    generateButton.style.border = "none";
+    generateButton.style.borderRadius = "5px";
+    generateButton.style.backgroundColor = "#007bff";
+    generateButton.style.color = "white";
+    generateButton.style.fontSize = "16px";
+    generateButton.style.cursor = "pointer";
+    generateButton.style.marginTop = "10px";
+    overlay.appendChild(generateButton);
+
     let historicoResultados = [];
+    let rodadasColetadas = 0;
+
     async function coletarDados() {
         let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white");
         let resultados = [...elementos].map(e => e.textContent.trim());
+    
         if (resultados.length > 0) {
             let resultadoAtual = resultados[0];
-            resultadoDisplay.textContent = resultadoAtual;
             historicoResultados.push(resultadoAtual);
             if (historicoResultados.length > 50) historicoResultados.shift();
-            resultadoDisplay.style.backgroundColor = resultadoAtual === "black" ? "black" : resultadoAtual === "red" ? "red" : "white";
+            rodadasColetadas++;
         }
-        if (historicoResultados.length % 10 === 0) gerarPrevisao();
-    }
-
-    function calcularProbabilidade() {
-        let vermelhos = historicoResultados.filter(c => c === "red").length;
-        let pretos = historicoResultados.filter(c => c === "black").length;
-        let brancos = historicoResultados.filter(c => c === "white").length;
-        return vermelhos > pretos ? "red" : pretos > vermelhos ? "black" : "white";
-    }
-
-    function calcularNumerologia() {
-        let soma = historicoResultados.reduce((acc, val) => acc + val.length, 0);
-        return soma % 2 === 0 ? "red" : "black";
-    }
-
-    function analisarTendencia() {
-        let ultimosCinco = historicoResultados.slice(-5);
-        return ultimosCinco.every(c => c === "red") ? "black" : "red";
-    }
-
-    function calcularHashSHA256() {
-        let input = historicoResultados.join("");
-        return crypto.subtle.digest("SHA-256", new TextEncoder().encode(input)).then(hashBuffer => {
-            let hashArray = Array.from(new Uint8Array(hashBuffer));
-            let hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-            return hashHex.endsWith("0") ? "white" : hashHex.endsWith("1") ? "red" : "black";
-        });
+    
+        if (rodadasColetadas >= 10) {
+            gerarPrevisao();
+            rodadasColetadas = 0;
+        }
     }
 
     async function gerarPrevisao() {
-        let probabilidade = calcularProbabilidade();
-        let numerologia = calcularNumerologia();
-        let tendencia = analisarTendencia();
-        let hashColor = await calcularHashSHA256();
-
-        let cores = { red: 0, black: 0, white: 0 };
-        cores[probabilidade]++;
-        cores[numerologia]++;
-        cores[tendencia]++;
-        cores[hashColor]++;
-
-        let previsaoFinal = Object.keys(cores).reduce((a, b) => (cores[a] > cores[b] ? a : b));
-        previsaoDisplay.textContent = previsaoFinal;
-        previsaoDisplay.style.backgroundColor = previsaoFinal;
+        let corPrevisao = "Erro";
+        if (historicoResultados.length >= 10) {
+            let ultimosResultados = historicoResultados.slice(-10);
+            let frequencia = {"red": 0, "black": 0, "white": 0};
+            ultimosResultados.forEach(cor => frequencia[cor]++);
+    
+            let maiorFrequencia = Object.keys(frequencia).reduce((a, b) => frequencia[a] > frequencia[b] ? a : b);
+            corPrevisao = maiorFrequencia;
+        }
+        previsaoDisplay.textContent = corPrevisao;
+        previsaoDisplay.style.backgroundColor = corPrevisao === "red" ? "red" : (corPrevisao === "black" ? "black" : "white");
     }
 
+    generateButton.addEventListener("click", gerarPrevisao);
     setInterval(coletarDados, 5000);
 })();
