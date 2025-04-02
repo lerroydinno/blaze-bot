@@ -5,6 +5,7 @@
         existingContainer.remove();
     }
 
+    // Criar a janela flutuante
     const overlay = document.createElement("div");
     overlay.id = containerId;
     overlay.style.position = "fixed";
@@ -16,7 +17,7 @@
     overlay.style.padding = "20px";
     overlay.style.borderRadius = "10px";
     overlay.style.boxShadow = "0px 0px 15px rgba(0, 0, 0, 0.7)";
-    overlay.style.background = "black";
+    overlay.style.background = "#222";
     overlay.style.color = "white";
     overlay.style.fontFamily = "Arial, sans-serif";
     overlay.style.zIndex = "9999";
@@ -24,8 +25,9 @@
     overlay.style.display = "none";
     document.body.appendChild(overlay);
 
+    // Criar botão para abrir/fechar a janela
     const floatingButton = document.createElement("div");
-    floatingButton.innerHTML = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/240px-User-avatar.svg.png' width='50' height='50' style='border-radius: 50%; border: 2px solid white;'>";
+    floatingButton.innerHTML = "<button style='width: 50px; height: 50px; border-radius: 50%;'>🔮</button>";
     floatingButton.style.position = "fixed";
     floatingButton.style.bottom = "20px";
     floatingButton.style.right = "20px";
@@ -34,18 +36,15 @@
     document.body.appendChild(floatingButton);
 
     floatingButton.addEventListener("click", function() {
-        overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
+        overlay.style.display = overlay.style.display === "none" ? "block" : "none";
     });
 
+    // Criar elementos para exibir o resultado e previsão
     const resultadoDisplay = document.createElement("div");
     resultadoDisplay.style.margin = "10px auto";
     resultadoDisplay.style.width = "50px";
     resultadoDisplay.style.height = "50px";
-    resultadoDisplay.style.lineHeight = "50px";
     resultadoDisplay.style.borderRadius = "50%";
-    resultadoDisplay.style.fontSize = "18px";
-    resultadoDisplay.style.color = "white";
-    resultadoDisplay.style.fontWeight = "bold";
     resultadoDisplay.style.backgroundColor = "gray";
     resultadoDisplay.textContent = "-";
     overlay.appendChild(resultadoDisplay);
@@ -54,11 +53,7 @@
     previsaoDisplay.style.margin = "10px auto";
     previsaoDisplay.style.width = "80px";
     previsaoDisplay.style.height = "80px";
-    previsaoDisplay.style.lineHeight = "80px";
     previsaoDisplay.style.borderRadius = "50%";
-    previsaoDisplay.style.fontSize = "20px";
-    previsaoDisplay.style.color = "white";
-    previsaoDisplay.style.fontWeight = "bold";
     previsaoDisplay.style.backgroundColor = "gray";
     previsaoDisplay.textContent = "-";
     overlay.appendChild(previsaoDisplay);
@@ -71,19 +66,20 @@
     generateButton.style.borderRadius = "5px";
     generateButton.style.backgroundColor = "#007bff";
     generateButton.style.color = "white";
-    generateButton.style.fontSize = "16px";
     generateButton.style.cursor = "pointer";
-    generateButton.style.marginTop = "10px";
     overlay.appendChild(generateButton);
 
     let historicoResultados = [];
     let ultimaPrevisao = "-";
-    let ultimoResultado = "-";
 
     async function carregarHistorico() {
-        const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743606817291.csv");
-        const text = await response.text();
-        historicoResultados = text.split("\n").slice(-50).map(linha => linha.split(",")[1]);
+        try {
+            const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743606817291.csv");
+            const text = await response.text();
+            historicoResultados = text.split("\n").slice(-50).map(linha => linha.split(",")[1]);
+        } catch (error) {
+            console.error("Erro ao carregar histórico:", error);
+        }
     }
     await carregarHistorico();
 
@@ -93,29 +89,30 @@
     
         if (resultados.length > 0) {
             let resultadoAtual = resultados[0];
-            if (resultadoAtual !== ultimoResultado) {
-                resultadoDisplay.textContent = resultadoAtual;
-                historicoResultados.push(resultadoAtual);
-                if (historicoResultados.length > 50) historicoResultados.shift();
-                ultimoResultado = resultadoAtual;
-                gerarPrevisao();
-            }
-    
-            let elementoEncontrado = elementos[0];
-            resultadoDisplay.style.backgroundColor = elementoEncontrado.classList.contains("black") ? "black" : elementoEncontrado.classList.contains("red") ? "red" : "white";
+            resultadoDisplay.textContent = resultadoAtual;
+            historicoResultados.push(resultadoAtual);
+            if (historicoResultados.length > 50) historicoResultados.shift();
+            gerarPrevisao();
         }
     }
 
     function gerarPrevisao() {
         if (historicoResultados.length < 5) return;
-        let padrao = historicoResultados.slice(-5).join("-");
-        let contagemPadrao = historicoResultados.filter(h => h === padrao).length;
-        let proximoIndice = historicoResultados.indexOf(padrao) + 5;
-        let corPrevista = historicoResultados[proximoIndice] || "Aleatório";
-    
-        previsaoDisplay.textContent = corPrevista;
-        previsaoDisplay.style.backgroundColor = corPrevista === "Preto" ? "black" : corPrevista === "Vermelho" ? "red" : "white";
-        ultimaPrevisao = corPrevista;
+
+        let ultimosResultados = historicoResultados.slice(-5);
+        let padroes = {
+            "black": ultimosResultados.filter(cor => cor === "black").length,
+            "red": ultimosResultados.filter(cor => cor === "red").length,
+            "white": ultimosResultados.filter(cor => cor === "white").length
+        };
+
+        let corPrevisao = Object.keys(padroes).reduce((a, b) => padroes[a] > padroes[b] ? a : b);
+        
+        if (corPrevisao !== ultimaPrevisao) {
+            previsaoDisplay.textContent = corPrevisao;
+            previsaoDisplay.style.backgroundColor = corPrevisao === "black" ? "black" : corPrevisao === "red" ? "red" : "white";
+            ultimaPrevisao = corPrevisao;
+        }
     }
 
     generateButton.addEventListener("click", gerarPrevisao);
