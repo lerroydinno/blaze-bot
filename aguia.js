@@ -5,7 +5,7 @@
         existingContainer.remove();
     }
 
-    // Criar janela flutuante com imagem de fundo
+    // Criar janela flutuante
     const overlay = document.createElement("div");
     overlay.id = containerId;
     overlay.style.position = "fixed";
@@ -45,7 +45,7 @@
     statusText.textContent = "Status do Jogo";
     overlay.appendChild(statusText);
 
-    // Criar exibição do resultado em tempo real
+    // Criar exibição do resultado da rodada
     const resultadoDisplay = document.createElement("div");
     resultadoDisplay.textContent = "Carregando...";
     resultadoDisplay.style.margin = "10px auto";
@@ -79,7 +79,7 @@
     generateButton.style.fontSize = "16px";
     generateButton.style.cursor = "pointer";
     generateButton.style.marginTop = "10px";
-    generateButton.disabled = true; // Começa desativado
+    generateButton.disabled = true;
     overlay.appendChild(generateButton);
 
     // Criar contador de rodadas
@@ -88,16 +88,8 @@
     contadorRodadas.style.marginTop = "10px";
     contadorRodadas.style.fontSize = "16px";
     contadorRodadas.style.fontWeight = "bold";
-    contadorRodadas.style.color = "red"; // Começa vermelho
+    contadorRodadas.style.color = "red";
     overlay.appendChild(contadorRodadas);
-
-    // Criar exibição do resultado da previsão
-    const resultadoPrevisao = document.createElement("div");
-    resultadoPrevisao.textContent = "";
-    resultadoPrevisao.style.marginTop = "10px";
-    resultadoPrevisao.style.fontSize = "18px";
-    resultadoPrevisao.style.fontWeight = "bold";
-    overlay.appendChild(resultadoPrevisao);
 
     let historicoResultados = [];
     let ultimaPrevisao = null;
@@ -107,40 +99,40 @@
         let resultados = [...elementos].map(e => e.textContent.trim());
 
         if (resultados.length > 0) {
-            let resultadoAtual = resultados[0];
-            resultadoDisplay.textContent = `Último Resultado: ${resultadoAtual}`;
+            let resultadoAtual = resultados[0].toLowerCase();
+
+            // Atualizar exibição do último resultado
+            resultadoDisplay.textContent = `Último Resultado: ${resultadoAtual.charAt(0).toUpperCase() + resultadoAtual.slice(1)}`;
+            resultadoDisplay.style.color = resultadoAtual === "preto" ? "black" : resultadoAtual === "vermelho" ? "red" : "white";
+            resultadoDisplay.style.backgroundColor = resultadoAtual === "branco" ? "black" : "transparent";
             historicoResultados.push(resultadoAtual);
             if (historicoResultados.length > 50) historicoResultados.shift();
 
             // Atualizar contador de rodadas
             contadorRodadas.textContent = `Rodadas coletadas: ${historicoResultados.length}/10`;
-
             if (historicoResultados.length >= 10) {
-                contadorRodadas.style.color = "green"; // Fica verde ao atingir 10 rodadas
-                generateButton.disabled = false; // Ativa o botão
+                contadorRodadas.style.color = "green";
+                generateButton.disabled = false;
             } else {
                 contadorRodadas.style.color = "red";
                 generateButton.disabled = true;
             }
 
-            // Verificar se a previsão foi acertada ou errada e exibir a cor que saiu
+            // Verificar acerto da previsão e exibir resultado
             if (ultimaPrevisao !== null) {
-                let resultadoFormatado = resultadoAtual.toLowerCase();
-                let previsaoFormatada = ultimaPrevisao.toLowerCase();
-
-                if (resultadoFormatado === previsaoFormatada) {
-                    resultadoPrevisao.textContent = `Saiu: ${resultadoAtual} - Ganhou ✅`;
-                    resultadoPrevisao.style.color = "green";
+                if (resultadoAtual === ultimaPrevisao.toLowerCase()) {
+                    resultadoDisplay.textContent = `Saiu: ${resultadoAtual.charAt(0).toUpperCase() + resultadoAtual.slice(1)} - Ganhou ✅`;
+                    resultadoDisplay.style.color = "green";
                 } else {
-                    resultadoPrevisao.textContent = `Saiu: ${resultadoAtual} - Perdeu ❌`;
-                    resultadoPrevisao.style.color = "red";
+                    resultadoDisplay.textContent = `Saiu: ${resultadoAtual.charAt(0).toUpperCase() + resultadoAtual.slice(1)} - Perdeu ❌`;
+                    resultadoDisplay.style.color = "red";
                 }
 
                 // Apagar previsão após novo resultado
                 setTimeout(() => {
                     previsaoDisplay.textContent = "-";
                     previsaoDisplay.style.backgroundColor = "gray";
-                    resultadoPrevisao.textContent = "";
+                    resultadoDisplay.textContent = "";
                     ultimaPrevisao = null;
                 }, 3000);
             }
@@ -154,11 +146,11 @@
             return;
         }
 
-        // Buscar padrões nos últimos 10 resultados
+        // Análise dos últimos 10 resultados
         let ultimos10 = historicoResultados.slice(-10);
-        let preto = ultimos10.filter(x => x.toLowerCase() === "preto").length;
-        let vermelho = ultimos10.filter(x => x.toLowerCase() === "vermelho").length;
-        let branco = ultimos10.filter(x => x.toLowerCase() === "branco").length;
+        let preto = ultimos10.filter(x => x === "preto").length;
+        let vermelho = ultimos10.filter(x => x === "vermelho").length;
+        let branco = ultimos10.filter(x => x === "branco").length;
 
         let corPrevisao;
         if (branco > 1 && Math.random() < 0.1) {
@@ -169,12 +161,12 @@
             corPrevisao = "Vermelho";
         }
 
-        // Exibir a previsão no menu
+        // Exibir previsão
         previsaoDisplay.textContent = corPrevisao;
         previsaoDisplay.style.backgroundColor = corPrevisao === "Preto" ? "black" : corPrevisao === "Vermelho" ? "red" : "white";
         previsaoDisplay.style.color = corPrevisao === "Branco" ? "black" : "white";
 
-        // Salvar previsão para verificar acerto depois
+        // Salvar previsão
         ultimaPrevisao = corPrevisao;
     }
 
