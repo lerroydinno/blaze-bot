@@ -13,7 +13,7 @@
     overlay.style.left = "50%";
     overlay.style.transform = "translate(-50%, -50%)";
     overlay.style.width = "350px";
-    overlay.style.height = "450px";
+    overlay.style.height = "470px";
     overlay.style.padding = "20px";
     overlay.style.borderRadius = "10px";
     overlay.style.boxShadow = "0px 0px 15px rgba(0, 0, 0, 0.7)";
@@ -108,7 +108,7 @@
 
         if (resultados.length > 0) {
             let resultadoAtual = resultados[0];
-            resultadoDisplay.textContent = "Último Resultado: " + resultadoAtual;
+            resultadoDisplay.textContent = `Último Resultado: ${resultadoAtual}`;
             historicoResultados.push(resultadoAtual);
             if (historicoResultados.length > 50) historicoResultados.shift();
 
@@ -123,13 +123,16 @@
                 generateButton.disabled = true;
             }
 
-            // Verificar se a previsão foi acertada ou errada
+            // Verificar se a previsão foi acertada ou errada e exibir a cor que saiu
             if (ultimaPrevisao !== null) {
-                if (resultadoAtual.toLowerCase() === ultimaPrevisao.toLowerCase()) {
-                    resultadoPrevisao.textContent = "Ganhou ✅";
+                let resultadoFormatado = resultadoAtual.toLowerCase();
+                let previsaoFormatada = ultimaPrevisao.toLowerCase();
+
+                if (resultadoFormatado === previsaoFormatada) {
+                    resultadoPrevisao.textContent = `Saiu: ${resultadoAtual} - Ganhou ✅`;
                     resultadoPrevisao.style.color = "green";
                 } else {
-                    resultadoPrevisao.textContent = "Perdeu ❌";
+                    resultadoPrevisao.textContent = `Saiu: ${resultadoAtual} - Perdeu ❌`;
                     resultadoPrevisao.style.color = "red";
                 }
 
