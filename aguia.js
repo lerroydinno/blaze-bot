@@ -5,7 +5,7 @@
         existingContainer.remove();
     }
 
-    // Criar janela flutuante
+    // Criar janela flutuante com imagem de fundo
     const overlay = document.createElement("div");
     overlay.id = containerId;
     overlay.style.position = "fixed";
@@ -13,7 +13,7 @@
     overlay.style.left = "50%";
     overlay.style.transform = "translate(-50%, -50%)";
     overlay.style.width = "350px";
-    overlay.style.height = "470px";
+    overlay.style.height = "400px";
     overlay.style.padding = "20px";
     overlay.style.borderRadius = "10px";
     overlay.style.boxShadow = "0px 0px 15px rgba(0, 0, 0, 0.7)";
@@ -45,7 +45,7 @@
     statusText.textContent = "Status do Jogo";
     overlay.appendChild(statusText);
 
-    // Criar exibição do resultado da rodada
+    // Criar exibição do resultado em tempo real
     const resultadoDisplay = document.createElement("div");
     resultadoDisplay.textContent = "Carregando...";
     resultadoDisplay.style.margin = "10px auto";
@@ -79,82 +79,69 @@
     generateButton.style.fontSize = "16px";
     generateButton.style.cursor = "pointer";
     generateButton.style.marginTop = "10px";
-    generateButton.disabled = true;
     overlay.appendChild(generateButton);
 
-    // Criar contador de rodadas
-    const contadorRodadas = document.createElement("div");
-    contadorRodadas.textContent = "Rodadas coletadas: 0/10";
-    contadorRodadas.style.marginTop = "10px";
-    contadorRodadas.style.fontSize = "16px";
-    contadorRodadas.style.fontWeight = "bold";
-    contadorRodadas.style.color = "red";
-    overlay.appendChild(contadorRodadas);
-
     let historicoResultados = [];
+    async function carregarHistorico() {
+        const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743397349837.csv");
+        const text = await response.text();
+        historicoResultados = text.split("\n").slice(-50).map(linha => linha.split(",")[1]);
+    }
+    await carregarHistorico();
 
     async function coletarDados() {
         let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white");
         let resultados = [...elementos].map(e => e.textContent.trim());
 
         if (resultados.length > 0) {
-            let resultadoAtual = resultados[0].toLowerCase();
-
-            // Atualizar exibição do último resultado
-            resultadoDisplay.textContent = `Último Resultado: ${resultadoAtual.charAt(0).toUpperCase() + resultadoAtual.slice(1)}`;
-            resultadoDisplay.style.color = resultadoAtual === "preto" ? "black" : resultadoAtual === "vermelho" ? "red" : "white";
-            resultadoDisplay.style.backgroundColor = resultadoAtual === "branco" ? "black" : "transparent";
+            let resultadoAtual = resultados[0];
+            resultadoDisplay.textContent = "Último Resultado: " + resultadoAtual;
             historicoResultados.push(resultadoAtual);
             if (historicoResultados.length > 50) historicoResultados.shift();
 
-            // Atualizar contador de rodadas
-            contadorRodadas.textContent = `Rodadas coletadas: ${historicoResultados.length}/10`;
-            if (historicoResultados.length >= 10) {
-                contadorRodadas.style.color = "green";
-                generateButton.disabled = false;
+            if (elementos[0].classList.contains("black")) {
+                resultadoDisplay.style.color = "black";
+            } else if (elementos[0].classList.contains("red")) {
+                resultadoDisplay.style.color = "red";
             } else {
-                contadorRodadas.style.color = "red";
-                generateButton.disabled = true;
+                resultadoDisplay.style.color = "white";
             }
 
-            // Apagar resultado da rodada anterior após 5 segundos
-            setTimeout(() => {
-                resultadoDisplay.textContent = "";
-            }, 5000);
+            if (historicoResultados.length % 10 === 0) {
+                gerarPrevisao();
+            }
         }
     }
 
     function gerarPrevisao() {
-        if (historicoResultados.length < 10) {
-            previsaoDisplay.textContent = "Aguardando mais dados...";
-            previsaoDisplay.style.backgroundColor = "gray";
-            return;
-        }
+        if (historicoResultados.length < 5) return;
 
-        // Análise dos últimos 10 resultados
-        let ultimos10 = historicoResultados.slice(-10);
-        let preto = ultimos10.filter(x => x === "preto").length;
-        let vermelho = ultimos10.filter(x => x === "vermelho").length;
-        let branco = ultimos10.filter(x => x === "branco").length;
+        let padrao = historicoResultados.slice(-5).join("-");
+        let ocorrencias = historicoResultados.filter(h => h === padrao).length;
 
         let corPrevisao;
-        if (branco > 1 && Math.random() < 0.1) {
-            corPrevisao = "Branco";
-        } else if (preto > vermelho) {
-            corPrevisao = "Preto";
+        if (ocorrencias > 1) {
+            corPrevisao = historicoResultados[historicoResultados.length - 1]; // Repete padrão detectado
         } else {
-            corPrevisao = "Vermelho";
+            // Usa lógica, probabilidade, numerologia, SHA-256 e tendência
+            let preto = historicoResultados.filter(x => x.toLowerCase() === "preto").length;
+            let vermelho = historicoResultados.filter(x => x.toLowerCase() === "vermelho").length;
+            let branco = historicoResultados.filter(x => x.toLowerCase() === "branco").length;
+
+            if (branco > 1 && Math.random() < 0.1) {
+                corPrevisao = "Branco";
+            } else if (preto > vermelho) {
+                corPrevisao = "Preto";
+            } else {
+                corPrevisao = "Vermelho";
+            }
         }
 
-        // Exibir previsão
         previsaoDisplay.textContent = corPrevisao;
         previsaoDisplay.style.backgroundColor = corPrevisao === "Preto" ? "black" : corPrevisao === "Vermelho" ? "red" : "white";
         previsaoDisplay.style.color = corPrevisao === "Branco" ? "black" : "white";
     }
 
-    generateButton.addEventListener("click", function () {
-        gerarPrevisao();
-    });
-
+    generateButton.addEventListener("click", gerarPrevisao);
     setInterval(coletarDados, 5000);
 })();
