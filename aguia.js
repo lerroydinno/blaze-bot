@@ -84,39 +84,27 @@
 
     let historicoResultados = [];
     async function carregarHistorico() {
-        const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743397349837.csv");
+        const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743606817291.csv");
         const text = await response.text();
-        historicoResultados = text.split("\n").slice(-50).map(linha => linha.split(",")[1]);
+        historicoResultados = text.split("\n").slice(-100).map(linha => linha.split(",")[1]);
     }
     await carregarHistorico();
 
     async function coletarDados() {
-        let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white");
-        let resultados = [...elementos].map(e => e.textContent.trim());
-    
-        console.log("📊 Resultados Capturados:", resultados);
-    
-        if (resultados.length > 0) {
-            let resultadoAtual = resultados[0];
-            resultadoDisplay.textContent = resultadoAtual;
-            historicoResultados.push(resultadoAtual);
-            if (historicoResultados.length > 50) historicoResultados.shift();
-    
-            let elementoEncontrado = elementos[0];
-            if (elementoEncontrado.classList.contains("black")) {
-                resultadoDisplay.style.backgroundColor = "black";
-            } else if (elementoEncontrado.classList.contains("red")) {
-                resultadoDisplay.style.backgroundColor = "red";
-            } else {
-                resultadoDisplay.style.backgroundColor = "white";
-            }
-        }
+        await carregarHistorico();
+        gerarPrevisao();
     }
-
+    
     async function gerarPrevisao() {
-        let padrao = historicoResultados.slice(-5).join("-");
-        let ocorrencias = historicoResultados.filter(h => h === padrao).length;
-        let corPrevisao = ocorrencias > 1 ? historicoResultados[historicoResultados.length - 1] : (Math.random() < 0.5 ? "Vermelho" : "Preto");
+        let frequencias = historicoResultados.reduce((acc, cor) => {
+            acc[cor] = (acc[cor] || 0) + 1;
+            return acc;
+        }, {});
+        
+        let maiorFrequencia = Math.max(...Object.values(frequencias));
+        let coresProvaveis = Object.keys(frequencias).filter(cor => frequencias[cor] === maiorFrequencia);
+        let corPrevisao = coresProvaveis[Math.floor(Math.random() * coresProvaveis.length)];
+
         previsaoDisplay.textContent = corPrevisao;
         previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : (corPrevisao === "Preto" ? "black" : "white");
     }
