@@ -92,7 +92,6 @@
     overlay.appendChild(contadorRodadas);
 
     let historicoResultados = [];
-    let ultimaPrevisao = null;
 
     async function coletarDados() {
         let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white");
@@ -118,24 +117,10 @@
                 generateButton.disabled = true;
             }
 
-            // Verificar acerto da previsão e exibir resultado
-            if (ultimaPrevisao !== null) {
-                if (resultadoAtual === ultimaPrevisao.toLowerCase()) {
-                    resultadoDisplay.textContent = `Saiu: ${resultadoAtual.charAt(0).toUpperCase() + resultadoAtual.slice(1)} - Ganhou ✅`;
-                    resultadoDisplay.style.color = "green";
-                } else {
-                    resultadoDisplay.textContent = `Saiu: ${resultadoAtual.charAt(0).toUpperCase() + resultadoAtual.slice(1)} - Perdeu ❌`;
-                    resultadoDisplay.style.color = "red";
-                }
-
-                // Apagar previsão após novo resultado
-                setTimeout(() => {
-                    previsaoDisplay.textContent = "-";
-                    previsaoDisplay.style.backgroundColor = "gray";
-                    resultadoDisplay.textContent = "";
-                    ultimaPrevisao = null;
-                }, 3000);
-            }
+            // Apagar resultado da rodada anterior após 5 segundos
+            setTimeout(() => {
+                resultadoDisplay.textContent = "";
+            }, 5000);
         }
     }
 
@@ -165,9 +150,6 @@
         previsaoDisplay.textContent = corPrevisao;
         previsaoDisplay.style.backgroundColor = corPrevisao === "Preto" ? "black" : corPrevisao === "Vermelho" ? "red" : "white";
         previsaoDisplay.style.color = corPrevisao === "Branco" ? "black" : "white";
-
-        // Salvar previsão
-        ultimaPrevisao = corPrevisao;
     }
 
     generateButton.addEventListener("click", function () {
