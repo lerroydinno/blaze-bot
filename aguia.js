@@ -100,37 +100,32 @@
             } else {
                 resultadoDisplay.style.color = "white";
             }
-
-            if (historicoResultados.length % 10 === 0) {
-                gerarPrevisao();
-            }
         }
     }
 
     function gerarPrevisao() {
-        if (historicoResultados.length < 10) return;
-
-        let padrao = historicoResultados.slice(-5).join("-");
-        let ocorrencias = historicoResultados.filter(h => h === padrao).length;
-
-        let corPrevisao;
-        if (ocorrencias > 1) {
-            corPrevisao = historicoResultados[historicoResultados.length - 1]; // Repete padrão detectado
-        } else {
-            // Usa lógica, probabilidade, numerologia, SHA-256 e tendência
-            let preto = historicoResultados.filter(x => x.toLowerCase() === "preto").length;
-            let vermelho = historicoResultados.filter(x => x.toLowerCase() === "vermelho").length;
-            let branco = historicoResultados.filter(x => x.toLowerCase() === "branco").length;
-
-            if (branco > 1 && Math.random() < 0.1) {
-                corPrevisao = "Branco";
-            } else if (preto > vermelho) {
-                corPrevisao = "Preto";
-            } else {
-                corPrevisao = "Vermelho";
-            }
+        if (historicoResultados.length < 10) {
+            previsaoDisplay.textContent = "Aguardando mais dados...";
+            previsaoDisplay.style.backgroundColor = "gray";
+            return;
         }
 
+        // Buscar padrões nos últimos 10 resultados
+        let ultimos10 = historicoResultados.slice(-10);
+        let preto = ultimos10.filter(x => x.toLowerCase() === "preto").length;
+        let vermelho = ultimos10.filter(x => x.toLowerCase() === "vermelho").length;
+        let branco = ultimos10.filter(x => x.toLowerCase() === "branco").length;
+
+        let corPrevisao;
+        if (branco > 1 && Math.random() < 0.1) {
+            corPrevisao = "Branco";
+        } else if (preto > vermelho) {
+            corPrevisao = "Preto";
+        } else {
+            corPrevisao = "Vermelho";
+        }
+
+        // Exibir a previsão no menu
         previsaoDisplay.textContent = corPrevisao;
         previsaoDisplay.style.backgroundColor = corPrevisao === "Preto" ? "black" : corPrevisao === "Vermelho" ? "red" : "white";
         previsaoDisplay.style.color = corPrevisao === "Branco" ? "black" : "white";
