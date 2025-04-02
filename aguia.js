@@ -5,7 +5,7 @@
         existingContainer.remove();
     }
 
-    // Criar janela flutuante com imagem de fundo
+    // Criar janela flutuante
     const overlay = document.createElement("div");
     overlay.id = containerId;
     overlay.style.position = "fixed";
@@ -27,7 +27,7 @@
 
     // Criar botão flutuante
     const floatingButton = document.createElement("div");
-    floatingButton.innerHTML = "<button style='border-radius:50%; width:50px; height:50px;'>🔍</button>";
+    floatingButton.innerHTML = "<button style='border-radius: 50%; padding: 10px; background: #007bff; color: white;'>🔮</button>";
     floatingButton.style.position = "fixed";
     floatingButton.style.bottom = "20px";
     floatingButton.style.right = "20px";
@@ -39,67 +39,63 @@
         overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
     });
 
-    // Exibir resultado e previsão
+    // Exibir resultado
     const resultadoDisplay = document.createElement("div");
     resultadoDisplay.style.margin = "10px auto";
     resultadoDisplay.style.width = "50px";
     resultadoDisplay.style.height = "50px";
     resultadoDisplay.style.borderRadius = "50%";
+    resultadoDisplay.style.fontSize = "18px";
+    resultadoDisplay.style.fontWeight = "bold";
     resultadoDisplay.style.backgroundColor = "gray";
     resultadoDisplay.textContent = "-";
     overlay.appendChild(resultadoDisplay);
 
+    // Exibir previsão
     const previsaoDisplay = document.createElement("div");
     previsaoDisplay.style.margin = "10px auto";
     previsaoDisplay.style.width = "80px";
     previsaoDisplay.style.height = "80px";
     previsaoDisplay.style.borderRadius = "50%";
+    previsaoDisplay.style.fontSize = "20px";
+    previsaoDisplay.style.fontWeight = "bold";
     previsaoDisplay.style.backgroundColor = "gray";
     previsaoDisplay.textContent = "-";
     overlay.appendChild(previsaoDisplay);
 
-    // Botão para gerar previsão manualmente
-    const generateButton = document.createElement("button");
-    generateButton.textContent = "Gerar Previsão";
-    overlay.appendChild(generateButton);
-
     let historicoResultados = [];
+    let contadorRodadas = 0;
 
     async function coletarDados() {
         let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white");
         let resultados = [...elementos].map(e => e.textContent.trim());
+
         if (resultados.length > 0) {
             let resultadoAtual = resultados[0];
+            resultadoDisplay.textContent = resultadoAtual;
             historicoResultados.push(resultadoAtual);
             if (historicoResultados.length > 50) historicoResultados.shift();
-            resultadoDisplay.textContent = resultadoAtual;
+            contadorRodadas++;
+
+            if (contadorRodadas >= 10) {
+                gerarPrevisao();
+                contadorRodadas = 0;
+            }
         }
     }
 
-    function calcularProbabilidade() {
-        let vermelho = historicoResultados.filter(r => r === "Vermelho").length;
-        let preto = historicoResultados.filter(r => r === "Preto").length;
-        let branco = historicoResultados.filter(r => r === "Branco").length;
-        return {
-            Vermelho: (vermelho / historicoResultados.length) * 100,
-            Preto: (preto / historicoResultados.length) * 100,
-            Branco: (branco / historicoResultados.length) * 100
-        };
-    }
+    function gerarPrevisao() {
+        if (historicoResultados.length < 10) return;
 
-    function analisarTendencia() {
-        let ultimos = historicoResultados.slice(-5).join("-");
-        return ultimos.includes("Vermelho") ? "Vermelho" : "Preto";
-    }
+        let ultimaCor = historicoResultados[historicoResultados.length - 1];
+        let tendencia = historicoResultados.slice(-5).filter(c => c === ultimaCor).length;
+        let previsao = "Preto";
+        if (tendencia >= 3) previsao = "Vermelho";
+        if (historicoResultados.includes("Branco")) previsao = "Branco";
 
-    async function gerarPrevisao() {
-        let prob = calcularProbabilidade();
-        let tendencia = analisarTendencia();
-        let previsao = prob.Branco > 5 ? "Branco" : tendencia;
         previsaoDisplay.textContent = previsao;
-        previsaoDisplay.style.backgroundColor = previsao === "Vermelho" ? "red" : (previsao === "Preto" ? "black" : "white");
+        previsaoDisplay.style.backgroundColor = previsao === "Vermelho" ? "red" : previsao === "Preto" ? "black" : "white";
     }
 
-    generateButton.addEventListener("click", gerarPrevisao);
     setInterval(coletarDados, 5000);
 })();
