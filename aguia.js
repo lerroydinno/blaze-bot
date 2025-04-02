@@ -82,12 +82,6 @@
     overlay.appendChild(generateButton);
 
     let historicoResultados = [];
-    async function carregarHistorico() {
-        const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743397349837.csv");
-        const text = await response.text();
-        historicoResultados = text.split("\n").slice(-50).map(linha => linha.split(",")[1]);
-    }
-    await carregarHistorico();
 
     async function coletarDados() {
         let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white");
@@ -114,7 +108,7 @@
     }
 
     function gerarPrevisao() {
-        if (historicoResultados.length < 5) return;
+        if (historicoResultados.length < 10) return;
 
         let padrao = historicoResultados.slice(-5).join("-");
         let ocorrencias = historicoResultados.filter(h => h === padrao).length;
@@ -142,6 +136,9 @@
         previsaoDisplay.style.color = corPrevisao === "Branco" ? "black" : "white";
     }
 
-    generateButton.addEventListener("click", gerarPrevisao);
+    generateButton.addEventListener("click", function () {
+        gerarPrevisao();
+    });
+
     setInterval(coletarDados, 5000);
 })();
