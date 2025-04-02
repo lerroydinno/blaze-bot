@@ -83,19 +83,25 @@
     overlay.appendChild(generateButton);
 
     let historicoResultados = [];
-    async function carregarHistorico() {
-        try {
-            const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743606817291.csv");
-            const text = await response.text();
-            historicoResultados = text.split("\n").map(linha => linha.split(",")[1]).filter(Boolean).slice(-100);
-        } catch (error) {
-            console.error("Erro ao carregar histórico:", error);
-        }
-    }
-
     async function coletarDados() {
-        await carregarHistorico();
-        gerarPrevisao();
+        let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white");
+        let resultados = [...elementos].map(e => e.textContent.trim());
+    
+        if (resultados.length > 0) {
+            let resultadoAtual = resultados[0];
+            resultadoDisplay.textContent = resultadoAtual;
+            historicoResultados.push(resultadoAtual);
+            if (historicoResultados.length > 100) historicoResultados.shift();
+    
+            let elementoEncontrado = elementos[0];
+            if (elementoEncontrado.classList.contains("black")) {
+                resultadoDisplay.style.backgroundColor = "black";
+            } else if (elementoEncontrado.classList.contains("red")) {
+                resultadoDisplay.style.backgroundColor = "red";
+            } else {
+                resultadoDisplay.style.backgroundColor = "white";
+            }
+        }
     }
     
     function gerarPrevisao() {
@@ -113,6 +119,12 @@
         previsaoDisplay.style.backgroundColor = corPrevisao.toLowerCase();
     }
 
-    generateButton.addEventListener("click", coletarDados);
-    setInterval(coletarDados, 5000);
+    generateButton.addEventListener("click", () => {
+        coletarDados();
+        gerarPrevisao();
+    });
+    setInterval(() => {
+        coletarDados();
+        gerarPrevisao();
+    }, 5000);
 })();
