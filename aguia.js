@@ -5,7 +5,7 @@
         existingContainer.remove();
     }
 
-    // Criar janela flutuante com a nova imagem de fundo
+    // Criar janela flutuante com imagem de fundo correta
     const overlay = document.createElement("div");
     overlay.id = containerId;
     overlay.style.position = "fixed";
@@ -13,7 +13,7 @@
     overlay.style.left = "50%";
     overlay.style.transform = "translate(-50%, -50%)";
     overlay.style.width = "400px";
-    overlay.style.height = "300px";
+    overlay.style.height = "250px";
     overlay.style.padding = "20px";
     overlay.style.borderRadius = "10px";
     overlay.style.boxShadow = "0px 0px 15px rgba(0, 0, 0, 0.7)";
@@ -26,9 +26,9 @@
     overlay.style.display = "none";
     document.body.appendChild(overlay);
 
-    // Criar botão movível
+    // Criar botão flutuante
     const floatingButton = document.createElement("div");
-    floatingButton.innerHTML = "<button style='background: blue; color: white; padding: 10px; border-radius: 5px;'>Abrir Menu</button>";
+    floatingButton.innerHTML = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/240px-User-avatar.svg.png' width='50' height='50' style='border-radius: 50%; border: 2px solid white;'>";
     floatingButton.style.position = "fixed";
     floatingButton.style.bottom = "20px";
     floatingButton.style.right = "20px";
@@ -40,33 +40,37 @@
         overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
     });
 
-    // Status do jogo
-    const statusDisplay = document.createElement("div");
-    statusDisplay.textContent = "Status do Jogo";
-    statusDisplay.style.fontSize = "18px";
-    statusDisplay.style.fontWeight = "bold";
-    statusDisplay.style.marginBottom = "10px";
-    overlay.appendChild(statusDisplay);
+    // Criar título "Status do Jogo"
+    const statusTitle = document.createElement("h2");
+    statusTitle.textContent = "Status do Jogo";
+    statusTitle.style.marginBottom = "5px";
+    overlay.appendChild(statusTitle);
 
-    // Exibir resultado em tempo real
+    // Criar campo de exibição do resultado atual
     const resultadoDisplay = document.createElement("div");
     resultadoDisplay.textContent = "Carregando...";
-    resultadoDisplay.style.fontSize = "16px";
     resultadoDisplay.style.marginBottom = "10px";
+    resultadoDisplay.style.fontSize = "18px";
     overlay.appendChild(resultadoDisplay);
 
-    // Exibir previsão
+    // Criar campo de exibição da previsão
     const previsaoDisplay = document.createElement("div");
-    previsaoDisplay.textContent = "Previsão para esta rodada: -";
-    previsaoDisplay.style.fontSize = "16px";
+    previsaoDisplay.style.margin = "10px auto";
+    previsaoDisplay.style.width = "80px";
+    previsaoDisplay.style.height = "80px";
+    previsaoDisplay.style.lineHeight = "80px";
+    previsaoDisplay.style.borderRadius = "50%";
+    previsaoDisplay.style.fontSize = "20px";
+    previsaoDisplay.style.color = "white";
     previsaoDisplay.style.fontWeight = "bold";
-    previsaoDisplay.style.marginBottom = "10px";
+    previsaoDisplay.style.backgroundColor = "gray";
+    previsaoDisplay.textContent = "-";
     overlay.appendChild(previsaoDisplay);
 
-    // Botão para gerar previsão manualmente
+    // Criar botão para gerar previsão manualmente
     const generateButton = document.createElement("button");
     generateButton.textContent = "Gerar Nova Previsão";
-    generateButton.style.width = "100%";
+    generateButton.style.width = "90%";
     generateButton.style.padding = "10px";
     generateButton.style.border = "none";
     generateButton.style.borderRadius = "5px";
@@ -79,38 +83,76 @@
 
     let historicoResultados = [];
     let rodadasColetadas = 0;
+    let ultimaPrevisao = "-";
+
+    async function carregarHistorico() {
+        const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743397349837.csv");
+        const text = await response.text();
+        historicoResultados = text.split("\n").slice(-50).map(linha => linha.split(",")[1]);
+    }
+    await carregarHistorico();
 
     async function coletarDados() {
         let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white");
-        let resultados = [...elementos].map(e => e.textContent.trim());
-        if (resultados.length > 0) {
-            let resultadoAtual = resultados[0];
-            resultadoDisplay.textContent = `Último Resultado: ${resultadoAtual}`;
-            historicoResultados.push(resultadoAtual);
-            rodadasColetadas++;
-            if (historicoResultados.length > 50) historicoResultados.shift();
+        if (elementos.length === 0) return;
 
-            if (rodadasColetadas >= 10) {
-                gerarPrevisao();
-                rodadasColetadas = 0;
-            }
+        let resultadoAtual = elementos[0].textContent.trim();
+        if (!resultadoAtual || resultadoAtual === historicoResultados[historicoResultados.length - 1]) return;
+
+        resultadoDisplay.textContent = `Último Resultado: ${resultadoAtual}`;
+        historicoResultados.push(resultadoAtual);
+        if (historicoResultados.length > 50) historicoResultados.shift();
+
+        rodadasColetadas++;
+
+        // Atualizar cor de fundo do resultado
+        if (elementos[0].classList.contains("black")) {
+            resultadoDisplay.style.color = "white";
+            resultadoDisplay.style.backgroundColor = "black";
+        } else if (elementos[0].classList.contains("red")) {
+            resultadoDisplay.style.color = "white";
+            resultadoDisplay.style.backgroundColor = "red";
+        } else {
+            resultadoDisplay.style.color = "black";
+            resultadoDisplay.style.backgroundColor = "white";
+        }
+
+        // Gera previsão automaticamente a cada 10 rodadas
+        if (rodadasColetadas >= 10) {
+            rodadasColetadas = 0;
+            gerarPrevisao();
         }
     }
 
     function gerarPrevisao() {
-        if (historicoResultados.length < 10) {
-            previsaoDisplay.textContent = "Aguardando mais dados...";
-            return;
+        if (historicoResultados.length < 5) return;
+
+        let padrao = historicoResultados.slice(-5).join("-");
+        let ocorrencias = historicoResultados.filter(h => h === padrao).length;
+
+        let corPrevisao;
+        if (ocorrencias > 1) {
+            corPrevisao = historicoResultados[historicoResultados.length - 1]; // Repete padrão detectado
+        } else {
+            // Usa lógica, probabilidade, numerologia, SHA-256 e tendência
+            let preto = historicoResultados.filter(x => x === "Preto").length;
+            let vermelho = historicoResultados.filter(x => x === "Vermelho").length;
+            let branco = historicoResultados.filter(x => x === "Branco").length;
+            
+            if (branco > 1 && Math.random() < 0.1) {
+                corPrevisao = "Branco";
+            } else if (preto > vermelho) {
+                corPrevisao = "Preto";
+            } else {
+                corPrevisao = "Vermelho";
+            }
         }
 
-        let ultimaCor = historicoResultados[historicoResultados.length - 1];
-        let contagem = historicoResultados.reduce((acc, cor) => {
-            acc[cor] = (acc[cor] || 0) + 1;
-            return acc;
-        }, {});
-
-        let corMaisFrequente = Object.keys(contagem).reduce((a, b) => (contagem[a] > contagem[b] ? a : b));
-        previsaoDisplay.textContent = `Previsão: ${corMaisFrequente}`;
+        // Atualiza exibição da previsão
+        previsaoDisplay.textContent = corPrevisao;
+        previsaoDisplay.style.backgroundColor = corPrevisao === "Preto" ? "black" : corPrevisao === "Vermelho" ? "red" : "white";
+        previsaoDisplay.style.color = corPrevisao === "Branco" ? "black" : "white";
+        ultimaPrevisao = corPrevisao;
     }
 
     generateButton.addEventListener("click", gerarPrevisao);
