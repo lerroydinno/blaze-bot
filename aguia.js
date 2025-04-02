@@ -5,7 +5,7 @@
         existingContainer.remove();
     }
 
-    // Criar janela flutuante
+    // Criar janela flutuante com imagem de fundo
     const overlay = document.createElement("div");
     overlay.id = containerId;
     overlay.style.position = "fixed";
@@ -17,7 +17,7 @@
     overlay.style.padding = "20px";
     overlay.style.borderRadius = "10px";
     overlay.style.boxShadow = "0px 0px 15px rgba(0, 0, 0, 0.7)";
-    overlay.style.backgroundColor = "#1e1e1e";
+    overlay.style.background = "#222";
     overlay.style.color = "white";
     overlay.style.fontFamily = "Arial, sans-serif";
     overlay.style.zIndex = "9999";
@@ -25,9 +25,9 @@
     overlay.style.display = "none";
     document.body.appendChild(overlay);
 
-    // Botão flutuante
+    // Criar botão movível
     const floatingButton = document.createElement("div");
-    floatingButton.innerHTML = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/240px-User-avatar.svg.png' width='50' height='50' style='border-radius: 50%; border: 2px solid white;'>";
+    floatingButton.innerHTML = "<button style='background:#007bff; color:white; border:none; padding:10px; border-radius:5px;'>Previsão</button>";
     floatingButton.style.position = "fixed";
     floatingButton.style.bottom = "20px";
     floatingButton.style.right = "20px";
@@ -39,7 +39,7 @@
         overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
     });
 
-    // Resultado em tempo real
+    // Exibir resultado em tempo real
     const resultadoDisplay = document.createElement("div");
     resultadoDisplay.style.margin = "10px auto";
     resultadoDisplay.style.width = "50px";
@@ -47,12 +47,13 @@
     resultadoDisplay.style.lineHeight = "50px";
     resultadoDisplay.style.borderRadius = "50%";
     resultadoDisplay.style.fontSize = "18px";
+    resultadoDisplay.style.color = "white";
     resultadoDisplay.style.fontWeight = "bold";
     resultadoDisplay.style.backgroundColor = "gray";
     resultadoDisplay.textContent = "-";
     overlay.appendChild(resultadoDisplay);
 
-    // Previsão
+    // Exibir previsão
     const previsaoDisplay = document.createElement("div");
     previsaoDisplay.style.margin = "10px auto";
     previsaoDisplay.style.width = "80px";
@@ -60,6 +61,7 @@
     previsaoDisplay.style.lineHeight = "80px";
     previsaoDisplay.style.borderRadius = "50%";
     previsaoDisplay.style.fontSize = "20px";
+    previsaoDisplay.style.color = "white";
     previsaoDisplay.style.fontWeight = "bold";
     previsaoDisplay.style.backgroundColor = "gray";
     previsaoDisplay.textContent = "-";
@@ -98,20 +100,23 @@
             if (historicoResultados.length > 50) historicoResultados.shift();
     
             let elementoEncontrado = elementos[0];
-            resultadoDisplay.style.backgroundColor = elementoEncontrado.classList.contains("black") ? "black" : 
-                                                     elementoEncontrado.classList.contains("red") ? "red" : "white";
+            if (elementoEncontrado.classList.contains("black")) {
+                resultadoDisplay.style.backgroundColor = "black";
+            } else if (elementoEncontrado.classList.contains("red")) {
+                resultadoDisplay.style.backgroundColor = "red";
+            } else {
+                resultadoDisplay.style.backgroundColor = "white";
+            }
+            gerarPrevisao();
         }
     }
 
     function gerarPrevisao() {
-        let ocorrencias = historicoResultados.reduce((acc, cor) => {
-            acc[cor] = (acc[cor] || 0) + 1;
-            return acc;
-        }, {});
-    
-        let corPrevisao = Object.keys(ocorrencias).reduce((a, b) => ocorrencias[a] > ocorrencias[b] ? a : b);
+        let padrao = historicoResultados.slice(-5).join("-");
+        let ocorrencias = historicoResultados.filter(h => h === padrao).length;
+        let corPrevisao = ocorrencias > 1 ? historicoResultados[historicoResultados.length - 1] : (Math.random() < 0.4 ? "Branco" : (Math.random() < 0.5 ? "Vermelho" : "Preto"));
         previsaoDisplay.textContent = corPrevisao;
-        previsaoDisplay.style.backgroundColor = corPrevisao === "Preto" ? "black" : corPrevisao === "Vermelho" ? "red" : "white";
+        previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : (corPrevisao === "Preto" ? "black" : "white");
     }
 
     generateButton.addEventListener("click", gerarPrevisao);
