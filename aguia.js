@@ -23,7 +23,6 @@
     overlay.style.fontFamily = "Arial, sans-serif";
     overlay.style.zIndex = "9999";
     overlay.style.textAlign = "center";
-    overlay.style.display = "none";
     document.body.appendChild(overlay);
 
     // Criar botão flutuante
@@ -82,6 +81,7 @@
     overlay.appendChild(generateButton);
 
     let historicoResultados = [];
+
     async function carregarHistorico() {
         const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743397349837.csv");
         const text = await response.text();
@@ -105,10 +105,6 @@
                 resultadoDisplay.style.color = "red";
             } else {
                 resultadoDisplay.style.color = "white";
-            }
-
-            if (historicoResultados.length % 10 === 0) {
-                gerarPrevisao();
             }
         }
     }
@@ -143,5 +139,7 @@
     }
 
     generateButton.addEventListener("click", gerarPrevisao);
+
+    // Atualiza os dados a cada 5 segundos
     setInterval(coletarDados, 5000);
 })();
