@@ -142,7 +142,9 @@
     }
 
     // Adiciona evento no botão para gerar previsão manualmente
-    generateButton.addEventListener("click", gerarPrevisao);
+    generateButton.addEventListener("click", function () {
+        gerarPrevisao();
+    });
 
     // Atualiza os dados a cada 5 segundos
     setInterval(coletarDados, 5000);
