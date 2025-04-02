@@ -84,18 +84,22 @@
 
     let historicoResultados = [];
     async function carregarHistorico() {
-        const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743606817291.csv");
-        const text = await response.text();
-        historicoResultados = text.split("\n").slice(-100).map(linha => linha.split(",")[1]);
+        try {
+            const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743606817291.csv");
+            const text = await response.text();
+            historicoResultados = text.split("\n").map(linha => linha.split(",")[1]).filter(Boolean).slice(-100);
+        } catch (error) {
+            console.error("Erro ao carregar histórico:", error);
+        }
     }
-    await carregarHistorico();
 
     async function coletarDados() {
         await carregarHistorico();
         gerarPrevisao();
     }
     
-    async function gerarPrevisao() {
+    function gerarPrevisao() {
+        if (historicoResultados.length === 0) return;
         let frequencias = historicoResultados.reduce((acc, cor) => {
             acc[cor] = (acc[cor] || 0) + 1;
             return acc;
@@ -106,9 +110,9 @@
         let corPrevisao = coresProvaveis[Math.floor(Math.random() * coresProvaveis.length)];
 
         previsaoDisplay.textContent = corPrevisao;
-        previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : (corPrevisao === "Preto" ? "black" : "white");
+        previsaoDisplay.style.backgroundColor = corPrevisao.toLowerCase();
     }
 
-    generateButton.addEventListener("click", gerarPrevisao);
+    generateButton.addEventListener("click", coletarDados);
     setInterval(coletarDados, 5000);
 })();
