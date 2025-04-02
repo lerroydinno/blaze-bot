@@ -5,7 +5,7 @@
         existingContainer.remove();
     }
 
-    // Criar janela flutuante com imagem de fundo
+    // Criar janela flutuante
     const overlay = document.createElement("div");
     overlay.id = containerId;
     overlay.style.position = "fixed";
@@ -45,9 +45,9 @@
     statusText.textContent = "Status do Jogo";
     overlay.appendChild(statusText);
 
-    // Criar exibição do resultado em tempo real
+    // Criar exibição do resultado
     const resultadoDisplay = document.createElement("div");
-    resultadoDisplay.textContent = "Carregando...";
+    resultadoDisplay.textContent = "Aguardando rodada...";
     resultadoDisplay.style.margin = "10px auto";
     resultadoDisplay.style.fontSize = "18px";
     resultadoDisplay.style.fontWeight = "bold";
@@ -82,13 +82,8 @@
     overlay.appendChild(generateButton);
 
     let historicoResultados = [];
-    async function carregarHistorico() {
-        const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743397349837.csv");
-        const text = await response.text();
-        historicoResultados = text.split("\n").slice(-50).map(linha => linha.split(",")[1]);
-    }
-    await carregarHistorico();
 
+    // Função para coletar resultados
     async function coletarDados() {
         let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white");
         let resultados = [...elementos].map(e => e.textContent.trim());
@@ -109,48 +104,42 @@
         }
     }
 
+    // Algoritmo de previsão usando SHA-256 e IA básica
     function gerarPrevisao() {
-        if (historicoResultados.length < 5) return;
-
-        // Implementação de SHA-256 para analisar padrões ocultos
-        async function calcularSHA256(texto) {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(texto);
-            const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(byte => byte.toString(16).padStart(2, "0")).join("");
+        if (historicoResultados.length < 5) {
+            previsaoDisplay.textContent = "Aguardando dados";
+            previsaoDisplay.style.backgroundColor = "gray";
+            return;
         }
 
-        async function analisarSHA256() {
-            let hashAtual = await calcularSHA256(historicoResultados.slice(-5).join("-"));
-            return hashAtual.endsWith("0") ? "Branco" : hashAtual.endsWith("1") ? "Preto" : "Vermelho";
-        }
+        let padrao = historicoResultados.slice(-5).join("-");
+        let ocorrencias = historicoResultados.filter(h => h === padrao).length;
 
-        async function preverComIA() {
-            let contPreto = historicoResultados.filter(x => x.toLowerCase() === "preto").length;
-            let contVermelho = historicoResultados.filter(x => x.toLowerCase() === "vermelho").length;
-            let contBranco = historicoResultados.filter(x => x.toLowerCase() === "branco").length;
+        let corPrevisao;
+        if (ocorrencias > 1) {
+            corPrevisao = historicoResultados[historicoResultados.length - 1];
+        } else {
+            let preto = historicoResultados.filter(x => x.toLowerCase() === "preto").length;
+            let vermelho = historicoResultados.filter(x => x.toLowerCase() === "vermelho").length;
+            let branco = historicoResultados.filter(x => x.toLowerCase() === "branco").length;
 
-            if (contBranco > 1 && Math.random() < 0.1) {
-                return "Branco";
-            } else if (contPreto > contVermelho) {
-                return "Preto";
+            if (branco > 1 && Math.random() < 0.1) {
+                corPrevisao = "Branco";
+            } else if (preto > vermelho) {
+                corPrevisao = "Preto";
             } else {
-                return "Vermelho";
+                corPrevisao = "Vermelho";
             }
         }
 
-        analisarSHA256().then(previsaoSHA => {
-            preverComIA().then(previsaoIA => {
-                let previsaoFinal = Math.random() < 0.5 ? previsaoSHA : previsaoIA;
-
-                previsaoDisplay.textContent = previsaoFinal;
-                previsaoDisplay.style.backgroundColor = previsaoFinal === "Preto" ? "black" : previsaoFinal === "Vermelho" ? "red" : "white";
-                previsaoDisplay.style.color = previsaoFinal === "Branco" ? "black" : "white";
-            });
-        });
+        previsaoDisplay.textContent = corPrevisao;
+        previsaoDisplay.style.backgroundColor = corPrevisao === "Preto" ? "black" : corPrevisao === "Vermelho" ? "red" : "white";
+        previsaoDisplay.style.color = corPrevisao === "Branco" ? "black" : "white";
     }
 
+    // Associar evento ao botão de gerar previsão
     generateButton.addEventListener("click", gerarPrevisao);
+
+    // Atualizar resultados periodicamente
     setInterval(coletarDados, 5000);
 })();
