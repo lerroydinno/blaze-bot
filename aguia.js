@@ -13,7 +13,7 @@
     overlay.style.left = "50%";
     overlay.style.transform = "translate(-50%, -50%)";
     overlay.style.width = "350px";
-    overlay.style.height = "400px";
+    overlay.style.height = "450px";
     overlay.style.padding = "20px";
     overlay.style.borderRadius = "10px";
     overlay.style.boxShadow = "0px 0px 15px rgba(0, 0, 0, 0.7)";
@@ -79,9 +79,28 @@
     generateButton.style.fontSize = "16px";
     generateButton.style.cursor = "pointer";
     generateButton.style.marginTop = "10px";
+    generateButton.disabled = true; // Começa desativado
     overlay.appendChild(generateButton);
 
+    // Criar contador de rodadas
+    const contadorRodadas = document.createElement("div");
+    contadorRodadas.textContent = "Rodadas coletadas: 0/10";
+    contadorRodadas.style.marginTop = "10px";
+    contadorRodadas.style.fontSize = "16px";
+    contadorRodadas.style.fontWeight = "bold";
+    contadorRodadas.style.color = "red"; // Começa vermelho
+    overlay.appendChild(contadorRodadas);
+
+    // Criar exibição do resultado da previsão
+    const resultadoPrevisao = document.createElement("div");
+    resultadoPrevisao.textContent = "";
+    resultadoPrevisao.style.marginTop = "10px";
+    resultadoPrevisao.style.fontSize = "18px";
+    resultadoPrevisao.style.fontWeight = "bold";
+    overlay.appendChild(resultadoPrevisao);
+
     let historicoResultados = [];
+    let ultimaPrevisao = null;
 
     async function coletarDados() {
         let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white");
@@ -93,12 +112,34 @@
             historicoResultados.push(resultadoAtual);
             if (historicoResultados.length > 50) historicoResultados.shift();
 
-            if (elementos[0].classList.contains("black")) {
-                resultadoDisplay.style.color = "black";
-            } else if (elementos[0].classList.contains("red")) {
-                resultadoDisplay.style.color = "red";
+            // Atualizar contador de rodadas
+            contadorRodadas.textContent = `Rodadas coletadas: ${historicoResultados.length}/10`;
+
+            if (historicoResultados.length >= 10) {
+                contadorRodadas.style.color = "green"; // Fica verde ao atingir 10 rodadas
+                generateButton.disabled = false; // Ativa o botão
             } else {
-                resultadoDisplay.style.color = "white";
+                contadorRodadas.style.color = "red";
+                generateButton.disabled = true;
+            }
+
+            // Verificar se a previsão foi acertada ou errada
+            if (ultimaPrevisao !== null) {
+                if (resultadoAtual.toLowerCase() === ultimaPrevisao.toLowerCase()) {
+                    resultadoPrevisao.textContent = "Ganhou ✅";
+                    resultadoPrevisao.style.color = "green";
+                } else {
+                    resultadoPrevisao.textContent = "Perdeu ❌";
+                    resultadoPrevisao.style.color = "red";
+                }
+
+                // Apagar previsão após novo resultado
+                setTimeout(() => {
+                    previsaoDisplay.textContent = "-";
+                    previsaoDisplay.style.backgroundColor = "gray";
+                    resultadoPrevisao.textContent = "";
+                    ultimaPrevisao = null;
+                }, 3000);
             }
         }
     }
@@ -129,6 +170,9 @@
         previsaoDisplay.textContent = corPrevisao;
         previsaoDisplay.style.backgroundColor = corPrevisao === "Preto" ? "black" : corPrevisao === "Vermelho" ? "red" : "white";
         previsaoDisplay.style.color = corPrevisao === "Branco" ? "black" : "white";
+
+        // Salvar previsão para verificar acerto depois
+        ultimaPrevisao = corPrevisao;
     }
 
     generateButton.addEventListener("click", function () {
