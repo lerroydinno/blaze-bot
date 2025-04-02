@@ -1,48 +1,12 @@
-async function obterResultadosTipMiner() {
-    try {
-        const response = await fetch("https://www.tipminer.com/br/historico/blaze/double?timezone=America%2FSao_Paulo&subject=filter&limit=1000");
-        const html = await response.text();
-        
-        // Criar um elemento temporário para processar o HTML
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, "text/html");
-        
-        // Extrair os resultados da tabela
-        const linhas = doc.querySelectorAll(".history-table tbody tr");
-        let resultados = [];
-        
-        linhas.forEach(linha => {
-            const colunas = linha.querySelectorAll("td");
-            if (colunas.length >= 2) {
-                const numero = colunas[0].textContent.trim();
-                const cor = colunas[1].querySelector("div").classList.contains("red") ? "Vermelho" :
-                            colunas[1].querySelector("div").classList.contains("black") ? "Preto" : "Branco";
-                
-                resultados.push({ numero, cor });
-            }
-        });
-        
-        return resultados;
-    } catch (error) {
-        console.error("Erro ao obter resultados do TipMiner:", error);
-        return [];
-    }
+const containerId = "custom-overlay";
+const existingContainer = document.getElementById(containerId);
+if (existingContainer) {
+    existingContainer.remove();
 }
 
-async function atualizarJanela() {
-    const resultados = await obterResultadosTipMiner();
-    if (resultados.length > 0) {
-        const ultimoResultado = resultados[0];
-        document.getElementById("resultado").innerHTML = `<div style='padding: 10px; background: ${ultimoResultado.cor.toLowerCase()}; color: white; text-align: center; border-radius: 5px;'>Último Resultado: ${ultimoResultado.cor}</div>`;
-    }
-}
-
-// Atualizar a cada 5 segundos
-setInterval(atualizarJanela, 5000);
-
-// Criar interface gráfica com fundo personalizado
+// Criar janela flutuante
 const overlay = document.createElement("div");
-overlay.id = "custom-overlay";
+overlay.id = containerId;
 overlay.style.position = "fixed";
 overlay.style.top = "50%";
 overlay.style.left = "50%";
@@ -58,12 +22,78 @@ overlay.style.fontFamily = "Arial, sans-serif";
 overlay.style.zIndex = "9999";
 overlay.style.textAlign = "center";
 
-overlay.innerHTML = `
-    <h3>Status do Jogo</h3>
-    <p id='resultado'>Carregando...</p>
-    <button id='atualizar' style='width: 100%; padding: 10px; margin-top: 10px; background: blue; color: white; border: none; border-radius: 5px; cursor: pointer;'>Atualizar</button>
-`;
 document.body.appendChild(overlay);
 
-document.getElementById("atualizar").onclick = atualizarJanela;
+// Criar botão flutuante
+const floatingButton = document.createElement("div");
+floatingButton.innerHTML = "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/User-avatar.svg/240px-User-avatar.svg.png' width='50' height='50' style='border-radius: 50%; border: 2px solid white;'>";
+floatingButton.style.position = "fixed";
+floatingButton.style.bottom = "20px";
+floatingButton.style.right = "20px";
+floatingButton.style.cursor = "pointer";
+floatingButton.style.zIndex = "9999";
+
+document.body.appendChild(floatingButton);
+
+// Alternar visibilidade da janela
+floatingButton.onclick = function() {
+    overlay.style.display = (overlay.style.display === "none" ? "block" : "none");
+};
+
+// Função para obter o resultado mais recente do TipMiner
+async function obterUltimoResultado() {
+    try {
+        const response = await fetch("https://www.tipminer.com/br/historico/blaze/double?timezone=America%2FSao_Paulo&subject=filter&limit=1000");
+        const data = await response.text();
+        
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(data, "text/html");
+        
+        const resultadoElement = doc.querySelector(".cell__circle .cell__result");
+        if (!resultadoElement) {
+            return "Erro";
+        }
+        
+        const resultadoTexto = resultadoElement.textContent.trim();
+        if (resultadoTexto === "") {
+            return "Branco";
+        }
+        
+        const numero = parseInt(resultadoTexto, 10);
+        if (isNaN(numero)) {
+            return "Erro";
+        }
+        
+        return numero >= 1 && numero <= 7 ? "Vermelho" : "Preto";
+    } catch (error) {
+        console.error("Erro ao obter resultado:", error);
+        return "Erro";
+    }
+}
+
+// Atualizar janela com resultado e previsão
+async function atualizarJanela() {
+    const previsao = await gerarPrevisao();
+    overlay.innerHTML = `
+        <h3>Status do Jogo</h3>
+        <p id='resultado'>Carregando...</p>
+        <h4>Previsão para esta rodada:</h4>
+        <div style='text-align:center; font-size: 20px; padding: 10px; border-radius: 5px; background: ${previsao === "Branco" ? "white" : previsao.toLowerCase()}; color: ${previsao === "Branco" ? "black" : "white"};'>${previsao}</div>
+        <button id='gerarPrevisao' style='width: 100%; padding: 10px; margin-top: 10px; background: blue; color: white; border: none; border-radius: 5px; cursor: pointer;'>Gerar Nova Previsão</button>
+    `;
+    
+    document.getElementById('gerarPrevisao').onclick = atualizarJanela;
+    setTimeout(atualizarResultado, 5000);
+}
+
+// Atualizar resultado na interface
+async function atualizarResultado() {
+    const resultado = await obterUltimoResultado();
+    
+    const previsaoAtual = document.querySelector("#custom-overlay div").innerText;
+    const ganhou = previsaoAtual.includes(resultado);
+    
+    document.getElementById("resultado").innerHTML = `<div style='padding: 10px; background: ${ganhou ? "green" : "red"}; color: white; text-align: center; border-radius: 5px;'>${ganhou ? "GANHOU! 🎉" : "PERDEU! ❌"}</div>`;
+}
+
 atualizarJanela();
