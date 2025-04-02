@@ -16,8 +16,7 @@
     overlay.style.padding = "20px";
     overlay.style.borderRadius = "10px";
     overlay.style.boxShadow = "0px 0px 15px rgba(0, 0, 0, 0.7)";
-    overlay.style.background = "url('https://example.com/background.jpg') no-repeat center center";
-    overlay.style.backgroundSize = "cover";
+    overlay.style.background = "black";
     overlay.style.color = "white";
     overlay.style.fontFamily = "Arial, sans-serif";
     overlay.style.zIndex = "9999";
@@ -103,26 +102,20 @@
             }
     
             let elementoEncontrado = elementos[0];
-            if (elementoEncontrado.classList.contains("black")) {
-                resultadoDisplay.style.backgroundColor = "black";
-            } else if (elementoEncontrado.classList.contains("red")) {
-                resultadoDisplay.style.backgroundColor = "red";
-            } else {
-                resultadoDisplay.style.backgroundColor = "white";
-            }
+            resultadoDisplay.style.backgroundColor = elementoEncontrado.classList.contains("black") ? "black" : elementoEncontrado.classList.contains("red") ? "red" : "white";
         }
     }
 
     function gerarPrevisao() {
         if (historicoResultados.length < 5) return;
         let padrao = historicoResultados.slice(-5).join("-");
-        let ocorrencias = historicoResultados.filter(h => h === padrao).length;
-        let corPrevisao = ocorrencias > 1 ? historicoResultados[historicoResultados.length - 1] : (Math.random() < 0.5 ? "Vermelho" : "Preto");
-        if (corPrevisao !== ultimaPrevisao) {
-            previsaoDisplay.textContent = corPrevisao;
-            previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : "black";
-            ultimaPrevisao = corPrevisao;
-        }
+        let contagemPadrao = historicoResultados.filter(h => h === padrao).length;
+        let proximoIndice = historicoResultados.indexOf(padrao) + 5;
+        let corPrevista = historicoResultados[proximoIndice] || "Aleatório";
+    
+        previsaoDisplay.textContent = corPrevista;
+        previsaoDisplay.style.backgroundColor = corPrevista === "Preto" ? "black" : corPrevista === "Vermelho" ? "red" : "white";
+        ultimaPrevisao = corPrevista;
     }
 
     generateButton.addEventListener("click", gerarPrevisao);
