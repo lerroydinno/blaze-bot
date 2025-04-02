@@ -82,4 +82,49 @@
     let ultimoResultado = "-";
 
     async function carregarHistorico() {
-        const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double
+        const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743606817291.csv");
+        const text = await response.text();
+        historicoResultados = text.split("\n").slice(-50).map(linha => linha.split(",")[1]);
+    }
+    await carregarHistorico();
+
+    async function coletarDados() {
+        let elementos = document.querySelectorAll(".sm-box.black, .sm-box.red, .sm-box.white");
+        let resultados = [...elementos].map(e => e.textContent.trim());
+    
+        if (resultados.length > 0) {
+            let resultadoAtual = resultados[0];
+            if (resultadoAtual !== ultimoResultado) {
+                resultadoDisplay.textContent = resultadoAtual;
+                historicoResultados.push(resultadoAtual);
+                if (historicoResultados.length > 50) historicoResultados.shift();
+                ultimoResultado = resultadoAtual;
+                gerarPrevisao();
+            }
+    
+            let elementoEncontrado = elementos[0];
+            if (elementoEncontrado.classList.contains("black")) {
+                resultadoDisplay.style.backgroundColor = "black";
+            } else if (elementoEncontrado.classList.contains("red")) {
+                resultadoDisplay.style.backgroundColor = "red";
+            } else {
+                resultadoDisplay.style.backgroundColor = "white";
+            }
+        }
+    }
+
+    function gerarPrevisao() {
+        if (historicoResultados.length < 5) return;
+        let padrao = historicoResultados.slice(-5).join("-");
+        let ocorrencias = historicoResultados.filter(h => h === padrao).length;
+        let corPrevisao = ocorrencias > 1 ? historicoResultados[historicoResultados.length - 1] : (Math.random() < 0.5 ? "Vermelho" : "Preto");
+        if (corPrevisao !== ultimaPrevisao) {
+            previsaoDisplay.textContent = corPrevisao;
+            previsaoDisplay.style.backgroundColor = corPrevisao === "Vermelho" ? "red" : "black";
+            ultimaPrevisao = corPrevisao;
+        }
+    }
+
+    generateButton.addEventListener("click", gerarPrevisao);
+    setInterval(coletarDados, 5000);
+})();
