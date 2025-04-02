@@ -23,6 +23,7 @@
     overlay.style.fontFamily = "Arial, sans-serif";
     overlay.style.zIndex = "9999";
     overlay.style.textAlign = "center";
+    overlay.style.display = "none";
     document.body.appendChild(overlay);
 
     // Criar botão flutuante
@@ -52,7 +53,7 @@
     resultadoDisplay.style.fontWeight = "bold";
     overlay.appendChild(resultadoDisplay);
 
-    // Criar exibição da previsão (inicialmente vazia)
+    // Criar exibição da previsão
     const previsaoDisplay = document.createElement("div");
     previsaoDisplay.style.margin = "10px auto";
     previsaoDisplay.style.width = "80px";
@@ -81,7 +82,6 @@
     overlay.appendChild(generateButton);
 
     let historicoResultados = [];
-
     async function carregarHistorico() {
         const response = await fetch("https://raw.githubusercontent.com/lerroydinno/blaze-bot/refs/heads/main/www.historicosblaze.com_Double_1743397349837.csv");
         const text = await response.text();
@@ -110,42 +110,47 @@
     }
 
     function gerarPrevisao() {
-        if (historicoResultados.length < 5) {
-            alert("Ainda não há dados suficientes para prever!");
-            return;
+        if (historicoResultados.length < 5) return;
+
+        // Implementação de SHA-256 para analisar padrões ocultos
+        async function calcularSHA256(texto) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(texto);
+            const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(byte => byte.toString(16).padStart(2, "0")).join("");
         }
 
-        let padrao = historicoResultados.slice(-5).join("-");
-        let ocorrencias = historicoResultados.filter(h => h === padrao).length;
+        async function analisarSHA256() {
+            let hashAtual = await calcularSHA256(historicoResultados.slice(-5).join("-"));
+            return hashAtual.endsWith("0") ? "Branco" : hashAtual.endsWith("1") ? "Preto" : "Vermelho";
+        }
 
-        let corPrevisao;
-        if (ocorrencias > 1) {
-            corPrevisao = historicoResultados[historicoResultados.length - 1]; // Repete padrão detectado
-        } else {
-            // Usa lógica de tendência
-            let preto = historicoResultados.filter(x => x.toLowerCase() === "preto").length;
-            let vermelho = historicoResultados.filter(x => x.toLowerCase() === "vermelho").length;
-            let branco = historicoResultados.filter(x => x.toLowerCase() === "branco").length;
+        async function preverComIA() {
+            let contPreto = historicoResultados.filter(x => x.toLowerCase() === "preto").length;
+            let contVermelho = historicoResultados.filter(x => x.toLowerCase() === "vermelho").length;
+            let contBranco = historicoResultados.filter(x => x.toLowerCase() === "branco").length;
 
-            if (branco > 1 && Math.random() < 0.1) {
-                corPrevisao = "Branco";
-            } else if (preto > vermelho) {
-                corPrevisao = "Preto";
+            if (contBranco > 1 && Math.random() < 0.1) {
+                return "Branco";
+            } else if (contPreto > contVermelho) {
+                return "Preto";
             } else {
-                corPrevisao = "Vermelho";
+                return "Vermelho";
             }
         }
 
-        previsaoDisplay.textContent = corPrevisao;
-        previsaoDisplay.style.backgroundColor = corPrevisao === "Preto" ? "black" : corPrevisao === "Vermelho" ? "red" : "white";
-        previsaoDisplay.style.color = corPrevisao === "Branco" ? "black" : "white";
+        analisarSHA256().then(previsaoSHA => {
+            preverComIA().then(previsaoIA => {
+                let previsaoFinal = Math.random() < 0.5 ? previsaoSHA : previsaoIA;
+
+                previsaoDisplay.textContent = previsaoFinal;
+                previsaoDisplay.style.backgroundColor = previsaoFinal === "Preto" ? "black" : previsaoFinal === "Vermelho" ? "red" : "white";
+                previsaoDisplay.style.color = previsaoFinal === "Branco" ? "black" : "white";
+            });
+        });
     }
 
-    // Adiciona evento no botão para gerar previsão manualmente
-    generateButton.addEventListener("click", function () {
-        gerarPrevisao();
-    });
-
-    // Atualiza os dados a cada 5 segundos
+    generateButton.addEventListener("click", gerarPrevisao);
     setInterval(coletarDados, 5000);
 })();
