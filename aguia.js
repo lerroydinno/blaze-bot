@@ -1,90 +1,73 @@
 (function () {
-  const style = document.createElement("style");
-  style.textContent = `
-    #janela-previsao {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: #1e1e1e;
-      color: white;
-      padding: 16px;
-      border-radius: 12px;
-      font-family: Arial, sans-serif;
-      box-shadow: 0 0 15px rgba(0,0,0,0.7);
-      z-index: 9999;
-      width: 200px;
-      text-align: center;
-    }
-    #janela-previsao button {
-      margin-top: 10px;
-      padding: 8px 12px;
-      border: none;
-      background: #3a3a3a;
-      color: white;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    #janela-previsao button:hover {
-      background: #5a5a5a;
-    }
+  async function sha256(message) {
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  function getRollColor(hash) {
+    const number = parseInt(hash.slice(0, 8), 16);
+    const result = number % 15;
+    if (result === 0) return { cor: "BRANCO", numero: 0 };
+    if (result >= 1 && result <= 7) return { cor: "VERMELHO", numero: result };
+    return { cor: "PRETO", numero: result };
+  }
+
+  const painel = document.createElement("div");
+  painel.style.position = "fixed";
+  painel.style.top = "20px";
+  painel.style.right = "20px";
+  painel.style.zIndex = 99999;
+  painel.style.background = "#000000dd";
+  painel.style.padding = "20px";
+  painel.style.border = "2px solid #00ff00";
+  painel.style.borderRadius = "15px";
+  painel.style.color = "#00ff00";
+  painel.style.fontFamily = "monospace";
+  painel.style.width = "300px";
+  painel.innerHTML = `
+    <div style="text-align:center; font-size:18px; font-weight:bold; margin-bottom:10px;">Hacker00 I.A</div>
+    <div style="margin-bottom:10px;">Conectado ao servidor</div>
+    <div style="margin-bottom:10px;"><strong>Status do Jogo</strong><br><span id="status_jogo">Esperando</span></div>
+    <button id="gerar_btn" style="width: 100%; padding: 8px; background: #00ff00; color: black; font-weight:bold; border: none; border-radius: 8px;">Gerar Nova Previsão</button>
+    <div id="previsao_resultado" style="margin-top: 12px; font-size: 13px; max-height: 200px; overflow-y: auto;"></div>
+    <input id="seed_input" placeholder="Seed inicial" style="width: 100%; padding: 4px; margin-top: 12px;" />
   `;
-  document.head.appendChild(style);
+  document.body.appendChild(painel);
 
-  const janela = document.createElement("div");
-  janela.id = "janela-previsao";
-  janela.innerHTML = `
-    <div id="previsao-texto">Previsão: Aguardando...</div>
-    <button id="botao-prever">Prever Manualmente</button>
-  `;
-  document.body.appendChild(janela);
+  async function gerarPrevisao(seed) {
+    const hash = await sha256(seed);
+    const resultado = getRollColor(hash);
+    const corTexto = resultado.cor === "VERMELHO" ? "red" : resultado.cor === "PRETO" ? "white" : "#ccc";
 
-  function tocarAlertaBranco() {
-    const audio = new Audio("https://notificationsounds.com/notification-sounds/light-569/download/mp3");
-    audio.play();
+    document.getElementById("previsao_resultado").innerHTML = `
+      <div>
+        Resultado Previsto: <span style="color:${corTexto}">${resultado.cor}</span> (${resultado.numero})<br>
+        <span style="font-size: 10px; color: #888;">${hash}</span>
+      </div>
+    `;
   }
 
-  function obterUltimosResultados() {
-    const slots = Array.from(document.querySelectorAll('.transition-transform')); // pega os quadrados da roleta
+  document.getElementById("gerar_btn").onclick = async () => {
+    const status = document.getElementById("status_jogo");
+    const seed = document.getElementById("seed_input").value.trim();
+    if (!seed) return alert("Informe uma seed.");
+    status.innerText = "Calculando...";
+    await gerarPrevisao(seed);
+    status.innerText = "Esperando";
+  };
 
-    const cores = slots.map(el => {
-      const txt = el.innerText.trim();
-      if (txt === '14') return 'BRANCO';
-      const bg = window.getComputedStyle(el).backgroundColor;
-      if (bg.includes('255, 0, 0')) return 'VERMELHO';
-      if (bg.includes('0, 0, 0')) return 'PRETO';
-      return null;
-    }).filter(c => c);
-
-    return cores.slice(0, 10);
-  }
-
-  function analisarPadrão(lista) {
-    if (lista.length < 3) return 'Aguardando...';
-
-    const brancos = lista.filter(c => c === 'BRANCO').length;
-    const ultimas = lista.slice(0, 3);
-
-    if (brancos === 0 && Math.random() > 0.95) return 'BRANCO';
-    if (ultimas.every(c => c === 'VERMELHO')) return 'PRETO';
-    if (ultimas.every(c => c === 'PRETO')) return 'VERMELHO';
-    if (ultimas.includes('BRANCO')) return 'VERMELHO';
-
-    return lista[0] === 'VERMELHO' ? 'PRETO' : 'VERMELHO';
-  }
-
-  function fazerPrevisao() {
-    const resultados = obterUltimosResultados();
-    const previsao = analisarPadrão(resultados);
-
-    const texto = document.getElementById("previsao-texto");
-    texto.innerText = `Previsão: ${previsao}`;
-    texto.style.color = previsao === 'BRANCO' ? 'black' : 'white';
-    texto.style.backgroundColor = previsao === 'BRANCO' ? 'white' : previsao === 'VERMELHO' ? 'red' : 'black';
-
-    if (previsao === 'BRANCO') tocarAlertaBranco();
-  }
-
-  document.getElementById("botao-prever").onclick = fazerPrevisao;
-  setInterval(fazerPrevisao, 15000);
-  fazerPrevisao();
+  let ultimaSeed = "";
+  setInterval(() => {
+    const elementoSeed = document.querySelector(".recent .hash"); // AJUSTE este seletor se necessário
+    if (elementoSeed) {
+      const seedAtual = elementoSeed.innerText.trim();
+      if (seedAtual && seedAtual !== ultimaSeed) {
+        ultimaSeed = seedAtual;
+        document.getElementById("status_jogo").innerText = "Nova rodada detectada";
+        gerarPrevisao(seedAtual);
+      }
+    }
+  }, 3000);
 })();
