@@ -38,48 +38,48 @@
   `;
   document.body.appendChild(janela);
 
-  function preverResultado(hash) {
-    const num = BigInt('0x' + hash);
-    const roll = Number(num % 15n);
-    if (roll === 0) return 'BRANCO';
-    else if (roll <= 7) return 'VERMELHO';
-    else return 'PRETO';
-  }
-
   function tocarAlertaBranco() {
     const audio = new Audio("https://notificationsounds.com/storage/sounds/file-sounds-1165-pristine.mp3");
     audio.play();
   }
 
-  function obterHashDaPagina() {
-    const scripts = Array.from(document.querySelectorAll('script'));
-    for (const s of scripts) {
-      if (s.textContent.includes('"hash":"')) {
-        const match = s.textContent.match(/"hash":"(.*?)"/);
-        if (match && match[1]) {
-          return match[1];
-        }
-      }
-    }
-    return null;
+  function obterUltimosResultados() {
+    const bolas = Array.from(document.querySelectorAll('.sm\\:h-5.sm\\:w-5')); // classe do número no histórico
+    const cores = bolas.map(bola => {
+      const texto = bola.innerText.trim();
+      const cor = bola.style.backgroundColor;
+      if (texto === '14') return 'BRANCO';
+      if (cor.includes('rgb(255, 0, 0)') || cor.includes('red')) return 'VERMELHO';
+      if (cor.includes('rgb(0, 0, 0)') || cor.includes('black')) return 'PRETO';
+      return null;
+    }).filter(cor => cor);
+    return cores.slice(0, 10);
+  }
+
+  function analisarPadrão(lista) {
+    if (lista.length < 3) return 'Aguardando...';
+
+    const brancos = lista.filter(cor => cor === 'BRANCO').length;
+    const ultimas = lista.slice(0, 3);
+
+    if (brancos === 0 && Math.random() > 0.95) return 'BRANCO';
+    if (ultimas.every(c => c === 'VERMELHO')) return 'PRETO';
+    if (ultimas.every(c => c === 'PRETO')) return 'VERMELHO';
+    if (ultimas.includes('BRANCO')) return 'VERMELHO';
+
+    return lista[0] === 'VERMELHO' ? 'PRETO' : 'VERMELHO';
   }
 
   function fazerPrevisao() {
-    const hash = obterHashDaPagina();
-    if (!hash) {
-      document.getElementById("previsao-texto").innerText = "Hash não encontrado";
-      return;
-    }
+    const resultados = obterUltimosResultados();
+    const previsao = analisarPadrão(resultados);
 
-    const resultado = preverResultado(hash);
     const texto = document.getElementById("previsao-texto");
-    texto.innerText = `Previsão: ${resultado}`;
-    texto.style.color = resultado === 'BRANCO' ? 'black' : 'white';
-    texto.style.backgroundColor = resultado === 'BRANCO' ? 'white' : resultado === 'VERMELHO' ? 'red' : 'black';
-    texto.style.padding = "10px";
-    texto.style.borderRadius = "8px";
+    texto.innerText = `Previsão: ${previsao}`;
+    texto.style.color = previsao === 'BRANCO' ? 'black' : 'white';
+    texto.style.backgroundColor = previsao === 'BRANCO' ? 'white' : previsao === 'VERMELHO' ? 'red' : 'black';
 
-    if (resultado === 'BRANCO') tocarAlertaBranco();
+    if (previsao === 'BRANCO') tocarAlertaBranco();
   }
 
   document.getElementById("botao-prever").onclick = fazerPrevisao;
