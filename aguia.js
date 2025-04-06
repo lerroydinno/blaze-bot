@@ -1,102 +1,65 @@
-(function () {
-  async function sha256(message) {
-    const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-  }
+<div id="painel_hacker" style="position: fixed; top: 20px; right: 20px; z-index: 999999; background: black; color: lime; font-family: monospace; border: 2px solid lime; border-radius: 20px; padding: 20px; box-shadow: 0 0 15px lime; max-width: 320px;">
+  <div id="conteudo_painel">
+    <h2 style="text-align:center;">Hacker00 I.A</h2>
+    <p>Conectado ao servidor</p>
+    <p id="status_jogo">Status do Jogo<br><strong>Esperando</strong></p>
+    <input id="seed_input" type="text" placeholder="Seed inicial" style="width:100%;margin-bottom:10px;padding:5px;background:#111;color:lime;border:1px solid lime;border-radius:5px;">
+    <button id="gerar_btn" style="width:100%;padding:10px;background:lime;color:black;border:none;border-radius:10px;font-weight:bold;">Gerar Nova Previsão</button>
+    <div id="resultado" style="margin-top:10px;"></div>
+    <button id="minimizar_btn" style="margin-top:10px;width:100%;padding:5px;background:#222;color:lime;border:1px solid lime;border-radius:5px;">Minimizar</button>
+  </div>
+  <div id="icone_dado" style="display:none;cursor:pointer;justify-content:center;align-items:center;background:lime;border-radius:50%;width:60px;height:60px;position:fixed;bottom:20px;right:20px;z-index:999999;">
+    <span style="font-size:30px;color:black;">🎲</span>
+  </div>
+</div>
 
-  function getRollColor(hash) {
-    const number = parseInt(hash.slice(0, 8), 16);
-    const result = number % 15;
-    if (result === 0) return { cor: "BRANCO", numero: 0 };
-    if (result >= 1 && result <= 7) return { cor: "VERMELHO", numero: result };
-    return { cor: "PRETO", numero: result };
-  }
+<script>
+function sha256(str) {
+  const buffer = new TextEncoder().encode(str);
+  return crypto.subtle.digest("SHA-256", buffer).then((hash) => {
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  });
+}
 
-  const painel = document.createElement("div");
-  painel.id = "painel-hacker";
-  painel.style.position = "fixed";
-  painel.style.top = "50px";
-  painel.style.left = "50%";
-  painel.style.transform = "translateX(-50%)";
-  painel.style.zIndex = 99999;
-  painel.style.background = "#000";
-  painel.style.padding = "20px";
-  painel.style.border = "2px solid lime";
-  painel.style.borderRadius = "16px";
-  painel.style.color = "lime";
-  painel.style.fontFamily = "monospace";
-  painel.style.textAlign = "center";
-  painel.style.minWidth = "280px";
-  painel.innerHTML = `
-    <h2 style="margin-top:0;">Hacker00 I.A</h2>
-    <div>Conectado ao servidor</div>
-    <div id="status_jogo">Status do Jogo<br><strong>Esperando</strong></div>
-    <br>
-    <input id="seed_input" placeholder="Seed inicial" style="width: 100%; padding: 6px; margin-bottom: 10px; background: #111; color: lime; border: 1px solid lime;" />
-    <button id="gerar_btn" style="padding: 10px 20px; background: lime; color: black; font-weight: bold; border: none; border-radius: 8px;">Gerar Nova Previsão</button>
-    <div id="resultado" style="margin-top: 10px; word-break: break-word;"></div>
-    <br>
-    <button id="minimizar_btn" style="margin-top:10px; background:red; color:white; border:none; padding:5px 10px; border-radius:8px;">Minimizar</button>
+function getRollColor(hash) {
+  const numero = parseInt(hash.substring(0, 8), 16) % 15;
+  if (numero === 0) return { cor: "BRANCO", numero };
+  if (numero % 2 === 0) return { cor: "PRETO", numero };
+  return { cor: "VERMELHO", numero };
+}
+
+document.getElementById("gerar_btn").onclick = async () => {
+  const status = document.getElementById("status_jogo");
+  const seedInput = document.getElementById("seed_input");
+  const resultado = document.getElementById("resultado");
+
+  const novaSeed = crypto.randomUUID();
+  seedInput.value = novaSeed;
+
+  status.innerHTML = "Status do Jogo<br><strong>Analisando...</strong>";
+  const hash = await sha256(novaSeed);
+  const rodada = getRollColor(hash);
+
+  resultado.innerHTML = `
+    <div>
+      <strong style="color:lime;">Previsão:</strong> 
+      <span style="color: ${rodada.cor === 'VERMELHO' ? 'red' : rodada.cor === 'PRETO' ? 'white' : 'gray'};">
+      ${rodada.cor}</span> (${rodada.numero})<br>
+      <small style="word-break: break-all;">${hash}</small>
+    </div>
   `;
-  document.body.appendChild(painel);
 
-  const botaoMostrar = document.createElement("div");
-  botaoMostrar.id = "botaoMostrar";
-  botaoMostrar.innerHTML = "🎲";
-  botaoMostrar.style.position = "fixed";
-  botaoMostrar.style.bottom = "20px";
-  botaoMostrar.style.right = "20px";
-  botaoMostrar.style.width = "60px";
-  botaoMostrar.style.height = "60px";
-  botaoMostrar.style.borderRadius = "50%";
-  botaoMostrar.style.background = "lime";
-  botaoMostrar.style.color = "black";
-  botaoMostrar.style.fontSize = "30px";
-  botaoMostrar.style.display = "none";
-  botaoMostrar.style.justifyContent = "center";
-  botaoMostrar.style.alignItems = "center";
-  botaoMostrar.style.textAlign = "center";
-  botaoMostrar.style.lineHeight = "60px";
-  botaoMostrar.style.fontWeight = "bold";
-  botaoMostrar.style.zIndex = 99999;
-  botaoMostrar.style.cursor = "pointer";
-  document.body.appendChild(botaoMostrar);
+  status.innerHTML = "Status do Jogo<br><strong>Esperando</strong>";
+};
 
-  // Seed aleatória
-  const defaultSeed = crypto.randomUUID();
-  document.getElementById("seed_input").value = defaultSeed;
+// Minimizar e restaurar
+document.getElementById("minimizar_btn").onclick = () => {
+  document.getElementById("painel_hacker").style.display = "none";
+  document.getElementById("icone_dado").style.display = "flex";
+};
 
-  document.getElementById("gerar_btn").onclick = async () => {
-    const status = document.getElementById("status_jogo");
-    const seed = document.getElementById("seed_input").value.trim();
-    const resultado = document.getElementById("resultado");
-    if (!seed) return alert("Digite uma seed válida!");
-
-    status.innerHTML = "Status do Jogo<br><strong>Analisando...</strong>";
-    const hash = await sha256(seed);
-    const rodada = getRollColor(hash);
-
-    resultado.innerHTML = `
-      <div>
-        <strong style="color:lime;">Previsão:</strong> 
-        <span style="color: ${rodada.cor === 'VERMELHO' ? 'red' : rodada.cor === 'PRETO' ? 'white' : 'gray'};">
-        ${rodada.cor}</span> (${rodada.numero})<br>
-        <small style="word-break: break-all;">${hash}</small>
-      </div>
-    `;
-
-    status.innerHTML = "Status do Jogo<br><strong>Esperando</strong>";
-  };
-
-  document.getElementById("minimizar_btn").onclick = () => {
-    painel.style.display = "none";
-    botaoMostrar.style.display = "flex";
-  };
-
-  botaoMostrar.onclick = () => {
-    painel.style.display = "block";
-    botaoMostrar.style.display = "none";
-  };
-})();
+document.getElementById("icone_dado").onclick = () => {
+  document.getElementById("painel_hacker").style.display = "block";
+  document.getElementById("icone_dado").style.display = "none";
+};
+</script>
