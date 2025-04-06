@@ -15,6 +15,7 @@
   }
 
   const painel = document.createElement("div");
+  painel.id = "painel-hacker";
   painel.style.position = "fixed";
   painel.style.top = "50px";
   painel.style.left = "50%";
@@ -27,6 +28,7 @@
   painel.style.color = "lime";
   painel.style.fontFamily = "monospace";
   painel.style.textAlign = "center";
+  painel.style.minWidth = "280px";
   painel.innerHTML = `
     <h2 style="margin-top:0;">Hacker00 I.A</h2>
     <div>Conectado ao servidor</div>
@@ -34,11 +36,35 @@
     <br>
     <input id="seed_input" placeholder="Seed inicial" style="width: 100%; padding: 6px; margin-bottom: 10px; background: #111; color: lime; border: 1px solid lime;" />
     <button id="gerar_btn" style="padding: 10px 20px; background: lime; color: black; font-weight: bold; border: none; border-radius: 8px;">Gerar Nova Previsão</button>
-    <div id="resultado" style="margin-top: 15px;"></div>
+    <div id="resultado" style="margin-top: 10px; word-break: break-word;"></div>
+    <br>
+    <button id="minimizar_btn" style="margin-top:10px; background:red; color:white; border:none; padding:5px 10px; border-radius:8px;">Minimizar</button>
   `;
   document.body.appendChild(painel);
 
-  // Preenche automaticamente com seed aleatória
+  const botaoMostrar = document.createElement("div");
+  botaoMostrar.id = "botaoMostrar";
+  botaoMostrar.innerHTML = "🎲";
+  botaoMostrar.style.position = "fixed";
+  botaoMostrar.style.bottom = "20px";
+  botaoMostrar.style.right = "20px";
+  botaoMostrar.style.width = "60px";
+  botaoMostrar.style.height = "60px";
+  botaoMostrar.style.borderRadius = "50%";
+  botaoMostrar.style.background = "lime";
+  botaoMostrar.style.color = "black";
+  botaoMostrar.style.fontSize = "30px";
+  botaoMostrar.style.display = "none";
+  botaoMostrar.style.justifyContent = "center";
+  botaoMostrar.style.alignItems = "center";
+  botaoMostrar.style.textAlign = "center";
+  botaoMostrar.style.lineHeight = "60px";
+  botaoMostrar.style.fontWeight = "bold";
+  botaoMostrar.style.zIndex = 99999;
+  botaoMostrar.style.cursor = "pointer";
+  document.body.appendChild(botaoMostrar);
+
+  // Seed aleatória
   const defaultSeed = crypto.randomUUID();
   document.getElementById("seed_input").value = defaultSeed;
 
@@ -53,14 +79,24 @@
     const rodada = getRollColor(hash);
 
     resultado.innerHTML = `
-      <div style="margin-top: 10px;">
-        <strong>Previsão:</strong> 
+      <div>
+        <strong style="color:lime;">Previsão:</strong> 
         <span style="color: ${rodada.cor === 'VERMELHO' ? 'red' : rodada.cor === 'PRETO' ? 'white' : 'gray'};">
         ${rodada.cor}</span> (${rodada.numero})<br>
-        <small>${hash}</small>
+        <small style="word-break: break-all;">${hash}</small>
       </div>
     `;
 
     status.innerHTML = "Status do Jogo<br><strong>Esperando</strong>";
+  };
+
+  document.getElementById("minimizar_btn").onclick = () => {
+    painel.style.display = "none";
+    botaoMostrar.style.display = "flex";
+  };
+
+  botaoMostrar.onclick = () => {
+    painel.style.display = "block";
+    botaoMostrar.style.display = "none";
   };
 })();
