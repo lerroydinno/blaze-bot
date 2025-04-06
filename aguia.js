@@ -33,6 +33,7 @@ document.getElementById("gerar_btn").onclick = async () => {
   const seedInput = document.getElementById("seed_input");
   const resultado = document.getElementById("resultado");
 
+  // Gera nova seed e exibe
   const novaSeed = crypto.randomUUID();
   seedInput.value = novaSeed;
 
@@ -40,13 +41,14 @@ document.getElementById("gerar_btn").onclick = async () => {
   const hash = await sha256(novaSeed);
   const rodada = getRollColor(hash);
 
+  let corHtml = "";
+  if (rodada.cor === "PRETO") corHtml = '<span style="color:white;">PRETO</span>';
+  else if (rodada.cor === "VERMELHO") corHtml = '<span style="color:red;">VERMELHO</span>';
+  else corHtml = '<span style="color:gray;">BRANCO</span>';
+
   resultado.innerHTML = `
-    <div>
-      <strong style="color:lime;">Previsão:</strong> 
-      <span style="color: ${rodada.cor === 'VERMELHO' ? 'red' : rodada.cor === 'PRETO' ? 'white' : 'gray'};">
-      ${rodada.cor}</span> (${rodada.numero})<br>
-      <small style="word-break: break-all;">${hash}</small>
-    </div>
+    <strong style="color:lime;">Previsão:</strong> ${corHtml} (${rodada.numero})<br>
+    <small style="word-break: break-all;">${hash}</small>
   `;
 
   status.innerHTML = "Status do Jogo<br><strong>Esperando</strong>";
