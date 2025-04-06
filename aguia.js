@@ -33,33 +33,35 @@
   const janela = document.createElement("div");
   janela.id = "janela-previsao";
   janela.innerHTML = `
-    <div id="previsao-texto">Previsão: ...</div>
+    <div id="previsao-texto">Previsão: Aguardando...</div>
     <button id="botao-prever">Prever Manualmente</button>
   `;
   document.body.appendChild(janela);
 
   function tocarAlertaBranco() {
-    const audio = new Audio("https://notificationsounds.com/storage/sounds/file-sounds-1165-pristine.mp3");
+    const audio = new Audio("https://notificationsounds.com/notification-sounds/light-569/download/mp3");
     audio.play();
   }
 
   function obterUltimosResultados() {
-    const bolas = Array.from(document.querySelectorAll('.sm\\:h-5.sm\\:w-5')); // classe do número no histórico
-    const cores = bolas.map(bola => {
-      const texto = bola.innerText.trim();
-      const cor = bola.style.backgroundColor;
-      if (texto === '14') return 'BRANCO';
-      if (cor.includes('rgb(255, 0, 0)') || cor.includes('red')) return 'VERMELHO';
-      if (cor.includes('rgb(0, 0, 0)') || cor.includes('black')) return 'PRETO';
+    const slots = Array.from(document.querySelectorAll('.transition-transform')); // pega os quadrados da roleta
+
+    const cores = slots.map(el => {
+      const txt = el.innerText.trim();
+      if (txt === '14') return 'BRANCO';
+      const bg = window.getComputedStyle(el).backgroundColor;
+      if (bg.includes('255, 0, 0')) return 'VERMELHO';
+      if (bg.includes('0, 0, 0')) return 'PRETO';
       return null;
-    }).filter(cor => cor);
+    }).filter(c => c);
+
     return cores.slice(0, 10);
   }
 
   function analisarPadrão(lista) {
     if (lista.length < 3) return 'Aguardando...';
 
-    const brancos = lista.filter(cor => cor === 'BRANCO').length;
+    const brancos = lista.filter(c => c === 'BRANCO').length;
     const ultimas = lista.slice(0, 3);
 
     if (brancos === 0 && Math.random() > 0.95) return 'BRANCO';
