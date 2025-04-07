@@ -16,7 +16,25 @@
     return { cor: "PRETO", numero: result };
   }
 
-  // Cria o painel flutuante
+  // Estatísticas
+  const historico = [];
+  function atualizarEstatisticas(previsao) {
+    historico.push(previsao.cor);
+    if (historico.length > 50) historico.shift(); // limite de histórico
+    const stats = historico.reduce((acc, cor) => {
+      acc[cor] = (acc[cor] || 0) + 1;
+      return acc;
+    }, {});
+    const total = historico.length;
+    return {
+      total,
+      branco: ((stats.BRANCO || 0) / total * 100).toFixed(1),
+      vermelho: ((stats.VERMELHO || 0) / total * 100).toFixed(1),
+      preto: ((stats.PRETO || 0) / total * 100).toFixed(1)
+    };
+  }
+
+  // Painel flutuante
   const painel = document.createElement("div");
   painel.style.position = "fixed";
   painel.style.top = "60px";
@@ -36,11 +54,13 @@
     <div id="status_jogo">Status do Jogo<br><b>Esperando</b></div>
     <input id="seed_input" placeholder="Seed inicial" style="margin: 10px 0; padding: 5px; width: 90%; text-align: center;" />
     <button id="btn_prever" style="padding: 10px; background: limegreen; border: none; color: black; font-weight: bold; cursor: pointer;">Gerar Nova Previsão</button>
+    <button id="btn_toggle" style="padding: 10px; background: red; border: none; color: white; font-weight: bold; cursor: pointer; margin-top: 5px;">Pausar Auto</button>
     <div id="previsao_resultado" style="margin-top: 10px; font-size: 16px;"></div>
+    <div id="estatisticas" style="margin-top: 10px; font-size: 12px;"></div>
   `;
   document.body.appendChild(painel);
 
-  // Função para gerar previsão
+  // Previsão
   async function gerarPrevisao(seed = null) {
     const status = document.getElementById("status_jogo");
     const saida = document.getElementById("previsao_resultado");
@@ -54,11 +74,26 @@
     status.innerHTML = "Status do Jogo<br><b>Gerando previsão...</b>";
     const hash = await sha256(seedAtual);
     const previsao = getRollColor(hash);
-    input.value = seedAtual; // atualiza input
+    input.value = seedAtual;
+
+    // Aplica estilo de cor visual
+    saida.style.background = previsao.cor === "BRANCO" ? "#fff" : previsao.cor === "VERMELHO" ? "#900" : "#111";
+    saida.style.color = previsao.cor === "BRANCO" ? "#000" : "#0f0";
+    saida.style.padding = "10px";
+    saida.style.borderRadius = "10px";
+
     saida.innerHTML = `
       <div><b>Previsão:</b> ${previsao.cor} (${previsao.numero})</div>
-      <div style="font-size: 10px;">Hash: ${hash.slice(0, 20)}...</div>
+      <div style="font-size: 10px;">Hash: <span style="user-select: all;">${hash}</span></div>
     `;
+
+    // Atualiza estatísticas
+    const estatisticas = atualizarEstatisticas(previsao);
+    document.getElementById("estatisticas").innerHTML = `
+      <div><b>Estatísticas (últimas ${estatisticas.total}):</b></div>
+      <div>Branco: ${estatisticas.branco}% | Vermelho: ${estatisticas.vermelho}% | Preto: ${estatisticas.preto}%</div>
+    `;
+
     status.innerHTML = "Status do Jogo<br><b>Esperando</b>";
     return hash;
   }
@@ -70,12 +105,20 @@
     document.getElementById("seed_input").value = novoSeed;
   };
 
-  // Atualização automática (simula nova rodada a cada 20s)
-  let seed = "123456"; // seed inicial padrão
+  // Auto atualização
+  let auto = true;
+  let seed = "123456";
   document.getElementById("seed_input").value = seed;
 
+  document.getElementById("btn_toggle").onclick = () => {
+    auto = !auto;
+    document.getElementById("btn_toggle").textContent = auto ? "Pausar Auto" : "Ativar Auto";
+    document.getElementById("btn_toggle").style.background = auto ? "red" : "limegreen";
+  };
+
   setInterval(async () => {
+    if (!auto) return;
     const novoSeed = await gerarPrevisao(seed);
     seed = novoSeed;
-  }, 20000); // 20 segundos por rodada
+  }, 20000); // 20s por rodada
 })();
