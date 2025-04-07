@@ -16,7 +16,7 @@
     return { cor: "PRETO", numero: result };
   }
 
-  // Painel flutuante
+  // Cria o painel flutuante
   const painel = document.createElement("div");
   painel.style.position = "fixed";
   painel.style.top = "60px";
@@ -40,52 +40,42 @@
   `;
   document.body.appendChild(painel);
 
-  // Função de previsão
-  async function gerarPrevisao(seed) {
+  // Função para gerar previsão
+  async function gerarPrevisao(seed = null) {
     const status = document.getElementById("status_jogo");
     const saida = document.getElementById("previsao_resultado");
     const input = document.getElementById("seed_input");
-    if (!seed) {
+    let seedAtual = seed || input.value.trim();
+    if (!seedAtual) {
       saida.innerHTML = "Seed não definida";
       return;
     }
 
     status.innerHTML = "Status do Jogo<br><b>Gerando previsão...</b>";
-    const hash = await sha256(seed);
+    const hash = await sha256(seedAtual);
     const previsao = getRollColor(hash);
-    input.value = seed;
+    input.value = seedAtual; // atualiza input
     saida.innerHTML = `
       <div><b>Previsão:</b> ${previsao.cor} (${previsao.numero})</div>
-      <div style="font-size: 10px;">Seed usada: ${seed.slice(0, 20)}...</div>
+      <div style="font-size: 10px;">Hash: ${hash.slice(0, 20)}...</div>
     `;
     status.innerHTML = "Status do Jogo<br><b>Esperando</b>";
+    return hash;
   }
 
-  // Botão manual
+  // Evento botão
   document.getElementById("btn_prever").onclick = async () => {
     const seed = document.getElementById("seed_input").value.trim();
-    await gerarPrevisao(seed);
+    const novoSeed = await gerarPrevisao(seed);
+    document.getElementById("seed_input").value = novoSeed;
   };
 
-  // WebSocket da Blaze
-  const socket = new WebSocket("wss://streaming-cdn.blaze.com/consumer");
+  // Atualização automática (simula nova rodada a cada 20s)
+  let seed = "123456"; // seed inicial padrão
+  document.getElementById("seed_input").value = seed;
 
-  socket.onopen = () => {
-    socket.send(JSON.stringify({ event: "subscribe", channel: "double" }));
-  };
-
-  socket.onmessage = async (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      if (data?.event === "newGame") {
-        const seed = data?.data?.hash;
-        if (seed) {
-          document.getElementById("seed_input").value = seed;
-          await gerarPrevisao(seed);
-        }
-      }
-    } catch (err) {
-      console.error("Erro ao processar WebSocket:", err);
-    }
-  };
+  setInterval(async () => {
+    const novoSeed = await gerarPrevisao(seed);
+    seed = novoSeed;
+  }, 20000); // 20 segundos por rodada
 })();
