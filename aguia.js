@@ -1,5 +1,5 @@
 (function () {
-  // Função SHA-256
+  // Utilitário SHA-256
   async function sha256(message) {
     const msgBuffer = new TextEncoder().encode(message);
     const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
@@ -7,7 +7,7 @@
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  // Determina a cor da rodada
+  // Lógica da cor
   function getRollColor(hash) {
     const number = parseInt(hash.slice(0, 8), 16);
     const result = number % 15;
@@ -18,122 +18,73 @@
 
   // Painel flutuante
   const painel = document.createElement("div");
-  painel.id = "painel_previsao";
+  painel.id = "painel_blaze";
   painel.style.position = "fixed";
-  painel.style.top = "60px";
-  painel.style.left = "50%";
-  painel.style.transform = "translateX(-50%)";
+  painel.style.top = "20px";
+  painel.style.right = "20px";
   painel.style.zIndex = 99999;
-  painel.style.background = "#000000cc";
+  painel.style.background = "#000000dd";
+  painel.style.padding = "16px";
   painel.style.border = "2px solid limegreen";
-  painel.style.borderRadius = "20px";
+  painel.style.borderRadius = "16px";
   painel.style.color = "limegreen";
-  painel.style.padding = "20px";
   painel.style.fontFamily = "monospace";
-  painel.style.textAlign = "center";
-
+  painel.style.fontSize = "14px";
+  painel.style.width = "260px";
   painel.innerHTML = `
-    <h2 style="margin: 0 0 10px;">Hacker00 I.A</h2>
-    <div>Conectado ao servidor</div>
-    <div id="status_jogo">Status do Jogo<br><b>Esperando</b></div>
-    <input id="seed_input" placeholder="Seed inicial" style="margin: 10px 0; padding: 5px; width: 90%; text-align: center;" />
-    <button id="btn_prever" style="padding: 10px; background: limegreen; border: none; color: black; font-weight: bold; cursor: pointer;">Gerar Nova Previsão</button>
-    <div id="previsao_resultado" style="margin-top: 10px; font-size: 16px;"></div>
-    <button id="minimizar_btn" style="margin-top: 10px; background: transparent; border: 1px solid limegreen; color: limegreen; padding: 4px 10px; cursor: pointer; border-radius: 6px;">Minimizar</button>
+    <h3 style="margin: 0 0 10px;">Hacker00 I.A 🔮</h3>
+    <div><b>Status:</b> <span id="status_blaze">Conectando...</span></div>
+    <div><b>Última cor:</b> <span id="ultima_cor">-</span></div>
+    <div><b>Hash:</b> <span id="hash_atual">-</span></div>
+    <div><b>Próxima previsão:</b> <span id="previsao_resultado">-</span></div>
+    <button id="btn_manual" style="margin-top:10px; width:100%; background:limegreen; color:black; border:none; padding:6px; cursor:pointer;">Gerar Previsão Manual</button>
   `;
   document.body.appendChild(painel);
 
-  // Botão de reabrir (ícone de dado)
-  const botaoReabrir = document.createElement("div");
-  botaoReabrir.id = "botao_reabrir";
-  botaoReabrir.style.position = "fixed";
-  botaoReabrir.style.top = "20px";
-  botaoReabrir.style.right = "20px";
-  botaoReabrir.style.width = "50px";
-  botaoReabrir.style.height = "50px";
-  botaoReabrir.style.borderRadius = "50%";
-  botaoReabrir.style.background = "limegreen";
-  botaoReabrir.style.color = "black";
-  botaoReabrir.style.display = "none";
-  botaoReabrir.style.alignItems = "center";
-  botaoReabrir.style.justifyContent = "center";
-  botaoReabrir.style.fontSize = "24px";
-  botaoReabrir.style.fontWeight = "bold";
-  botaoReabrir.style.cursor = "pointer";
-  botaoReabrir.style.zIndex = 99999;
-  botaoReabrir.innerText = "🎲";
-  document.body.appendChild(botaoReabrir);
+  const statusEl = document.getElementById("status_blaze");
+  const ultimaCorEl = document.getElementById("ultima_cor");
+  const hashAtualEl = document.getElementById("hash_atual");
+  const previsaoEl = document.getElementById("previsao_resultado");
 
-  // Minimizar painel
-  document.getElementById("minimizar_btn").onclick = () => {
-    painel.style.display = "none";
-    botaoReabrir.style.display = "flex";
-  };
+  let ultimaHash = null;
 
-  // Reabrir painel
-  botaoReabrir.onclick = () => {
-    painel.style.display = "block";
-    botaoReabrir.style.display = "none";
-  };
-
-  // Função para gerar previsão
-  async function gerarPrevisao(seed = null) {
-    const status = document.getElementById("status_jogo");
-    const saida = document.getElementById("previsao_resultado");
-    const input = document.getElementById("seed_input");
-    let seedAtual = seed || input.value.trim();
-    if (!seedAtual) {
-      saida.innerHTML = "Seed não definida";
-      return;
-    }
-
-    status.innerHTML = "Status do Jogo<br><b>Gerando previsão...</b>";
-    const hash = await sha256(seedAtual);
-    const previsao = getRollColor(hash);
-    input.value = seedAtual;
-    saida.innerHTML = `
-      <div><b>Previsão:</b> ${previsao.cor} (${previsao.numero})</div>
-      <div style="font-size: 10px;">Hash: ${hash.slice(0, 20)}...</div>
-    `;
-    status.innerHTML = "Status do Jogo<br><b>Esperando</b>";
-    return hash;
+  // Função para atualizar previsão com base na hash
+  async function atualizarPrevisao(hash) {
+    const novaHash = await sha256(hash);
+    const previsao = getRollColor(novaHash);
+    previsaoEl.innerHTML = `${previsao.cor} (${previsao.numero})`;
+    return novaHash;
   }
 
   // Botão manual
-  document.getElementById("btn_prever").onclick = async () => {
-    const seed = document.getElementById("seed_input").value.trim();
-    const novoSeed = await gerarPrevisao(seed);
-    document.getElementById("seed_input").value = novoSeed;
-  };
-
-  // WebSocket para pegar hash da rodada real (Blaze)
-  const ws = new WebSocket("wss://blaze.com/socket.io/?EIO=3&transport=websocket");
-
-  ws.onopen = () => {
-    console.log("WebSocket conectado");
-  };
-
-  ws.onmessage = async (event) => {
-    const msg = event.data;
-    if (msg.includes("roulette")) {
-      try {
-        const dataStr = msg.substring(msg.indexOf("[") + 1, msg.lastIndexOf("]"));
-        const jsonStr = dataStr.substring(dataStr.indexOf("{"), dataStr.lastIndexOf("}") + 1);
-        const data = JSON.parse(jsonStr);
-
-        if (data && data.hash) {
-          const hashAtual = data.hash;
-          const corReal = data.color === 0 ? "BRANCO" : data.color === 1 ? "VERMELHO" : "PRETO";
-          document.getElementById("status_jogo").innerHTML = `
-            Última Cor Real: <b>${corReal}</b><br>
-            Hash: <span style="font-size: 10px;">${hashAtual.slice(0, 20)}...</span>
-          `;
-          const novaPrevisao = await gerarPrevisao(hashAtual);
-          document.getElementById("seed_input").value = novaPrevisao;
-        }
-      } catch (err) {
-        console.warn("Erro ao processar dados da rodada:", err);
-      }
+  document.getElementById("btn_manual").onclick = async () => {
+    if (ultimaHash) {
+      statusEl.innerText = "Gerando previsão...";
+      await atualizarPrevisao(ultimaHash);
+      statusEl.innerText = "Esperando nova rodada...";
     }
+  };
+
+  // Interceptar WebSocket para capturar hash real
+  const OriginalWebSocket = window.WebSocket;
+  window.WebSocket = function (url, protocols) {
+    const socket = new OriginalWebSocket(url, protocols);
+    socket.addEventListener("message", async function (event) {
+      try {
+        const data = JSON.parse(event.data);
+        if (data && data[0] && data[0].hash && data[0].color) {
+          const hash = data[0].hash;
+          const cor = data[0].color === 0 ? "BRANCO" : data[0].color === 1 ? "VERMELHO" : "PRETO";
+
+          statusEl.innerText = "Nova rodada detectada!";
+          ultimaCorEl.innerText = cor;
+          hashAtualEl.innerText = hash.slice(0, 20) + "...";
+
+          ultimaHash = hash;
+          await atualizarPrevisao(hash);
+        }
+      } catch (e) {}
+    });
+    return socket;
   };
 })();
