@@ -1,33 +1,10 @@
 (function () {
-  const painel = document.createElement("div");
-  painel.style.position = "fixed";
-  painel.style.top = "60px";
-  painel.style.left = "50%";
-  painel.style.transform = "translateX(-50%)";
-  painel.style.zIndex = 99999;
-  painel.style.background = "#000000cc";
-  painel.style.border = "2px solid limegreen";
-  painel.style.borderRadius = "20px";
-  painel.style.color = "limegreen";
-  painel.style.padding = "20px";
-  painel.style.fontFamily = "monospace";
-  painel.style.textAlign = "center";
-  painel.innerHTML = `
-    <h2 style="margin: 0 0 10px;">🔥 Previsão Double</h2>
-    <div id="status_jogo">Status: <b>Conectando...</b></div>
-    <div id="resultado_real">Último resultado: ...</div>
-    <input id="seed_input" placeholder="Seed manual (opcional)" style="margin: 10px 0; padding: 5px; width: 90%; text-align: center;" />
-    <button id="btn_prever" style="padding: 10px; background: limegreen; border: none; color: black; font-weight: bold; cursor: pointer;">Gerar Previsão</button>
-    <div id="previsao_resultado" style="margin-top: 10px; font-size: 16px;"></div>
-  `;
-  document.body.appendChild(painel);
-
-  // Função SHA256
+  // Função SHA-256
   async function sha256(message) {
     const msgBuffer = new TextEncoder().encode(message);
     const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
   function getRollColor(hash) {
@@ -38,47 +15,58 @@
     return { cor: "PRETO", numero: result };
   }
 
-  async function gerarPrevisao(seed) {
-    const saida = document.getElementById("previsao_resultado");
-    if (!seed) {
-      saida.innerHTML = "Seed não definida.";
-      return;
+  // Criação do painel
+  const painel = document.createElement("div");
+  painel.style.position = "fixed";
+  painel.style.top = "70px";
+  painel.style.left = "50%";
+  painel.style.transform = "translateX(-50%)";
+  painel.style.zIndex = 99999;
+  painel.style.background = "#111";
+  painel.style.color = "#0f0";
+  painel.style.border = "2px solid #0f0";
+  painel.style.padding = "15px";
+  painel.style.borderRadius = "20px";
+  painel.style.fontFamily = "monospace";
+  painel.innerHTML = `
+    <h3 style="margin-top: 0;">Painel Double - SHA256</h3>
+    <div>Último resultado: <span id="resultado_atual">---</span></div>
+    <div id="previsao">Previsão: aguardando...</div>
+    <input id="seed_input" placeholder="Seed manual" style="margin-top:10px;width: 100%;text-align:center;" />
+    <button id="btn_prever" style="margin-top:5px;width:100%;padding:5px;">Prever Próxima</button>
+  `;
+  document.body.appendChild(painel);
+
+  // Monitor DOM
+  let ultimo = "";
+  setInterval(async () => {
+    const el = document.querySelector('.entries .entry:first-child');
+    if (!el) return;
+
+    const numero = el.querySelector('.number')?.textContent.trim();
+    const cor = el.classList.contains('color-red') ? 'VERMELHO' :
+                el.classList.contains('color-black') ? 'PRETO' :
+                el.classList.contains('color-white') ? 'BRANCO' : 'DESCONHECIDA';
+
+    const resultadoAtual = `${cor} (${numero})`;
+
+    if (resultadoAtual !== ultimo) {
+      ultimo = resultadoAtual;
+      document.getElementById("resultado_atual").innerText = resultadoAtual;
+
+      // Previsão automática com base na cor (exemplo: usar resultado como seed)
+      const hash = await sha256(`${cor}-${numero}-${Date.now()}`);
+      const previsao = getRollColor(hash);
+      document.getElementById("previsao").innerHTML = `Previsão: <b>${previsao.cor} (${previsao.numero})</b>`;
     }
+  }, 1000);
+
+  // Botão manual
+  document.getElementById("btn_prever").onclick = async () => {
+    const seed = document.getElementById("seed_input").value.trim();
+    if (!seed) return alert("Digite uma seed válida.");
     const hash = await sha256(seed);
     const previsao = getRollColor(hash);
-    saida.innerHTML = `<b>Previsão:</b> ${previsao.cor} (${previsao.numero})<br><small>Hash: ${hash.slice(0, 12)}...</small>`;
-  }
-
-  document.getElementById("btn_prever").onclick = () => {
-    const seed = document.getElementById("seed_input").value.trim();
-    gerarPrevisao(seed);
-  };
-
-  // Conexão com WebSocket real da Blaze
-  const ws = new WebSocket("wss://streaming-cdn.blaze.com/consumer");
-
-  ws.onopen = () => {
-    document.getElementById("status_jogo").innerHTML = "Status: <b>Conectado ✅</b>";
-    ws.send(JSON.stringify({ event: "subscribe", data: { room: "double_v2" } }));
-  };
-
-  ws.onmessage = async (msg) => {
-    try {
-      const response = JSON.parse(msg.data);
-      if (response && response.event === "double.tick") {
-        const rodada = response?.data;
-        if (!rodada) return;
-
-        const cor = rodada.color === 0 ? "⚪ BRANCO" : rodada.color === 1 ? "🔴 VERMELHO" : "⚫ PRETO";
-        const numero = rodada.roll;
-        const seed = rodada.seed;
-
-        document.getElementById("resultado_real").innerHTML = `Último resultado: ${cor} (${numero})`;
-        document.getElementById("seed_input").value = seed;
-        gerarPrevisao(seed);
-      }
-    } catch (e) {
-      console.error("Erro ao processar mensagem:", e);
-    }
+    document.getElementById("previsao").innerHTML = `Previsão: <b>${previsao.cor} (${previsao.numero})</b>`;
   };
 })();
