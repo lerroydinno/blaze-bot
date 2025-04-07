@@ -1,69 +1,81 @@
-<!-- Painel principal -->
-<div id="painel_hacker" style="position: fixed; top: 20px; right: 20px; z-index: 999999; background: black; color: lime; font-family: monospace; border: 2px solid lime; border-radius: 20px; padding: 20px; box-shadow: 0 0 15px lime; max-width: 320px;">
-  <div id="conteudo_painel">
-    <h2 style="text-align:center;">Hacker00 I.A</h2>
-    <p>Conectado ao servidor</p>
-    <p id="status_jogo">Status do Jogo<br><strong>Esperando</strong></p>
-    <input id="seed_input" type="text" placeholder="Seed inicial" style="width:100%;margin-bottom:10px;padding:5px;background:#111;color:lime;border:1px solid lime;border-radius:5px;">
-    <button id="gerar_btn" style="width:100%;padding:10px;background:lime;color:black;border:none;border-radius:10px;font-weight:bold;">Gerar Nova Previsão</button>
-    <div id="resultado" style="margin-top:10px;"></div>
-    <button id="minimizar_btn" style="margin-top:10px;width:100%;padding:5px;background:#222;color:lime;border:1px solid lime;border-radius:5px;">Minimizar</button>
-  </div>
-</div>
+(function () {
+  // Função SHA-256
+  async function sha256(message) {
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
 
-<!-- Botão flutuante com dado -->
-<div id="icone_dado" style="display:none;cursor:pointer;justify-content:center;align-items:center;background:lime;border-radius:50%;width:60px;height:60px;position:fixed;bottom:20px;right:20px;z-index:999999;">
-  <span style="font-size:30px;color:black;">🎲</span>
-</div>
+  // Determina a cor da rodada
+  function getRollColor(hash) {
+    const number = parseInt(hash.slice(0, 8), 16);
+    const result = number % 15;
+    if (result === 0) return { cor: "BRANCO", numero: 0 };
+    if (result >= 1 && result <= 7) return { cor: "VERMELHO", numero: result };
+    return { cor: "PRETO", numero: result };
+  }
 
-<script>
-function sha256(str) {
-  const buffer = new TextEncoder().encode(str);
-  return crypto.subtle.digest("SHA-256", buffer).then((hash) => {
-    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-  });
-}
-
-function getRollColor(hash) {
-  const numero = parseInt(hash.substring(0, 8), 16) % 15;
-  if (numero === 0) return { cor: "BRANCO", numero };
-  if (numero % 2 === 0) return { cor: "PRETO", numero };
-  return { cor: "VERMELHO", numero };
-}
-
-document.getElementById("gerar_btn").onclick = async () => {
-  const status = document.getElementById("status_jogo");
-  const seedInput = document.getElementById("seed_input");
-  const resultado = document.getElementById("resultado");
-
-  const novaSeed = crypto.randomUUID();
-  seedInput.value = novaSeed;
-
-  status.innerHTML = "Status do Jogo<br><strong>Analisando...</strong>";
-  const hash = await sha256(novaSeed);
-  const rodada = getRollColor(hash);
-
-  let corHtml = "";
-  if (rodada.cor === "PRETO") corHtml = '<span style="color:white;">PRETO</span>';
-  else if (rodada.cor === "VERMELHO") corHtml = '<span style="color:red;">VERMELHO</span>';
-  else corHtml = '<span style="color:gray;">BRANCO</span>';
-
-  resultado.innerHTML = `
-    <strong style="color:lime;">Previsão:</strong> ${corHtml} (${rodada.numero})<br>
-    <small style="word-break: break-all;">${hash}</small>
+  // Cria o painel flutuante
+  const painel = document.createElement("div");
+  painel.style.position = "fixed";
+  painel.style.top = "60px";
+  painel.style.left = "50%";
+  painel.style.transform = "translateX(-50%)";
+  painel.style.zIndex = 99999;
+  painel.style.background = "#000000cc";
+  painel.style.border = "2px solid limegreen";
+  painel.style.borderRadius = "20px";
+  painel.style.color = "limegreen";
+  painel.style.padding = "20px";
+  painel.style.fontFamily = "monospace";
+  painel.style.textAlign = "center";
+  painel.innerHTML = `
+    <h2 style="margin: 0 0 10px;">Hacker00 I.A</h2>
+    <div>Conectado ao servidor</div>
+    <div id="status_jogo">Status do Jogo<br><b>Esperando</b></div>
+    <input id="seed_input" placeholder="Seed inicial" style="margin: 10px 0; padding: 5px; width: 90%; text-align: center;" />
+    <button id="btn_prever" style="padding: 10px; background: limegreen; border: none; color: black; font-weight: bold; cursor: pointer;">Gerar Nova Previsão</button>
+    <div id="previsao_resultado" style="margin-top: 10px; font-size: 16px;"></div>
   `;
+  document.body.appendChild(painel);
 
-  status.innerHTML = "Status do Jogo<br><strong>Esperando</strong>";
-};
+  // Função para gerar previsão
+  async function gerarPrevisao(seed = null) {
+    const status = document.getElementById("status_jogo");
+    const saida = document.getElementById("previsao_resultado");
+    const input = document.getElementById("seed_input");
+    let seedAtual = seed || input.value.trim();
+    if (!seedAtual) {
+      saida.innerHTML = "Seed não definida";
+      return;
+    }
 
-// Minimizar e restaurar painel
-document.getElementById("minimizar_btn").onclick = () => {
-  document.getElementById("painel_hacker").style.display = "none";
-  document.getElementById("icone_dado").style.display = "flex";
-};
+    status.innerHTML = "Status do Jogo<br><b>Gerando previsão...</b>";
+    const hash = await sha256(seedAtual);
+    const previsao = getRollColor(hash);
+    input.value = seedAtual; // atualiza input
+    saida.innerHTML = `
+      <div><b>Previsão:</b> ${previsao.cor} (${previsao.numero})</div>
+      <div style="font-size: 10px;">Hash: ${hash.slice(0, 20)}...</div>
+    `;
+    status.innerHTML = "Status do Jogo<br><b>Esperando</b>";
+    return hash;
+  }
 
-document.getElementById("icone_dado").onclick = () => {
-  document.getElementById("painel_hacker").style.display = "block";
-  document.getElementById("icone_dado").style.display = "none";
-};
-</script>
+  // Evento botão
+  document.getElementById("btn_prever").onclick = async () => {
+    const seed = document.getElementById("seed_input").value.trim();
+    const novoSeed = await gerarPrevisao(seed);
+    document.getElementById("seed_input").value = novoSeed;
+  };
+
+  // Atualização automática (simula nova rodada a cada 20s)
+  let seed = "123456"; // seed inicial padrão
+  document.getElementById("seed_input").value = seed;
+
+  setInterval(async () => {
+    const novoSeed = await gerarPrevisao(seed);
+    seed = novoSeed;
+  }, 20000); // 20 segundos por rodada
+})();
