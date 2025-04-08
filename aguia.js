@@ -1,50 +1,51 @@
 (function () {
-  const apiURL = "https://jonbet.bet.br/api/roulette_games/recent";
-  let historico = [];
+  const painel = document.createElement("div");
+  painel.style.position = "fixed";
+  painel.style.top = "100px";
+  painel.style.right = "20px";
+  painel.style.zIndex = "9999";
+  painel.style.background = "black";
+  painel.style.border = "2px solid lime";
+  painel.style.padding = "15px";
+  painel.style.color = "lime";
+  painel.style.fontFamily = "monospace";
+  painel.style.borderRadius = "10px";
+  painel.innerHTML = `
+    <div id="status">Status: Carregando...</div>
+    <div id="ultimaCor">Última Cor: --</div>
+    <div id="previsao">Previsão: --</div>
+    <button id="prever" style="margin-top:10px;background:lime;color:black;font-weight:bold;border:none;padding:5px 10px;border-radius:5px;">Prever Manualmente</button>
+    <button id="minimizar" style="margin-top:5px;background:#111;color:lime;border:none;padding:3px 10px;border-radius:5px;">Minimizar</button>
+  `;
+  document.body.appendChild(painel);
+
   let minimizado = false;
 
-  // Utilitário: converte número em cor
+  document.getElementById("minimizar").onclick = () => {
+    minimizado = !minimizado;
+    painel.querySelectorAll("div:not(#status), button:not(#minimizar)").forEach(el => {
+      el.style.display = minimizado ? "none" : "block";
+    });
+    painel.style.height = minimizado ? "40px" : "auto";
+    document.getElementById("minimizar").innerText = minimizado ? "Mostrar" : "Minimizar";
+  };
+
+  document.getElementById("prever").onclick = () => {
+    gerarPrevisao();
+  };
+
   function corPorNumero(num) {
-    if (num === 0) return "branco";
-    return num % 2 === 0 ? "vermelho" : "preto";
+    if (num === 0) return "Branco";
+    if ([1, 3, 5, 7, 9, 11, 13].includes(num)) return "Preto";
+    return "Vermelho";
   }
 
-  // Previsão simples com base na última cor
-  function preverProximaCor() {
-    const ultimas = historico.slice(0, 3).map(c => c.cor);
-    if (ultimas.length < 3) return "Aguardando...";
-    if (ultimas.every(c => c === ultimas[0])) return ultimas[0]; // repete padrão
-    return ultimas.includes("branco") ? "vermelho" : "preto"; // simples lógica
-  }
-
-  // Atualiza interface
-  function atualizarPainel(status, ultimaCor, previsao) {
-    document.getElementById("status-conexao").innerText = `Status: ${status}`;
-    document.getElementById("ultima-cor").innerText = `Última Cor: ${ultimaCor}`;
-    document.getElementById("previsao").innerText = `Previsão: ${previsao}`;
-  }
-
-  // Tenta pegar resultado da API
-  async function obterCorAPI() {
-    try {
-      const res = await fetch(apiURL);
-      const data = await res.json();
-      const ultimo = data[0];
-      return {
-        numero: ultimo.result,
-        cor: corPorNumero(ultimo.result)
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  // Tenta pegar resultado via DOM
   function obterCorDOM() {
     try {
-      const el = document.querySelector('.last-result span');
-      if (!el) return null;
-      const num = parseInt(el.innerText);
+      const bolas = document.querySelectorAll(".last-results span");
+      if (!bolas.length) return null;
+      const ultimoSpan = bolas[0]; // ou bolas[bolas.length - 1] dependendo da ordem
+      const num = parseInt(ultimoSpan.textContent.trim());
       return {
         numero: num,
         cor: corPorNumero(num)
@@ -54,53 +55,46 @@
     }
   }
 
-  // Loop principal
-  async function loopPrincipal() {
-    let resultado = await obterCorAPI();
-    if (!resultado) {
-      resultado = obterCorDOM();
+  function gerarPrevisao() {
+    const info = obterCorDOM();
+    const status = document.getElementById("status");
+    const ultimaCor = document.getElementById("ultimaCor");
+    const previsao = document.getElementById("previsao");
+
+    if (!info) {
+      status.textContent = "Status: Erro";
+      ultimaCor.textContent = "Última Cor: --";
+      previsao.textContent = "Previsão: --";
+      return;
     }
 
-    if (resultado) {
-      if (historico.length === 0 || historico[0].numero !== resultado.numero) {
-        historico.unshift(resultado);
-        const previsao = preverProximaCor();
-        atualizarPainel("Conectado", resultado.cor.toUpperCase(), previsao.toUpperCase());
-      }
+    status.textContent = "Status: Online";
+    ultimaCor.textContent = `Última Cor: ${info.cor}`;
+
+    // Lógica simples de previsão: se veio 2x a mesma cor, muda
+    const historico = Array.from(document.querySelectorAll(".last-results span"))
+      .map(span => parseInt(span.textContent.trim()))
+      .map(corPorNumero);
+
+    let corAtual = historico[0];
+    let count = 1;
+
+    for (let i = 1; i < historico.length; i++) {
+      if (historico[i] === corAtual) {
+        count++;
+      } else break;
+    }
+
+    let previsaoCor;
+    if (count >= 2) {
+      previsaoCor = corAtual === "Preto" ? "Vermelho" : corAtual === "Vermelho" ? "Preto" : "Branco";
     } else {
-      atualizarPainel("Erro", "--", "--");
+      previsaoCor = corAtual;
     }
+
+    previsao.textContent = `Previsão: ${previsaoCor}`;
   }
 
-  // Monta painel flutuante
-  function criarPainel() {
-    const painel = document.createElement("div");
-    painel.id = "painel-jonbet";
-    painel.innerHTML = `
-      <div style="background:#111;padding:10px;border:2px solid lime;color:lime;border-radius:10px;max-width:200px;">
-        <div id="status-conexao">Status: Carregando...</div>
-        <div id="ultima-cor">Última Cor: --</div>
-        <div id="previsao">Previsão: --</div>
-        <button id="btn-prever" style="margin-top:10px;width:100%;background:lime;color:black;font-weight:bold;">Prever Manualmente</button>
-        <button id="btn-minimizar" style="margin-top:5px;width:100%;background:#333;color:lime;">Minimizar</button>
-      </div>
-    `;
-    painel.style.position = "fixed";
-    painel.style.top = "100px";
-    painel.style.right = "10px";
-    painel.style.zIndex = "9999";
-    document.body.appendChild(painel);
-
-    document.getElementById("btn-prever").onclick = loopPrincipal;
-    document.getElementById("btn-minimizar").onclick = () => {
-      minimizado = !minimizado;
-      painel.querySelector("div").style.display = minimizado ? "none" : "block";
-      document.getElementById("btn-minimizar").innerText = minimizado ? "Mostrar" : "Minimizar";
-    };
-  }
-
-  // Iniciar tudo
-  criarPainel();
-  loopPrincipal();
-  setInterval(loopPrincipal, 5000); // Atualiza a cada 5 segundos
+  // Atualiza automaticamente a cada 10s
+  setInterval(gerarPrevisao, 10000);
 })();
