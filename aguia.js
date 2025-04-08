@@ -1,108 +1,117 @@
-// ==UserScript==
-// @name         JonBet Double Predictor
-// @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  Previsão de cores para o jogo Double da JonBet com captura de hash em tempo real
-// @author       ChatGPT
-// @match        https://jonbet.bet.br/*
-// @grant        none
-// ==/UserScript==
-
 (function () {
-  'use strict';
+    let originalWebSocket = window.WebSocket;
+    let painelMinimizado = false;
+    let wsInstances = [];
 
-  // Função SHA-256
-  async function sha256(message) {
-    const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  }
+    // Intercepta qualquer criação de WebSocket
+    window.WebSocket = function (url, protocols) {
+        const ws = new originalWebSocket(url, protocols);
+        wsInstances.push(ws);
 
-  // Define cor com base na hash
-  function getRollColor(hash) {
-    const number = parseInt(hash.slice(0, 8), 16);
-    const result = number % 15;
-    if (result === 0) return { cor: "BRANCO", numero: 0 };
-    if (result >= 1 && result <= 7) return { cor: "VERMELHO", numero: result };
-    return { cor: "PRETO", numero: result };
-  }
+        ws.addEventListener('message', function (event) {
+            console.log('[📡 Nova mensagem WebSocket]:', event.data);
 
-  // Cria menu flutuante
-  const painel = document.createElement("div");
-  painel.style.position = "fixed";
-  painel.style.top = "60px";
-  painel.style.left = "50%";
-  painel.style.transform = "translateX(-50%)";
-  painel.style.zIndex = 99999;
-  painel.style.background = "#000000cc";
-  painel.style.border = "2px solid limegreen";
-  painel.style.borderRadius = "20px";
-  painel.style.color = "limegreen";
-  painel.style.padding = "20px";
-  painel.style.fontFamily = "monospace";
-  painel.style.textAlign = "center";
-  painel.style.transition = "all 0.3s ease";
-  painel.innerHTML = `
-    <h2 style="margin: 0 0 10px;">JonBet I.A</h2>
-    <div id="status_jogo">Status: <b>Conectando...</b></div>
-    <div id="ultima_hash" style="font-size: 10px; margin-top: 5px;">Hash: ---</div>
-    <button id="btn_prever" style="margin: 10px 0; padding: 10px; background: limegreen; border: none; color: black; font-weight: bold; cursor: pointer;">Prever Manualmente</button>
-    <div id="previsao_resultado" style="margin-top: 10px; font-size: 16px;"></div>
-    <button id="btn_minimizar" style="margin-top: 10px; background: transparent; border: none; color: limegreen; cursor: pointer;">Minimizar</button>
-  `;
-  document.body.appendChild(painel);
+            // Detecta hash em strings ou JSON
+            try {
+                let json = JSON.parse(event.data);
 
-  const status = document.getElementById("status_jogo");
-  const saida = document.getElementById("previsao_resultado");
-  const hashLabel = document.getElementById("ultima_hash");
+                // Tenta extrair hash de diferentes formas
+                let hash = json?.hash || json?.server_hash || json?.seed || null;
+                if (typeof hash === 'string' && hash.length >= 10) {
+                    document.getElementById('jonbet-hash').innerText = hash;
+                }
+            } catch (e) {
+                // Se não for JSON, tenta extrair hash de string direta
+                const match = event.data.match(/[a-f0-9]{64}/i);
+                if (match) {
+                    document.getElementById('jonbet-hash').innerText = match[0];
+                }
+            }
+        });
 
-  async function preverComHash(hash) {
-    const cor = getRollColor(hash);
-    saida.innerHTML = `<b>Previsão:</b> ${cor.cor} (${cor.numero})`;
-    hashLabel.innerHTML = `Hash: ${hash.slice(0, 20)}...`;
-  }
+        updateStatus(`Interceptado ✅`);
+        return ws;
+    };
 
-  // Botão minimizar
-  let minimizado = false;
-  document.getElementById("btn_minimizar").onclick = () => {
-    minimizado = !minimizado;
-    painel.style.height = minimizado ? "40px" : "auto";
-    painel.style.overflow = minimizado ? "hidden" : "visible";
-    document.getElementById("btn_minimizar").innerText = minimizado ? "Maximizar" : "Minimizar";
-  };
+    // Mantém o prototype
+    window.WebSocket.prototype = originalWebSocket.prototype;
 
-  // Botão manual
-  document.getElementById("btn_prever").onclick = async () => {
-    if (window.ultimaHash) {
-      await preverComHash(window.ultimaHash);
-    } else {
-      saida.innerHTML = "Hash não disponível";
-    }
-  };
+    // Interface do painel
+    const style = `
+        #jonbet-menu {
+            position: fixed;
+            top: 50px;
+            right: 20px;
+            width: 250px;
+            padding: 15px;
+            background: #000000dd;
+            color: lime;
+            border: 2px solid lime;
+            border-radius: 15px;
+            font-family: monospace;
+            z-index: 99999;
+            transition: all 0.3s ease;
+        }
+        #jonbet-menu.minimizado {
+            width: 120px;
+            height: 40px;
+            overflow: hidden;
+        }
+        #jonbet-menu button {
+            background: lime;
+            border: none;
+            padding: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+        }
+        #jonbet-toggle {
+            text-align: center;
+            margin-top: 10px;
+            cursor: pointer;
+            color: lime;
+        }
+    `;
 
-  // WebSocket intercept
-  const socket = new WebSocket("wss://api-v2.jonbet.bet.br/replication/?EIO=3&transport=websocket");
+    const html = `
+        <div id="jonbet-menu">
+            <div><b>JonBet I.A</b></div>
+            <div>Status: <span id="jonbet-status">Monitorando...</span></div>
+            <div>Hash: <span id="jonbet-hash">---</span></div>
+            <button onclick="gerarPrevisao()">Prever Manualmente</button>
+            <div id="jonbet-toggle" onclick="togglePainel()">Minimizar</div>
+        </div>
+    `;
 
-  socket.addEventListener('message', async (event) => {
-    const data = event.data;
-    if (typeof data === 'string' && data.includes("double")) {
-      const match = data.match(/"hash":"(.*?)"/);
-      if (match && match[1]) {
-        const hash = match[1];
-        window.ultimaHash = hash;
-        await preverComHash(hash);
-        status.innerHTML = "Status: <b>Previsão atualizada</b>";
-      }
-    }
-  });
+    const styleTag = document.createElement('style');
+    styleTag.innerHTML = style;
+    document.head.appendChild(styleTag);
 
-  socket.addEventListener('open', () => {
-    status.innerHTML = "Status: <b>Conectado</b>";
-  });
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    document.body.appendChild(div);
 
-  socket.addEventListener('close', () => {
-    status.innerHTML = "Status: <b>Desconectado</b>";
-  });
+    // Funções
+    window.togglePainel = function () {
+        const painel = document.getElementById('jonbet-menu');
+        painelMinimizado = !painelMinimizado;
+        if (painelMinimizado) {
+            painel.classList.add('minimizado');
+            document.getElementById('jonbet-toggle').innerText = 'Maximizar';
+        } else {
+            painel.classList.remove('minimizado');
+            document.getElementById('jonbet-toggle').innerText = 'Minimizar';
+        }
+    };
+
+    window.updateStatus = function (msg) {
+        const el = document.getElementById('jonbet-status');
+        if (el) el.innerText = msg;
+    };
+
+    window.gerarPrevisao = function () {
+        alert('🔮 Previsão gerada (em breve com IA e hash!)');
+    };
 
 })();
