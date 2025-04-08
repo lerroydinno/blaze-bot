@@ -1,117 +1,116 @@
-(function () {
-    let originalWebSocket = window.WebSocket;
-    let painelMinimizado = false;
-    let wsInstances = [];
+(function() {
+    const apiURL = "https://jonbet.com/api/roulette_games/recent";
 
-    // Intercepta qualquer criação de WebSocket
-    window.WebSocket = function (url, protocols) {
-        const ws = new originalWebSocket(url, protocols);
-        wsInstances.push(ws);
+    let minimized = false;
 
-        ws.addEventListener('message', function (event) {
-            console.log('[📡 Nova mensagem WebSocket]:', event.data);
-
-            // Detecta hash em strings ou JSON
-            try {
-                let json = JSON.parse(event.data);
-
-                // Tenta extrair hash de diferentes formas
-                let hash = json?.hash || json?.server_hash || json?.seed || null;
-                if (typeof hash === 'string' && hash.length >= 10) {
-                    document.getElementById('jonbet-hash').innerText = hash;
-                }
-            } catch (e) {
-                // Se não for JSON, tenta extrair hash de string direta
-                const match = event.data.match(/[a-f0-9]{64}/i);
-                if (match) {
-                    document.getElementById('jonbet-hash').innerText = match[0];
-                }
-            }
-        });
-
-        updateStatus(`Interceptado ✅`);
-        return ws;
-    };
-
-    // Mantém o prototype
-    window.WebSocket.prototype = originalWebSocket.prototype;
-
-    // Interface do painel
-    const style = `
-        #jonbet-menu {
+    const styles = `
+        #jonbet-ai {
             position: fixed;
-            top: 50px;
+            top: 80px;
             right: 20px;
-            width: 250px;
-            padding: 15px;
-            background: #000000dd;
-            color: lime;
-            border: 2px solid lime;
-            border-radius: 15px;
-            font-family: monospace;
             z-index: 99999;
-            transition: all 0.3s ease;
+            background-color: #111;
+            color: lime;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 14px;
+            border: 2px solid lime;
+            border-radius: 10px;
+            width: 220px;
         }
-        #jonbet-menu.minimizado {
-            width: 120px;
-            height: 40px;
-            overflow: hidden;
+        #jonbet-ai.minimized {
+            height: auto;
+            width: auto;
+            padding: 8px;
         }
-        #jonbet-menu button {
+        #jonbet-ai button {
             background: lime;
             border: none;
             padding: 10px;
-            font-weight: bold;
-            cursor: pointer;
             width: 100%;
             margin-top: 10px;
-        }
-        #jonbet-toggle {
-            text-align: center;
-            margin-top: 10px;
+            font-weight: bold;
             cursor: pointer;
+        }
+        #jonbet-ai .minimizar {
+            margin-top: 8px;
+            background: #333;
             color: lime;
         }
     `;
 
-    const html = `
-        <div id="jonbet-menu">
-            <div><b>JonBet I.A</b></div>
-            <div>Status: <span id="jonbet-status">Monitorando...</span></div>
-            <div>Hash: <span id="jonbet-hash">---</span></div>
-            <button onclick="gerarPrevisao()">Prever Manualmente</button>
-            <div id="jonbet-toggle" onclick="togglePainel()">Minimizar</div>
-        </div>
+    const styleEl = document.createElement("style");
+    styleEl.innerText = styles;
+    document.head.appendChild(styleEl);
+
+    const painel = document.createElement("div");
+    painel.id = "jonbet-ai";
+    painel.innerHTML = `
+        <div><b>Status:</b> <span id="status">Carregando...</span></div>
+        <div><b>Última Cor:</b> <span id="ultima-cor">--</span></div>
+        <div><b>Previsão:</b> <span id="previsao">--</span></div>
+        <button onclick="gerarPrevisao()">Prever Manualmente</button>
+        <button class="minimizar" onclick="toggleMinimizar()">Minimizar</button>
     `;
+    document.body.appendChild(painel);
 
-    const styleTag = document.createElement('style');
-    styleTag.innerHTML = style;
-    document.head.appendChild(styleTag);
-
-    const div = document.createElement('div');
-    div.innerHTML = html;
-    document.body.appendChild(div);
-
-    // Funções
-    window.togglePainel = function () {
-        const painel = document.getElementById('jonbet-menu');
-        painelMinimizado = !painelMinimizado;
-        if (painelMinimizado) {
-            painel.classList.add('minimizado');
-            document.getElementById('jonbet-toggle').innerText = 'Maximizar';
-        } else {
-            painel.classList.remove('minimizado');
-            document.getElementById('jonbet-toggle').innerText = 'Minimizar';
-        }
+    window.toggleMinimizar = () => {
+        minimized = !minimized;
+        painel.classList.toggle("minimized");
+        painel.innerHTML = minimized
+            ? `<button class="minimizar" onclick="toggleMinimizar()">Mostrar</button>`
+            : `
+                <div><b>Status:</b> <span id="status">Atualizando</span></div>
+                <div><b>Última Cor:</b> <span id="ultima-cor">--</span></div>
+                <div><b>Previsão:</b> <span id="previsao">--</span></div>
+                <button onclick="gerarPrevisao()">Prever Manualmente</button>
+                <button class="minimizar" onclick="toggleMinimizar()">Minimizar</button>
+              `;
     };
 
-    window.updateStatus = function (msg) {
-        const el = document.getElementById('jonbet-status');
-        if (el) el.innerText = msg;
+    window.gerarPrevisao = () => {
+        fetch(apiURL)
+            .then(res => res.json())
+            .then(data => {
+                if (!Array.isArray(data)) return;
+
+                const ultimos = data.slice(0, 10);
+                const cores = ultimos.map(r => getCor(r));
+
+                const corMaisComum = cores.sort((a,b) =>
+                      cores.filter(v => v==a).length - cores.filter(v => v==b).length
+                ).pop();
+
+                document.querySelector("#previsao").innerText = corMaisComum.toUpperCase();
+            });
     };
 
-    window.gerarPrevisao = function () {
-        alert('🔮 Previsão gerada (em breve com IA e hash!)');
-    };
+    function getCor(rodada) {
+        // Altere conforme a estrutura retornada
+        if (!rodada || !rodada.color) return 'desconhecido';
+        const cor = rodada.color.toLowerCase();
+        if (cor.includes("green")) return "branco";
+        if (cor.includes("black")) return "preto";
+        if (cor.includes("red")) return "vermelho";
+        return cor;
+    }
 
+    function atualizarPainel() {
+        fetch(apiURL)
+            .then(res => res.json())
+            .then(data => {
+                if (!Array.isArray(data)) return;
+
+                const ultima = data[0];
+                const cor = getCor(ultima);
+                document.querySelector("#ultima-cor").innerText = cor.toUpperCase();
+                document.querySelector("#status").innerText = "Conectado";
+            })
+            .catch(() => {
+                document.querySelector("#status").innerText = "Erro";
+            });
+    }
+
+    setInterval(atualizarPainel, 5000); // Atualiza a cada 5s
+    atualizarPainel();
 })();
