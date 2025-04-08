@@ -1,88 +1,106 @@
 (function () {
-  const style = document.createElement("style");
-  style.innerHTML = `
-    #iaMenu {
-      position: fixed;
-      top: 100px;
-      right: 10px;
-      background: black;
-      color: lime;
-      border: 2px solid lime;
-      border-radius: 12px;
-      padding: 10px;
-      z-index: 9999;
-      font-family: monospace;
-      width: 220px;
-      box-shadow: 0 0 10px lime;
-    }
-    #iaMenu.minimized {
-      height: 40px;
-      overflow: hidden;
-    }
-    #iaMenu button {
-      background: lime;
-      color: black;
-      border: none;
-      padding: 8px;
-      margin-top: 10px;
-      font-weight: bold;
-      cursor: pointer;
-      width: 100%;
-      border-radius: 5px;
-    }
-    #iaMenu .status-erro {
-      color: red;
-    }
-  `;
-  document.head.appendChild(style);
+  const apiURL = "https://jonbet.bet.br/api/roulette_games/recent";
+  let historico = [];
+  let minimizado = false;
 
-  const menu = document.createElement("div");
-  menu.id = "iaMenu";
-  menu.innerHTML = `
-    <div><b>Status:</b> <span id="iaStatus" class="status-erro">Desconectado</span></div>
-    <div><b>Última Cor:</b> <span id="iaCor">--</span></div>
-    <div><b>Previsão:</b> <span id="iaPrev">--</span></div>
-    <button id="iaPrever">Prever Manualmente</button>
-    <button id="iaToggle">Minimizar</button>
-  `;
-  document.body.appendChild(menu);
-
-  let minimized = false;
-
-  document.getElementById("iaToggle").onclick = () => {
-    minimized = !minimized;
-    menu.classList.toggle("minimized");
-    document.getElementById("iaToggle").innerText = minimized ? "Maximizar" : "Minimizar";
-  };
-
-  function detectarUltimaCor() {
-    const bolas = document.querySelectorAll(".roulette-history .number");
-    if (!bolas || bolas.length === 0) return;
-
-    const ultima = bolas[0];
-    const cor = ultima.className.includes("white")
-      ? "Branco"
-      : ultima.className.includes("green")
-      ? "Verde"
-      : ultima.className.includes("red")
-      ? "Vermelho"
-      : "--";
-
-    document.getElementById("iaStatus").innerText = "Conectado";
-    document.getElementById("iaStatus").classList.remove("status-erro");
-    document.getElementById("iaCor").innerText = cor;
-    document.getElementById("iaPrev").innerText = preverProxima(cor); // simples
+  // Utilitário: converte número em cor
+  function corPorNumero(num) {
+    if (num === 0) return "branco";
+    return num % 2 === 0 ? "vermelho" : "preto";
   }
 
-  function preverProxima(ultimaCor) {
-    // Lógica simples: se saiu verde, aposta em vermelho. Só exemplo.
-    if (ultimaCor === "Verde") return "Vermelho";
-    if (ultimaCor === "Vermelho") return "Verde";
-    if (ultimaCor === "Branco") return "Verde";
-    return "--";
+  // Previsão simples com base na última cor
+  function preverProximaCor() {
+    const ultimas = historico.slice(0, 3).map(c => c.cor);
+    if (ultimas.length < 3) return "Aguardando...";
+    if (ultimas.every(c => c === ultimas[0])) return ultimas[0]; // repete padrão
+    return ultimas.includes("branco") ? "vermelho" : "preto"; // simples lógica
   }
 
-  document.getElementById("iaPrever").onclick = detectarUltimaCor;
+  // Atualiza interface
+  function atualizarPainel(status, ultimaCor, previsao) {
+    document.getElementById("status-conexao").innerText = `Status: ${status}`;
+    document.getElementById("ultima-cor").innerText = `Última Cor: ${ultimaCor}`;
+    document.getElementById("previsao").innerText = `Previsão: ${previsao}`;
+  }
 
-  setInterval(detectarUltimaCor, 2000); // Atualiza automático
+  // Tenta pegar resultado da API
+  async function obterCorAPI() {
+    try {
+      const res = await fetch(apiURL);
+      const data = await res.json();
+      const ultimo = data[0];
+      return {
+        numero: ultimo.result,
+        cor: corPorNumero(ultimo.result)
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  // Tenta pegar resultado via DOM
+  function obterCorDOM() {
+    try {
+      const el = document.querySelector('.last-result span');
+      if (!el) return null;
+      const num = parseInt(el.innerText);
+      return {
+        numero: num,
+        cor: corPorNumero(num)
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  // Loop principal
+  async function loopPrincipal() {
+    let resultado = await obterCorAPI();
+    if (!resultado) {
+      resultado = obterCorDOM();
+    }
+
+    if (resultado) {
+      if (historico.length === 0 || historico[0].numero !== resultado.numero) {
+        historico.unshift(resultado);
+        const previsao = preverProximaCor();
+        atualizarPainel("Conectado", resultado.cor.toUpperCase(), previsao.toUpperCase());
+      }
+    } else {
+      atualizarPainel("Erro", "--", "--");
+    }
+  }
+
+  // Monta painel flutuante
+  function criarPainel() {
+    const painel = document.createElement("div");
+    painel.id = "painel-jonbet";
+    painel.innerHTML = `
+      <div style="background:#111;padding:10px;border:2px solid lime;color:lime;border-radius:10px;max-width:200px;">
+        <div id="status-conexao">Status: Carregando...</div>
+        <div id="ultima-cor">Última Cor: --</div>
+        <div id="previsao">Previsão: --</div>
+        <button id="btn-prever" style="margin-top:10px;width:100%;background:lime;color:black;font-weight:bold;">Prever Manualmente</button>
+        <button id="btn-minimizar" style="margin-top:5px;width:100%;background:#333;color:lime;">Minimizar</button>
+      </div>
+    `;
+    painel.style.position = "fixed";
+    painel.style.top = "100px";
+    painel.style.right = "10px";
+    painel.style.zIndex = "9999";
+    document.body.appendChild(painel);
+
+    document.getElementById("btn-prever").onclick = loopPrincipal;
+    document.getElementById("btn-minimizar").onclick = () => {
+      minimizado = !minimizado;
+      painel.querySelector("div").style.display = minimizado ? "none" : "block";
+      document.getElementById("btn-minimizar").innerText = minimizado ? "Mostrar" : "Minimizar";
+    };
+  }
+
+  // Iniciar tudo
+  criarPainel();
+  loopPrincipal();
+  setInterval(loopPrincipal, 5000); // Atualiza a cada 5 segundos
 })();
