@@ -1,12 +1,7 @@
 (async function () {
   const apiURL = "https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
-  let historicoCSV = "Data;Cor;Número;Hash\n";
-  let ultimaHash = "";
-  let somAtivado = true;
 
-  // 🔔 Alerta Sonoro para BRANCO
-  const alertaBranco = new Audio("https://www.myinstants.com/media/sounds/alerta.mp3");
-
+  // SHA-256
   async function sha256(message) {
     const msgBuffer = new TextEncoder().encode(message);
     const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
@@ -27,27 +22,11 @@
     return getRollColor(novaHash);
   }
 
-  function saveToHistory(cor, numero, hash) {
-    const csvLine = `${new Date().toLocaleString()};${cor};${numero};${hash}\n`;
-    historicoCSV += csvLine;
-    document.getElementById('historico_resultados').innerHTML += `<div>${cor} (${numero}) - <span style="font-size:10px">${hash.slice(0, 16)}...</span></div>`;
-  }
-
   function updatePainel(cor, numero, hash, previsao) {
-    document.getElementById('resultado_cor').innerText = `🎯 Resultado: ${cor.toLowerCase()} (${numero})`;
+    document.getElementById('resultado_cor').innerText = `🎯 Resultado: ${cor} (${numero})`;
     document.getElementById('resultado_hash').innerText = `Hash: ${hash}`;
-    document.getElementById('previsao_texto').innerText = `🔮 Previsão: ${previsao.cor.toLowerCase()} (${previsao.numero})`;
-
-    // Animação rápida de previsão
-    const previsaoBox = document.getElementById('previsao_texto');
-    previsaoBox.style.opacity = 0.2;
-    setTimeout(() => { previsaoBox.style.opacity = 1; }, 300);
-
-    if (cor === "BRANCO" && somAtivado) {
-      alertaBranco.play();
-    }
-
-    saveToHistory(cor, numero, hash);
+    document.getElementById('previsao_texto').innerText = `🔮 Próxima previsão: ${previsao.cor} (${previsao.numero})`;
+    document.getElementById('historico_resultados').innerHTML += `<div>${cor} (${numero}) - <span style="font-size:10px">${hash.slice(0, 16)}...</span></div>`;
   }
 
   function downloadCSV() {
@@ -60,65 +39,70 @@
     URL.revokeObjectURL(url);
   }
 
-  // 🧩 Painel visual
+  let historicoCSV = "Data;Cor;Número;Hash\n";
+
+  // Painel
   const painel = document.createElement("div");
   painel.id = "painel_previsao";
-  painel.style.cssText = `
-    position: fixed;
-    top: 80px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 99999;
-    background: rgba(0, 0, 0, 0.9);
-    border: 2px solid limegreen;
-    border-radius: 15px;
-    color: limegreen;
-    padding: 15px;
-    font-family: 'Courier New', monospace;
-    text-align: center;
-    box-shadow: 0 0 15px limegreen;
-    width: 280px;
-  `;
+  painel.style.position = "fixed";
+  painel.style.top = "60px";
+  painel.style.left = "50%";
+  painel.style.transform = "translateX(-50%)";
+  painel.style.zIndex = 99999;
+  painel.style.background = "#000000cc";
+  painel.style.border = "2px solid limegreen";
+  painel.style.borderRadius = "20px";
+  painel.style.color = "limegreen";
+  painel.style.padding = "20px";
+  painel.style.fontFamily = "monospace";
+  painel.style.textAlign = "center";
+  painel.style.width = "300px";
   painel.innerHTML = `
-    <h3 style="margin: 0; font-weight: bold; color: limegreen;">Blaze<br><span style="font-size: 16px;">Bot I.A</span></h3>
-    <div id="resultado_cor" style="margin-top: 10px;">🎯 Resultado: aguardando...</div>
-    <div id="resultado_hash" style="font-size: 10px; margin-top: 5px;">Hash: --</div>
-    <div id="previsao_texto" style="margin-top: 12px;">🔮 Previsão: aguardando...</div>
-    <button id="btn_baixar" style="margin-top: 10px; background: #ffffff; border: none; border-radius: 5px; color: #000; padding: 8px 15px; font-weight: bold; cursor: pointer;">
-      ⬇️ Baixar CSV
-    </button>
-    <button id="btn_som" style="margin-top: 10px; background: limegreen; border: none; border-radius: 5px; color: black; padding: 5px 10px; font-weight: bold; cursor: pointer;">
-      🔈 Som: Ativado
-    </button>
-    <div id="historico_resultados" style="margin-top: 10px; max-height: 80px; overflow-y: auto; font-size: 11px; text-align: left;"></div>
+    <div style="display:flex;justify-content:space-between;">
+      <h3 style="margin:0;">Blaze Bot I.A</h3>
+      <button id="btn_minimizar" style="background:none;border:none;color:limegreen;font-weight:bold;">−</button>
+    </div>
+    <div id="resultado_cor">🎯 Resultado: aguardando...</div>
+    <div id="resultado_hash" style="font-size: 10px;">Hash: --</div>
+    <div id="previsao_texto" style="margin-top: 10px;">🔮 Previsão: aguardando...</div>
+    <button id="btn_baixar" style="margin-top:10px;padding:5px 10px;">⬇️ Baixar CSV</button>
+    <div id="historico_resultados" style="margin-top:10px;max-height:100px;overflow:auto;text-align:left;font-size:12px;"></div>
   `;
   document.body.appendChild(painel);
 
   document.getElementById('btn_baixar').onclick = downloadCSV;
-  document.getElementById('btn_som').onclick = () => {
-    somAtivado = !somAtivado;
-    document.getElementById('btn_som').innerText = somAtivado ? "🔈 Som: Ativado" : "🔇 Som: Desativado";
+  document.getElementById('btn_minimizar').onclick = () => {
+    const body = document.getElementById('historico_resultados');
+    const prev = document.getElementById('previsao_texto');
+    const cor = document.getElementById('resultado_cor');
+    const hash = document.getElementById('resultado_hash');
+    const btn = document.getElementById('btn_baixar');
+    const minimized = body.style.display === 'none';
+    body.style.display = minimized ? 'block' : 'none';
+    prev.style.display = minimized ? 'block' : 'none';
+    cor.style.display = minimized ? 'block' : 'none';
+    hash.style.display = minimized ? 'block' : 'none';
+    btn.style.display = minimized ? 'inline-block' : 'none';
   };
 
-  // 🔁 Loop automático
+  // Atualização periódica a cada 8 segundos
   setInterval(async () => {
     try {
-      const response = await fetch(apiURL);
-      const data = await response.json();
-      const resultado = data[0];
+      const res = await fetch(apiURL);
+      const data = await res.json();
+      const ultimo = data[0];
+      const cor = ultimo.color === 0 ? "BRANCO" : ultimo.color <= 7 ? "VERMELHO" : "PRETO";
+      const numero = ultimo.roll;
+      const hash = ultimo.hash;
 
-      if (!resultado || !resultado.hash || resultado.hash === ultimaHash) return;
-
-      ultimaHash = resultado.hash;
-      const numero = resultado.roll;
-      const colorMap = { 1: 'VERMELHO', 2: 'PRETO', 0: 'BRANCO' };
-      const cor = colorMap[resultado.color] || 'DESCONHECIDO';
-      const hash = resultado.hash;
-
-      const previsao = await gerarPrevisao(hash);
-      updatePainel(cor, numero, hash, previsao);
+      if (!document.getElementById(`log_${hash}`)) {
+        const previsao = await gerarPrevisao(hash);
+        updatePainel(cor, numero, hash, previsao);
+        historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash}\n`;
+        document.getElementById('historico_resultados').innerHTML += `<div id="log_${hash}">${cor} (${numero})</div>`;
+      }
     } catch (e) {
-      console.error("Erro ao buscar dados:", e);
+      console.error("Erro ao buscar API:", e);
     }
-  }, 5000);
+  }, 8000);
 })();
