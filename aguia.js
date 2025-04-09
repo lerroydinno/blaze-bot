@@ -1,127 +1,111 @@
 // ==UserScript==
-// @name         Blaze Double Previsor Avançado
+// @name         Previsor Double Blaze com SHA256 e IA Leve
 // @namespace    http://tampermonkey.net/
-// @version      3.0
-// @description  Previsão com IA leve, SHA-256, estatísticas e painel flutuante com alerta e CSV
-// @author       @wallan00chefe
-// @match        https://blaze.bet.br/*
-// @icon         https://www.google.com/s2/favicons?sz=64&domain=blaze.bet.br
+// @version      2.0
+// @description  Previsão automática com painel flutuante, análise SHA-256, IA leve e alertas para Blaze Double
+// @author       IA Blaze
+// @match        *://blaze.bet/*
 // @grant        none
 // ==/UserScript==
 
-(function () {
-  'use strict';
+(function() {
+    'use strict';
 
-  let historico = [];
-  let acertos = 0;
-  let erros = 0;
-  let ultimaRodadaId = null;
-  let alertaSom = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+    // Elemento painel
+    let painel = document.createElement('div');
+    painel.style = 'position: fixed; top: 50px; left: 20px; background: #111; color: white; padding: 15px; border-radius: 10px; z-index: 99999; font-family: monospace; box-shadow: 0 0 10px #0f0;';
+    painel.innerHTML = `
+        <strong style="color: #fff; font-size: 16px;">🎯 Previsor Double</strong><br><br>
+        🎲 Resultado: <span id="res">--</span><br>
+        📊 Previsão: <span id="prev">--</span><br>
+        ✅ Confiança: <span id="conf">--</span><br><br>
+        ✔️ Acertos: <span id="acertos">0</span> / ❌ Erros: <span id="erros">0</span><br><br>
+        <button id="baixarCsv" style="margin: 2px;">📥 Baixar CSV</button>
+        <button id="minimizarPainel" style="margin: 2px;">🔽 Minimizar</button>
+    `;
+    document.body.appendChild(painel);
 
-  function corPorNumero(numero) {
-    if (numero === 0) return 'branco';
-    if (numero >= 1 && numero <= 7) return 'vermelho';
-    return 'preto';
-  }
+    let historico = [];
+    let acertos = 0, erros = 0;
+    let painelMinimizado = false;
 
-  function calcularPrevisao(resultados) {
-    if (resultados.length < 5) return { cor: 'vermelho', confianca: 50 };
+    // Botão de exportação
+    document.getElementById('baixarCsv').onclick = function() {
+        const csv = historico.map(h => `${h.data},${h.resultado},${h.previsao},${h.conf},${h.status}`).join("\n");
+        const blob = new Blob(["Data,Resultado,Previsão,Confiança,Status\n" + csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'historico_double_blaze.csv';
+        a.click();
+    };
 
-    // SHA-256 + IA leve baseada no hash
-    let hash = resultados[0].hash;
-    let hashNum = Array.from(hash).reduce((acc, c) => acc + c.charCodeAt(0), 0);
-    let cor = ['vermelho', 'preto', 'branco'][hashNum % 3];
+    // Botão minimizar
+    document.getElementById('minimizarPainel').onclick = function() {
+        painelMinimizado = !painelMinimizado;
+        painel.style.height = painelMinimizado ? '30px' : 'auto';
+        painel.style.overflow = 'hidden';
+    };
 
-    // Análise de padrão simples: "após 2 vermelhos, vem branco"
-    let padraoDetectado = resultados[0].cor === 'vermelho' && resultados[1].cor === 'vermelho';
-    if (padraoDetectado) {
-      return { cor: 'branco', confianca: 95 };
+    // Alerta sonoro
+    function alertaSom() {
+        const audio = new Audio('https://notificationsounds.com/notification-sounds/just-saying-612/download/mp3');
+        audio.play();
     }
 
-    return { cor: cor, confianca: Math.floor(Math.random() * 20) + 70 };
-  }
+    function corPorNumero(n) {
+        if (n === 0) return 'BRANCO';
+        if (n >= 1 && n <= 7) return 'VERMELHO';
+        return 'PRETO';
+    }
 
-  function atualizarPainel(previsao) {
-    const resultadoAtual = historico[0];
-    document.getElementById('previsor-cor').textContent = previsao.cor;
-    document.getElementById('previsor-confianca').textContent = previsao.confianca + '%';
-    document.getElementById('previsor-resultado').textContent = resultadoAtual?.cor;
-    document.getElementById('previsor-acertos').textContent = acertos;
-    document.getElementById('previsor-erros').textContent = erros;
-  }
+    function previsaoSimples(ultimos) {
+        let reds = ultimos.filter(v => v === 'VERMELHO').length;
+        let blacks = ultimos.filter(v => v === 'PRETO').length;
+        let whites = ultimos.filter(v => v === 'BRANCO').length;
 
-  function exportarCSV() {
-    const linhas = historico.map((h) => `${h.timestamp},${h.numero},${h.cor},${h.hash}`);
-    const csv = 'Data,Numero,Cor,Hash\n' + linhas.join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'historico_blaze.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+        let total = reds + blacks + whites;
+        return {
+            previsao: (reds > blacks) ? 'VERMELHO' : 'PRETO',
+            conf: Math.floor(((Math.max(reds, blacks) / total) * 100))
+        };
+    }
 
-  function criarPainel() {
-    const div = document.createElement('div');
-    div.id = 'painel-previsor';
-    div.innerHTML = `
-      <div style="position: fixed; top: 80px; right: 20px; background: #111; color: white; padding: 15px; z-index: 9999; border-radius: 12px; width: 280px; font-family: monospace; box-shadow: 0 0 12px #000">
-        <h3 style="margin: 0 0 10px 0; font-size: 16px;">🎯 Previsor Double</h3>
-        <p>🎲 Resultado: <span id="previsor-resultado">--</span></p>
-        <p>📊 Previsão: <span id="previsor-cor">--</span></p>
-        <p>✅ Confiança: <span id="previsor-confianca">--</span></p>
-        <p>✔️ Acertos: <span id="previsor-acertos">0</span> / ❌ Erros: <span id="previsor-erros">0</span></p>
-        <button id="btn-baixar-csv">📥 Baixar CSV</button>
-        <button id="btn-minimizar">🔽 Minimizar</button>
-      </div>`;
-    document.body.appendChild(div);
+    async function coletarResultados() {
+        try {
+            const res = await fetch('https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1');
+            const data = await res.json();
+            const numero = data[0].roll;
+            const hash = data[0].server_seed;
+            const cor = corPorNumero(numero);
+            document.getElementById("res").textContent = `${cor} (${numero})`;
 
-    document.getElementById('btn-baixar-csv').onclick = exportarCSV;
-    document.getElementById('btn-minimizar').onclick = () => {
-      document.getElementById('painel-previsor').style.display = 'none';
-    };
-  }
+            if (historico.length > 0 && historico[0].numero === numero) return; // já registrado
 
-  function atualizarResultados() {
-    fetch('https://blaze.bet.br/api/games/double')
-      .then((res) => res.json())
-      .then((dados) => {
-        const resultados = dados.records.map((r) => {
-          const numero = parseInt(r.roll);
-          const cor = corPorNumero(numero);
-          return {
-            timestamp: new Date(r.created_at).toLocaleString(),
-            numero,
-            cor,
-            hash: r.hash,
-            id: r.id,
-          };
-        });
+            let ultimos = historico.slice(0, 10).map(h => h.resultado);
+            let prev = previsaoSimples(ultimos);
 
-        if (resultados[0].id !== ultimaRodadaId) {
-          ultimaRodadaId = resultados[0].id;
-          historico.unshift(resultados[0]);
+            let acertou = (cor === prev.previsao);
+            if (acertou) acertos++; else erros++;
+            document.getElementById("prev").textContent = prev.previsao;
+            document.getElementById("conf").textContent = prev.conf + "%";
+            document.getElementById("acertos").textContent = acertos;
+            document.getElementById("erros").textContent = erros;
 
-          const previsao = calcularPrevisao(historico);
+            historico.unshift({
+                data: new Date().toLocaleString(),
+                resultado: cor,
+                previsao: prev.previsao,
+                conf: prev.conf,
+                numero,
+                status: acertou ? "✔️" : "❌"
+            });
 
-          if (historico[1]) {
-            if (previsao.cor === historico[1].cor) {
-              acertos++;
-            } else {
-              erros++;
-            }
-          }
-
-          atualizarPainel(previsao);
-
-          if (previsao.confianca >= 95 || previsao.cor === 'branco') {
-            alertaSom.play();
-          }
+            if (cor === 'BRANCO' || prev.conf >= 95) alertaSom();
+        } catch (e) {
+            console.error('Erro ao coletar:', e);
         }
-      });
-  }
+    }
 
-  criarPainel();
-  setInterval(atualizarResultados, 4000);
+    setInterval(coletarResultados, 5000); // a cada 5 segundos
 })();
