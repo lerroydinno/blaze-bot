@@ -1,108 +1,95 @@
-(async function () {
-  const apiURL = "https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
+// ==UserScript==
+// @name         Blaze Bot IA - Previsor de Double
+// @namespace    http://tampermonkey.net/
+// @version      1.0
+// @description  Previsão de cores para o jogo Double da Blaze com base em padrões recentes
+// @author       IA
+// @match        https://blaze.bet.br/*
+// @grant        none
+// ==/UserScript==
 
-  // SHA-256
-  async function sha256(message) {
-    const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  }
+(function() {
+    'use strict';
 
-  function getRollColor(hash) {
-    const number = parseInt(hash.slice(0, 8), 16);
-    const result = number % 15;
-    if (result === 0) return { cor: "BRANCO", numero: 0 };
-    if (result >= 1 && result <= 7) return { cor: "VERMELHO", numero: result };
-    return { cor: "PRETO", numero: result };
-  }
+    const historico = [];
+    const maxHistorico = 20;
 
-  async function gerarPrevisao(seed) {
-    const novaHash = await sha256(seed);
-    return getRollColor(novaHash);
-  }
-
-  function updatePainel(cor, numero, hash, previsao) {
-    document.getElementById('resultado_cor').innerText = `🎯 Resultado: ${cor} (${numero})`;
-    document.getElementById('resultado_hash').innerText = `Hash: ${hash}`;
-    document.getElementById('previsao_texto').innerText = `🔮 Próxima previsão: ${previsao.cor} (${previsao.numero})`;
-    document.getElementById('historico_resultados').innerHTML += `<div>${cor} (${numero}) - <span style="font-size:10px">${hash.slice(0, 16)}...</span></div>`;
-  }
-
-  function downloadCSV() {
-    const blob = new Blob([historicoCSV], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `double_historico_${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  let historicoCSV = "Data;Cor;Número;Hash\n";
-
-  // Painel
-  const painel = document.createElement("div");
-  painel.id = "painel_previsao";
-  painel.style.position = "fixed";
-  painel.style.top = "60px";
-  painel.style.left = "50%";
-  painel.style.transform = "translateX(-50%)";
-  painel.style.zIndex = 99999;
-  painel.style.background = "#000000cc";
-  painel.style.border = "2px solid limegreen";
-  painel.style.borderRadius = "20px";
-  painel.style.color = "limegreen";
-  painel.style.padding = "20px";
-  painel.style.fontFamily = "monospace";
-  painel.style.textAlign = "center";
-  painel.style.width = "300px";
-  painel.innerHTML = `
-    <div style="display:flex;justify-content:space-between;">
-      <h3 style="margin:0;">Blaze Bot I.A</h3>
-      <button id="btn_minimizar" style="background:none;border:none;color:limegreen;font-weight:bold;">−</button>
-    </div>
-    <div id="resultado_cor">🎯 Resultado: aguardando...</div>
-    <div id="resultado_hash" style="font-size: 10px;">Hash: --</div>
-    <div id="previsao_texto" style="margin-top: 10px;">🔮 Previsão: aguardando...</div>
-    <button id="btn_baixar" style="margin-top:10px;padding:5px 10px;">⬇️ Baixar CSV</button>
-    <div id="historico_resultados" style="margin-top:10px;max-height:100px;overflow:auto;text-align:left;font-size:12px;"></div>
-  `;
-  document.body.appendChild(painel);
-
-  document.getElementById('btn_baixar').onclick = downloadCSV;
-  document.getElementById('btn_minimizar').onclick = () => {
-    const body = document.getElementById('historico_resultados');
-    const prev = document.getElementById('previsao_texto');
-    const cor = document.getElementById('resultado_cor');
-    const hash = document.getElementById('resultado_hash');
-    const btn = document.getElementById('btn_baixar');
-    const minimized = body.style.display === 'none';
-    body.style.display = minimized ? 'block' : 'none';
-    prev.style.display = minimized ? 'block' : 'none';
-    cor.style.display = minimized ? 'block' : 'none';
-    hash.style.display = minimized ? 'block' : 'none';
-    btn.style.display = minimized ? 'inline-block' : 'none';
-  };
-
-  // Atualização periódica a cada 8 segundos
-  setInterval(async () => {
-    try {
-      const res = await fetch(apiURL);
-      const data = await res.json();
-      const ultimo = data[0];
-      const cor = ultimo.color === 0 ? "BRANCO" : ultimo.color <= 7 ? "VERMELHO" : "PRETO";
-      const numero = ultimo.roll;
-      const hash = ultimo.hash;
-
-      if (!document.getElementById(`log_${hash}`)) {
-        const previsao = await gerarPrevisao(hash);
-        updatePainel(cor, numero, hash, previsao);
-        historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash}\n`;
-        document.getElementById('historico_resultados').innerHTML += `<div id="log_${hash}">${cor} (${numero})</div>`;
-      }
-    } catch (e) {
-      console.error("Erro ao buscar API:", e);
+    function getCorDoNumero(numero) {
+        if (numero === 0) return 'branco';
+        if (numero >= 1 && numero <= 7) return 'preto'; // corrigido
+        if (numero >= 8 && numero <= 14) return 'vermelho'; // corrigido
     }
-  }, 8000);
+
+    function preverProximaCor() {
+        if (historico.length < 5) return 'aguardando...';
+        const ultimas = historico.slice(-5);
+        const contagem = { vermelho: 0, preto: 0, branco: 0 };
+        ultimas.forEach(r => contagem[r.cor]++);
+
+        // Estratégia simples: prever a cor menos frequente nos últimos 5
+        const menor = Object.entries(contagem).sort((a, b) => a[1] - b[1])[0][0];
+        return menor;
+    }
+
+    function atualizarPainel(resultado, previsao) {
+        const painel = document.getElementById('painel-blaze');
+        if (painel) {
+            painel.querySelector('#resultado').innerText = `Resultado: ${resultado.cor.toUpperCase()} (${resultado.numero})`;
+            painel.querySelector('#hash').innerText = `Hash: ${resultado.hash}`;
+            painel.querySelector('#previsao').innerText = `Próxima previsão: ${previsao.toUpperCase()} (${historico.length})`;
+        }
+    }
+
+    function criarPainel() {
+        const painel = document.createElement('div');
+        painel.id = 'painel-blaze';
+        painel.style.cssText = `
+            position: fixed; top: 50px; left: 20px; z-index: 9999;
+            background: black; color: lime; padding: 10px; border-radius: 15px;
+            font-family: monospace; border: 2px solid lime;
+        `;
+
+        painel.innerHTML = `
+            <div><b>Blaze</b> - <span style="color:lime">Bot I.A</span></div>
+            <div id="resultado">🎯 Resultado: aguardando...</div>
+            <div id="hash">Hash: -</div>
+            <div id="previsao">🤖 Previsão: aguardando...</div>
+            <button id="baixarCSV" style="margin-top:5px">⬇️ Baixar CSV</button>
+        `;
+
+        document.body.appendChild(painel);
+
+        document.getElementById('baixarCSV').onclick = () => {
+            const linhas = historico.map(h => `${h.timestamp},${h.numero},${h.cor},${h.hash}`).join("\n");
+            const blob = new Blob(["timestamp,numero,cor,hash\n" + linhas], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'historico_blaze.csv';
+            a.click();
+        };
+    }
+
+    async function verificarRodada() {
+        try {
+            const res = await fetch('https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1');
+            const data = await res.json();
+            const rodada = data[0];
+            const numero = rodada.roll;
+            const hash = rodada.hash;
+            const cor = getCorDoNumero(numero);
+
+            if (!historico.length || historico[historico.length - 1].hash !== hash) {
+                historico.push({ timestamp: new Date().toISOString(), numero, cor, hash });
+                if (historico.length > maxHistorico) historico.shift();
+                const previsao = preverProximaCor();
+                atualizarPainel({ numero, cor, hash }, previsao);
+            }
+        } catch (e) {
+            console.error('Erro ao buscar rodada:', e);
+        }
+    }
+
+    criarPainel();
+    setInterval(verificarRodada, 5000); // verifica a cada 5s
 })();
