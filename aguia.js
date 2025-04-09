@@ -9,54 +9,37 @@
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  function getCorPorNumero(numero) {
-    if (numero === 0) return "BRANCO";
-    if (numero >= 1 && numero <= 7) return "VERMELHO";
-    return "PRETO";
+  function getRollColorByNumber(number) {
+    if (number === 0) return { cor: "BRANCO", numero: 0 };
+    if (number >= 1 && number <= 7) return { cor: "VERMELHO", numero };
+    return { cor: "PRETO", numero };
   }
 
-  // IA simples: rede neural leve baseada na frequência recente
-  let historicoIA = [];
-
-  function preverIA() {
-    if (historicoIA.length < 10) return { cor: "AGUARDANDO", confianca: 0 };
-
-    const contagem = { BRANCO: 0, VERMELHO: 0, PRETO: 0 };
-    historicoIA.slice(-20).forEach(entry => contagem[entry]++);
-    const total = contagem.BRANCO + contagem.VERMELHO + contagem.PRETO;
-
-    const proporcoes = {
-      BRANCO: contagem.BRANCO / total,
-      VERMELHO: contagem.VERMELHO / total,
-      PRETO: contagem.PRETO / total,
-    };
-
-    let corPrevista = "VERMELHO";
-    let confianca = proporcoes.VERMELHO;
-
-    if (proporcoes.PRETO > confianca) {
-      corPrevista = "PRETO";
-      confianca = proporcoes.PRETO;
-    }
-
-    if (proporcoes.BRANCO > confianca) {
-      corPrevista = "BRANCO";
-      confianca = proporcoes.BRANCO;
-    }
-
-    return {
-      cor: corPrevista,
-      confianca: Math.round(confianca * 100),
-    };
+  function getRollColorByHash(hash) {
+    const number = parseInt(hash.slice(0, 8), 16) % 15;
+    return getRollColorByNumber(number);
   }
 
-  function updatePainel(cor, numero, hash, previsao, confianca) {
+  async function gerarPrevisao(seed, historico) {
+    const novaHash = await sha256(seed);
+    const previsaoSHA = getRollColorByHash(novaHash);
+    const proporcao = historico.reduce((acc, val) => {
+      acc[val] = (acc[val] || 0) + 1;
+      return acc;
+    }, {});
+    const total = historico.length;
+    const conf = (proporcao[previsaoSHA.cor] || 0) / total;
+    return { ...previsaoSHA, confianca: (conf * 100).toFixed(1) };
+  }
+
+  function updatePainel(cor, numero, hash, previsao) {
     document.getElementById('resultado_cor').innerText = `🎯 Resultado: ${cor} (${numero})`;
-    document.getElementById('resultado_hash').innerText = `Hash: ${hash || '--'}`;
-    document.getElementById('previsao_texto').innerText = `🔮 Próxima previsão: ${previsao} (${confianca}%)`;
+    document.getElementById('resultado_hash').innerText = `Hash: ${hash}`;
+    document.getElementById('previsao_texto').innerText = `🔮 Próxima previsão: ${previsao.cor} (${previsao.numero}) (${previsao.confianca}% confiança)`;
+    document.getElementById('historico_resultados').innerHTML += `<div>${cor} (${numero}) - <span style="font-size:10px">${hash.slice(0, 16)}...</span></div>`;
 
-    if (cor === "BRANCO" || confianca >= 95) {
-      const audio = new Audio("https://cdn.pixabay.com/download/audio/2022/03/15/audio_2d95d12f84.mp3?filename=notification-132001.mp3");
+    if (cor === 'BRANCO' || parseFloat(previsao.confianca) >= 95) {
+      const audio = new Audio("https://www.myinstants.com/media/sounds/anime-wow-sound-effect.mp3");
       audio.play();
     }
   }
@@ -72,8 +55,10 @@
   }
 
   let historicoCSV = "Data;Cor;Número;Hash;Previsão;Confiança\n";
+  let coresAnteriores = [];
+  let lastHash = null;
 
-  // Painel
+  // Painel flutuante
   const painel = document.createElement("div");
   painel.id = "painel_previsao";
   painel.style.position = "fixed";
@@ -97,44 +82,55 @@
     <div id="resultado_cor">🎯 Resultado: aguardando...</div>
     <div id="resultado_hash" style="font-size: 10px;">Hash: --</div>
     <div id="previsao_texto" style="margin-top: 10px;">🔮 Previsão: aguardando...</div>
-    <button id="btn_prever" style="margin-top:10px;padding:5px 10px;">🧠 Gerar previsão manual</button>
+    <button id="btn_prever" style="margin-top:10px;padding:5px 10px;">🔁 Gerar previsão manual</button>
     <button id="btn_baixar" style="margin-top:10px;padding:5px 10px;">⬇️ Baixar CSV</button>
     <div id="historico_resultados" style="margin-top:10px;max-height:100px;overflow:auto;text-align:left;font-size:12px;"></div>
   `;
   document.body.appendChild(painel);
 
+  // Botões
   document.getElementById('btn_baixar').onclick = downloadCSV;
+
   document.getElementById('btn_minimizar').onclick = () => {
-    const toggle = id => {
-      const el = document.getElementById(id);
-      el.style.display = el.style.display === 'none' ? 'block' : 'none';
-    };
-    ['historico_resultados', 'previsao_texto', 'resultado_cor', 'resultado_hash', 'btn_baixar', 'btn_prever'].forEach(toggle);
+    const body = document.getElementById('historico_resultados');
+    const prev = document.getElementById('previsao_texto');
+    const cor = document.getElementById('resultado_cor');
+    const hash = document.getElementById('resultado_hash');
+    const btn1 = document.getElementById('btn_baixar');
+    const btn2 = document.getElementById('btn_prever');
+    const minimized = body.style.display === 'none';
+    body.style.display = minimized ? 'block' : 'none';
+    prev.style.display = minimized ? 'block' : 'none';
+    cor.style.display = minimized ? 'block' : 'none';
+    hash.style.display = minimized ? 'block' : 'none';
+    btn1.style.display = minimized ? 'inline-block' : 'none';
+    btn2.style.display = minimized ? 'inline-block' : 'none';
   };
 
-  document.getElementById('btn_prever').onclick = () => {
-    const prev = preverIA();
-    document.getElementById('previsao_texto').innerText = `🔮 Próxima previsão: ${prev.cor} (${prev.confianca}%)`;
+  document.getElementById('btn_prever').onclick = async () => {
+    if (!lastHash) return alert("Aguardando primeiro resultado...");
+    const previsao = await gerarPrevisao(lastHash, coresAnteriores);
+    updatePainel("Aguardando", "-", lastHash, previsao);
   };
 
+  // Intervalo de checagem
   setInterval(async () => {
     try {
       const res = await fetch(apiURL);
       const data = await res.json();
       const ultimo = data[0];
-
       const numero = ultimo.roll;
-      const cor = getCorPorNumero(numero);
       const hash = ultimo.hash;
+      const corData = getRollColorByNumber(numero);
 
       if (!document.getElementById(`log_${hash}`)) {
-        historicoIA.push(cor);
-
-        const previsaoIA = preverIA();
-        updatePainel(cor, numero, hash, previsaoIA.cor, previsaoIA.confianca);
-
-        historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash};${previsaoIA.cor};${previsaoIA.confianca}%\n`;
-        document.getElementById('historico_resultados').innerHTML += `<div id="log_${hash}">${cor} (${numero})</div>`;
+        const previsao = await gerarPrevisao(hash, coresAnteriores);
+        updatePainel(corData.cor, numero, hash, previsao);
+        historicoCSV += `${new Date().toLocaleString()};${corData.cor};${numero};${hash};${previsao.cor};${previsao.confianca}%\n`;
+        document.getElementById('historico_resultados').innerHTML += `<div id="log_${hash}">${corData.cor} (${numero})</div>`;
+        coresAnteriores.push(corData.cor);
+        if (coresAnteriores.length > 100) coresAnteriores.shift();
+        lastHash = hash;
       }
     } catch (e) {
       console.error("Erro ao buscar API:", e);
