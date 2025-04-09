@@ -9,34 +9,31 @@
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  function getRollColorByNumber(number) {
-    if (number === 0) return { cor: "BRANCO", numero: 0 };
-    if (number >= 1 && number <= 7) return { cor: "VERMELHO", numero };
-    return { cor: "PRETO", numero };
-  }
-
-  function getRollColorByHash(hash) {
-    const number = parseInt(hash.slice(0, 8), 16) % 15;
-    return getRollColorByNumber(number);
+  function getRollColor(hash) {
+    const number = parseInt(hash.slice(0, 8), 16);
+    const result = number % 15;
+    if (result === 0) return { cor: "BRANCO", numero: 0 };
+    if (result >= 1 && result <= 7) return { cor: "VERMELHO", numero: result };
+    return { cor: "PRETO", numero: result };
   }
 
   async function gerarPrevisao(seed, historico) {
     const novaHash = await sha256(seed);
-    const previsaoSHA = getRollColorByHash(novaHash);
+    const previsao = getRollColor(novaHash);
     const proporcao = historico.reduce((acc, val) => {
       acc[val] = (acc[val] || 0) + 1;
       return acc;
     }, {});
     const total = historico.length;
-    const conf = (proporcao[previsaoSHA.cor] || 0) / total;
-    return { ...previsaoSHA, confianca: (conf * 100).toFixed(1) };
+    const conf = (proporcao[previsao.cor] || 0) / total;
+    return { ...previsao, confianca: (conf * 100).toFixed(1) };
   }
 
   function updatePainel(cor, numero, hash, previsao) {
     document.getElementById('resultado_cor').innerText = `🎯 Resultado: ${cor} (${numero})`;
     document.getElementById('resultado_hash').innerText = `Hash: ${hash}`;
     document.getElementById('previsao_texto').innerText = `🔮 Próxima previsão: ${previsao.cor} (${previsao.numero}) (${previsao.confianca}% confiança)`;
-    document.getElementById('historico_resultados').innerHTML += `<div>${cor} (${numero}) - <span style="font-size:10px">${hash.slice(0, 16)}...</span></div>`;
+    document.getElementById('historico_resultados').innerHTML += `<div id="log_${hash}">${cor} (${numero}) - <span style="font-size:10px">${hash.slice(0, 16)}...</span></div>`;
 
     if (cor === 'BRANCO' || parseFloat(previsao.confianca) >= 95) {
       const audio = new Audio("https://www.myinstants.com/media/sounds/anime-wow-sound-effect.mp3");
@@ -58,7 +55,7 @@
   let coresAnteriores = [];
   let lastHash = null;
 
-  // Painel flutuante
+  // Painel
   const painel = document.createElement("div");
   painel.id = "painel_previsao";
   painel.style.position = "fixed";
@@ -88,7 +85,6 @@
   `;
   document.body.appendChild(painel);
 
-  // Botões
   document.getElementById('btn_baixar').onclick = downloadCSV;
 
   document.getElementById('btn_minimizar').onclick = () => {
@@ -113,22 +109,21 @@
     updatePainel("Aguardando", "-", lastHash, previsao);
   };
 
-  // Intervalo de checagem
+  // Atualização periódica a cada 8 segundos
   setInterval(async () => {
     try {
       const res = await fetch(apiURL);
       const data = await res.json();
       const ultimo = data[0];
+      const cor = ultimo.color === 0 ? "BRANCO" : ultimo.color <= 7 ? "VERMELHO" : "PRETO";
       const numero = ultimo.roll;
       const hash = ultimo.hash;
-      const corData = getRollColorByNumber(numero);
 
       if (!document.getElementById(`log_${hash}`)) {
         const previsao = await gerarPrevisao(hash, coresAnteriores);
-        updatePainel(corData.cor, numero, hash, previsao);
-        historicoCSV += `${new Date().toLocaleString()};${corData.cor};${numero};${hash};${previsao.cor};${previsao.confianca}%\n`;
-        document.getElementById('historico_resultados').innerHTML += `<div id="log_${hash}">${corData.cor} (${numero})</div>`;
-        coresAnteriores.push(corData.cor);
+        updatePainel(cor, numero, hash, previsao);
+        historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash};${previsao.cor};${previsao.confianca}%\n`;
+        coresAnteriores.push(cor);
         if (coresAnteriores.length > 100) coresAnteriores.shift();
         lastHash = hash;
       }
