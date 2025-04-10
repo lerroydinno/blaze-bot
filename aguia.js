@@ -158,11 +158,11 @@
   icone.id = "icone_flutuante";
   icone.style = `
     display: none; position: fixed; bottom: 20px; right: 20px; z-index: 99999;
-    width: 60px; height: 60px; border-radius: 50%; background: black;
+    width: 60px; height: 60px; border-radius: 50%;
+    background-image: url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg');
+    background-size: cover; background-repeat: no-repeat; background-position: center;
     border: 2px solid limegreen; box-shadow: 0 0 10px limegreen, 0 0 20px limegreen inset;
     cursor: pointer; animation: neonPulse 1s infinite;
-    background-image: url('https://cdn-icons-png.flaticon.com/512/854/854878.png');
-    background-size: 50%; background-repeat: no-repeat; background-position: center;
   `;
   document.body.appendChild(icone);
 
