@@ -14,7 +14,6 @@
     }
   }
 
-  // Adiciona o script da biblioteca CryptoJS se necessário
   if (!window.crypto?.subtle && !window.CryptoJS) {
     const script = document.createElement("script");
     script.src = "https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js";
@@ -52,7 +51,51 @@
     return { media, desdeUltimo };
   }
 
-  // NOVO: prefixo agora com 4 caracteres
+  function analisarBrancoMinutos(dados) {
+    const minutos = {};
+    dados.forEach(d => {
+      if (d.cor === "BRANCO") {
+        const minuto = new Date(d.data).getMinutes();
+        minutos[minuto] = (minutos[minuto] || 0) + 1;
+      }
+    });
+    return minutos;
+  }
+
+  function analisarBrancoAnterior(dados) {
+    const anterior = {};
+    for (let i = 1; i < dados.length; i++) {
+      if (dados[i].cor === "BRANCO") {
+        const anteriorNum = dados[i - 1].numero;
+        anterior[anteriorNum] = (anterior[anteriorNum] || 0) + 1;
+      }
+    }
+    return anterior;
+  }
+
+  function analisarBrancoProximidade(dados) {
+    const distancias = [];
+    let ultPos = -1;
+    dados.forEach((d, i) => {
+      if (d.cor === "BRANCO") {
+        if (ultPos >= 0) distancias.push(i - ultPos);
+        ultPos = i;
+      }
+    });
+    return distancias;
+  }
+
+  function encontrarPadroes(hist) {
+    const padroes = {};
+    for (let i = 0; i < hist.length - 2; i++) {
+      const seq = hist[i] + '-' + hist[i + 1];
+      const prox = hist[i + 2];
+      if (!padroes[seq]) padroes[seq] = {};
+      padroes[seq][prox] = (padroes[seq][prox] || 0) + 1;
+    }
+    return padroes;
+  }
+
   let lookupPrefix = {};
 
   function atualizarLookup(hash, cor) {
@@ -73,12 +116,11 @@
     };
   }
 
-  // NOVA FUNÇÃO: soma dos dígitos hexadecimais da hash
   function somaHexadecimal(hash) {
     return hash.split('').reduce((acc, char) => acc + parseInt(char, 16), 0);
   }
 
-  async function gerarPrevisao(seed, hist = []) {
+  async function gerarPrevisao(seed, hist = [], dadosExtras = []) {
     const novaHash = await sha256(seed);
     const previsao = getRollColor(novaHash);
     const recente = hist.slice(-100);
@@ -91,11 +133,9 @@
       if (desdeUltimo >= media * 0.8) confianca += 10;
     }
 
-    // REFORÇO: prefixo com 4 caracteres
     const reforco = reforcoPrefixo(novaHash);
     if (reforco[previsao.cor]) confianca += parseFloat(reforco[previsao.cor]) / 10;
 
-    // REFORÇO: soma dos dígitos hexadecimais
     const soma = somaHexadecimal(novaHash);
     if (previsao.cor === "VERMELHO" && soma % 2 === 0) confianca += 5;
     else if (previsao.cor === "PRETO" && soma % 2 !== 0) confianca += 5;
@@ -147,8 +187,11 @@
       const partes = l.split(";");
       if (partes.length >= 4) {
         const cor = partes[1];
+        const numero = Number(partes[2]);
         const hash = partes[3];
+        const data = partes[0];
         coresAnteriores.push(cor);
+        dadosJogos.push({ cor, numero, hash, data });
         atualizarLookup(hash, cor);
       }
     });
@@ -157,6 +200,7 @@
   let historicoCSV = "Data;Cor;Número;Hash;Previsão;Confiança\n";
   let lastHash = "";
   let coresAnteriores = [];
+  let dadosJogos = [];
 
   carregarHistoricoLocal();
 
@@ -208,21 +252,17 @@
     painel.style.display = "none";
     icone.style.display = "block";
   };
-
   icone.onclick = () => {
     painel.style.display = "block";
     icone.style.display = "none";
   };
-
   document.getElementById('btn_baixar').onclick = downloadCSV;
-
   document.getElementById('btn_prever').onclick = async () => {
     if (lastHash && lastHash !== "indefinido") {
-      const previsao = await gerarPrevisao(lastHash, coresAnteriores);
+      const previsao = await gerarPrevisao(lastHash, coresAnteriores, dadosJogos);
       document.getElementById('previsao_texto').innerText = `🔮 Próxima: ${previsao.cor} (${previsao.numero})\n🎯 Confiança: ${previsao.confianca}%\n💰 Apostar: ${previsao.aposta}x`;
     }
   };
-
   document.getElementById('import_csv').addEventListener('change', e => {
     const file = e.target.files[0];
     if (!file) return;
@@ -240,14 +280,16 @@
       const cor = corNum === 0 ? "BRANCO" : corNum <= 7 ? "VERMELHO" : "PRETO";
       const numero = ultimo.roll;
       const hash = ultimo.hash || ultimo.server_seed || "indefinido";
+      const dataHora = new Date().toLocaleString();
 
       if (!document.getElementById(`log_${hash}`) && hash !== "indefinido") {
         atualizarLookup(hash, cor);
-        const previsao = await gerarPrevisao(hash, coresAnteriores);
+        const previsao = await gerarPrevisao(hash, coresAnteriores, dadosJogos);
         updatePainel(cor, numero, hash, previsao);
-        historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash};${previsao.cor};${previsao.confianca}%\n`;
+        historicoCSV += `${dataHora};${cor};${numero};${hash};${previsao.cor};${previsao.confianca}%\n`;
         salvarHistoricoLocal();
         coresAnteriores.push(cor);
+        dadosJogos.push({ cor, numero, hash, data: dataHora });
         if (coresAnteriores.length > 200) coresAnteriores.shift();
         lastHash = hash;
         document.getElementById('historico_resultados').innerHTML += `<div id="log_${hash}">${cor} (${numero})</div>`;
