@@ -1,140 +1,95 @@
-// ==UserScript== // @name         Double Blaze Previsor SHA-256 // @namespace    http://tampermonkey.net/ // @version      1.0 // @description  Previsão de cores no Double da Blaze com SHA-256 e painel flutuante // @author       wallan00chefe // @match        https://blaze.bet.br/* // @grant        none // ==/UserScript==
+(function () {
+    // Criação do menu flutuante
+    const menu = document.createElement("div");
+    menu.style.position = "fixed";
+    menu.style.bottom = "10px";
+    menu.style.right = "10px";
+    menu.style.backgroundColor = "#1e1e2f";
+    menu.style.color = "white";
+    menu.style.padding = "15px";
+    menu.style.borderRadius = "10px";
+    menu.style.boxShadow = "0 4px 8px rgba(0,0,0,0.2)";
+    menu.style.zIndex = "9999";
+    menu.style.fontFamily = "Arial, sans-serif";
+    menu.style.minWidth = "250px";
 
-(function() { 'use strict';
+    menu.innerHTML = `
+        <h4 style="margin:0 0 10px;">Painel de Previsão SHA-256</h4>
+        <div><strong>Última Previsão:</strong> <span id="previsao">---</span></div>
+        <div><strong>Confiança:</strong> <span id="confianca">---</span></div>
+        <div><strong>Último Resultado:</strong> <span id="ultimoResultado">---</span></div>
+        <button id="gerarPrevisao" style="margin-top:10px;padding:5px 10px;border:none;background:#4caf50;color:white;border-radius:5px;">Gerar Previsão</button>
+    `;
 
-let historico = [];
-let previsaoAtual = null;
+    document.body.appendChild(menu);
 
-const cores = {
-    0: 'branco',
-    1: 'vermelho',
-    2: 'preto'
-};
+    const spanPrevisao = document.getElementById("previsao");
+    const spanConfianca = document.getElementById("confianca");
+    const spanUltimo = document.getElementById("ultimoResultado");
+    const btnPrever = document.getElementById("gerarPrevisao");
 
-function sha256(ascii) {
-    function rightRotate(value, amount) {
-        return (value>>>amount) | (value<<(32 - amount));
+    const historico = [];
+
+    async function calcularSHA256(texto) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(texto);
+        const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        return hashHex;
     }
 
-    let mathPow = Math.pow;
-    let maxWord = mathPow(2, 32);
-    let lengthProperty = 'length';
-    let i, j;
-    let result = '';
+    function analisarHash(hash) {
+        // Simples lógica de proporção de caracteres para prever
+        const letras = hash.replace(/[^a-f]/g, '').length;
+        const numeros = hash.replace(/[^0-9]/g, '').length;
 
-    let words = [];
-    let asciiBitLength = ascii[lengthProperty]*8;
-
-    let hash = sha256.h = sha256.h || [];
-    let k = sha256.k = sha256.k || [];
-    let primeCounter = k[lengthProperty];
-
-    let isPrime = num => {
-        for (let i = 2, sqrt = Math.sqrt(num); i <= sqrt; i++) {
-            if (num % i === 0) return false;
-        }
-        return true;
-    };
-
-    let getFractionalBits = n => ((n - Math.floor(n)) * maxWord) | 0;
-
-    while (primeCounter < 64) {
-        if (isPrime(++primeCounter)) {
-            hash.push(getFractionalBits(Math.pow(primeCounter, 1/2)));
-            k.push(getFractionalBits(Math.pow(primeCounter, 1/3)));
-        }
+        if (hash.endsWith("0000")) return { cor: "white", confianca: "100%" };
+        if (letras > numeros) return { cor: "red", confianca: "75%" };
+        if (numeros > letras) return { cor: "black", confianca: "75%" };
+        return { cor: "black", confianca: "50%" };
     }
 
-    ascii += '\x80';
-    while (ascii[lengthProperty]%64 - 56) ascii += '\x00';
-    for (i = 0; i < ascii[lengthProperty]; i++) {
-        j = ascii.charCodeAt(i);
-        if (j>>8) return;
-        words[i>>2] |= j << ((3 - i)%4)*8;
-    }
-    words[words[lengthProperty]] = ((asciiBitLength/maxWord)|0);
-    words[words[lengthProperty]] = (asciiBitLength);
-
-    for (j = 0; j < words[lengthProperty];) {
-        let w = words.slice(j, j += 16);
-        let oldHash = hash.slice(0);
-
-        for (i = 0; i < 64; i++) {
-            let w15 = w[i - 15], w2 = w[i - 2];
-
-            let a = hash[0], e = hash[4];
-            let temp1 = hash[7] + (rightRotate(e, 6)^rightRotate(e, 11)^rightRotate(e, 25)) + ((e&hash[5])^((~e)&hash[6])) + k[i] + (w[i] = (i < 16) ? w[i] : (
-                w[i - 16] + (rightRotate(w15, 7)^rightRotate(w15, 18)^(w15>>>3)) +
-                w[i - 7] + (rightRotate(w2, 17)^rightRotate(w2, 19)^(w2>>>10))
-            )|0);
-
-            let temp2 = (rightRotate(a, 2)^rightRotate(a, 13)^rightRotate(a, 22)) + ((a&hash[1])^(a&hash[2])^(hash[1]&hash[2]));
-
-            hash = [(temp1 + temp2)|0].concat(hash);
-            hash[4] = (hash[4] + temp1)|0;
+    function atualizarHistorico(numero) {
+        let color = 'unknown';
+        if (numero === 0) {
+            color = 'white';
+        } else if (numero >= 1 && numero <= 7) {
+            color = 'red';
+        } else if (numero >= 8 && numero <= 14) {
+            color = 'black';
         }
-
-        for (i = 0; i < 8; i++) {
-            hash[i] = (hash[i] + oldHash[i])|0;
-        }
+        historico.push({ numero, color });
+        spanUltimo.innerText = `${numero} (${color})`;
     }
 
-    for (i = 0; i < 8; i++) {
-        for (j = 3; j + 1; j--) {
-            let b = (hash[i]>>(j*8))&255;
-            result += ((b < 16) ? 0 : '') + b.toString(16);
+    async function preverProximaCor() {
+        try {
+            const response = await fetch("https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1");
+            const data = await response.json();
+            const ultimoJogo = data[0];
+
+            const hash = ultimoJogo.hash;
+            const resultado = ultimoJogo.roll;
+            atualizarHistorico(resultado);
+
+            const sha = await calcularSHA256(hash);
+            const previsao = analisarHash(sha);
+
+            spanPrevisao.innerText = previsao.cor;
+            spanConfianca.innerText = previsao.confianca;
+
+        } catch (e) {
+            console.error("Erro ao prever:", e);
         }
     }
-    return result;
-}
 
-function analisarHash(hash) {
-    const prefixo = hash.slice(0, 4);
-    const frequencias = {};
-    historico.forEach(h => {
-        const pre = h.hash.slice(0, 4);
-        if (!frequencias[pre]) frequencias[pre] = { vermelho: 0, preto: 0, branco: 0 };
-        frequencias[pre][h.resultado]++;
-    });
+    btnPrever.addEventListener("click", preverProximaCor);
 
-    const dados = frequencias[prefixo];
-    if (!dados) return { cor: 'vermelho', confianca: 33 };
+    // Atualização automática a cada 10s
+    setInterval(preverProximaCor, 10000);
 
-    const total = dados.vermelho + dados.preto + dados.branco;
-    let corMaisProvavel = 'vermelho';
-    let maior = dados.vermelho;
-
-    if (dados.preto > maior) {
-        maior = dados.preto;
-        corMaisProvavel = 'preto';
-    }
-    if (dados.branco > maior) {
-        maior = dados.branco;
-        corMaisProvavel = 'branco';
-    }
-
-    return { cor: corMaisProvavel, confianca: Math.round((maior / total) * 100) };
-}
-
-function coletarResultados() {
-    fetch('https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1')
-        .then(res => res.json())
-        .then(data => {
-            const item = data[0];
-            const cor = cores[item.color];
-            const hash = item.hash;
-
-            if (!historico.find(h => h.hash === hash)) {
-                historico.push({ hash, resultado: cor });
-                if (historico.length > 1000) historico.shift();
-
-                previsaoAtual = analisarHash(hash);
-                console.log(`Previsão: ${previsaoAtual.cor} com ${previsaoAtual.confianca}%`);
-            }
-        });
-}
-
-setInterval(coletarResultados, 5000);
+    // Primeira chamada
+    preverProximaCor();
 
 })();
-
