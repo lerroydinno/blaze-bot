@@ -38,6 +38,60 @@
     return { media, desdeUltimo };
   }
 
+  function analisarHorariosBranco(logs) {
+    const horarios = {};
+    logs.forEach(item => {
+      if (item.cor === "BRANCO") {
+        const hora = new Date(item.timestamp).getHours();
+        horarios[hora] = (horarios[hora] || 0) + 1;
+      }
+    });
+    return horarios;
+  }
+
+  function numeroAntesDoBranco(logs) {
+    const freq = {};
+    for (let i = 1; i < logs.length; i++) {
+      if (logs[i].cor === "BRANCO") {
+        const anterior = logs[i - 1].numero;
+        freq[anterior] = (freq[anterior] || 0) + 1;
+      }
+    }
+    let maisFrequente = null, max = 0;
+    for (const [num, count] of Object.entries(freq)) {
+      if (count > max) {
+        max = count;
+        maisFrequente = num;
+      }
+    }
+    return { maisFrequente, ocorrencias: max };
+  }
+
+  function distanciaEntreBrancos(logs) {
+    let distancias = [];
+    let lastIndex = -1;
+    logs.forEach((item, index) => {
+      if (item.cor === "BRANCO") {
+        if (lastIndex !== -1) {
+          distancias.push(index - lastIndex);
+        }
+        lastIndex = index;
+      }
+    });
+    const media = distancias.length ? (distancias.reduce((a, b) => a + b, 0) / distancias.length).toFixed(2) : 0;
+    return { media, distancias };
+  }
+
+  function detectarPadroesCores(hist, tamanho = 3) {
+    const padroes = {};
+    for (let i = 0; i <= hist.length - tamanho; i++) {
+      const seq = hist.slice(i, i + tamanho).join("-");
+      padroes[seq] = (padroes[seq] || 0) + 1;
+    }
+    const recorrentes = Object.entries(padroes).filter(([_, count]) => count > 1);
+    return recorrentes.sort((a, b) => b[1] - a[1]);
+  }
+
   let lookupPrefix = {};
 
   function atualizarLookup(hash, cor) {
@@ -72,7 +126,6 @@
     }
     const reforco = reforcoPrefixo(novaHash);
     if (reforco[previsao.cor]) confianca += parseFloat(reforco[previsao.cor]) / 10;
-
     let aposta = calcularAposta(confianca);
     return { ...previsao, confianca: Math.min(100, confianca.toFixed(2)), aposta };
   }
@@ -134,46 +187,17 @@
 
   const painel = document.createElement("div");
   painel.id = "painel_previsao";
-  painel.style = `
-    position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
-    z-index: 99999; background: #000000cc; border: 2px solid limegreen; border-radius: 20px;
-    color: limegreen; padding: 20px; font-family: monospace; text-align: center; width: 360px;
-  `;
-  painel.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;">
-      <h3 style="margin:0;">Blaze<br>Bot I.A</h3>
-      <button id="btn_minimizar" style="background:none;border:none;color:limegreen;font-weight:bold;font-size:20px;">−</button>
-    </div>
-    <div id="resultado_cor">🎯 Resultado: aguardando...</div>
-    <div id="resultado_hash" style="font-size: 10px; word-break: break-all;">Hash: --</div>
-    <div id="previsao_texto" style="margin-top: 10px;">🔮 Previsão: aguardando...</div>
-    <input type="file" id="import_csv" accept=".csv" style="margin:10px;" />
-    <button id="btn_prever" style="margin-top:5px;">🔁 Gerar previsão manual</button>
-    <button id="btn_baixar" style="margin-top:5px;">⬇️ Baixar CSV</button>
-    <div id="historico_resultados" style="margin-top:10px;max-height:100px;overflow:auto;text-align:left;font-size:12px;"></div>
-  `;
+  painel.style = `position: fixed; top: 60px; left: 50%; transform: translateX(-50%); z-index: 99999; background: #000000cc; border: 2px solid limegreen; border-radius: 20px; color: limegreen; padding: 20px; font-family: monospace; text-align: center; width: 360px;`;
+  painel.innerHTML = `...`; // Você já tem o HTML do painel, pode mantê-lo igual
   document.body.appendChild(painel);
 
   const icone = document.createElement("div");
   icone.id = "icone_flutuante";
-  icone.style = `
-    display: none; position: fixed; bottom: 20px; right: 20px; z-index: 99999;
-    width: 60px; height: 60px; border-radius: 50%;
-    background-image: url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg');
-    background-size: cover; background-repeat: no-repeat; background-position: center;
-    border: 2px solid limegreen; box-shadow: 0 0 10px limegreen, 0 0 20px limegreen inset;
-    cursor: pointer; animation: neonPulse 1s infinite;
-  `;
+  icone.style = `...`; // Seu estilo original
   document.body.appendChild(icone);
 
   const estilo = document.createElement("style");
-  estilo.innerHTML = `
-    @keyframes neonPulse {
-      0% { box-shadow: 0 0 5px limegreen, 0 0 10px limegreen inset; }
-      50% { box-shadow: 0 0 20px limegreen, 0 0 40px limegreen inset; }
-      100% { box-shadow: 0 0 5px limegreen, 0 0 10px limegreen inset; }
-    }
-  `;
+  estilo.innerHTML = `@keyframes neonPulse { ... }`;
   document.head.appendChild(estilo);
 
   document.getElementById('btn_minimizar').onclick = () => {
@@ -218,6 +242,22 @@
         if (coresAnteriores.length > 200) coresAnteriores.shift();
         lastHash = hash;
         document.getElementById('historico_resultados').innerHTML += `<div id="log_${hash}">${cor} (${numero})</div>`;
+
+        if (!window.dadosHistorico) window.dadosHistorico = [];
+        window.dadosHistorico.push({ cor, numero, timestamp: Date.now() });
+        if (window.dadosHistorico.length > 500) window.dadosHistorico.shift();
+
+        if (window.dadosHistorico.length >= 50) {
+          const horarios = analisarHorariosBranco(window.dadosHistorico);
+          const antesBranco = numeroAntesDoBranco(window.dadosHistorico);
+          const distBrancos = distanciaEntreBrancos(window.dadosHistorico);
+          const padroes = detectarPadroesCores(coresAnteriores, 4);
+
+          console.log("📊 Horários do Branco:", horarios);
+          console.log("🔁 Número que mais antecede o Branco:", antesBranco);
+          console.log("📏 Distância entre Brancos:", distBrancos);
+          console.log("♻️ Padrões de cores recorrentes (top 5):", padroes.slice(0, 5));
+        }
       }
     } catch (e) {
       console.error("Erro ao buscar API:", e);
