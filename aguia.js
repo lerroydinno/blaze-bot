@@ -2,10 +2,24 @@
   const apiURL = "https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
 
   async function sha256(message) {
-    const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    if (window.crypto && crypto.subtle) {
+      const msgBuffer = new TextEncoder().encode(message);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } else if (window.CryptoJS) {
+      return CryptoJS.SHA256(message).toString(CryptoJS.enc.Hex);
+    } else {
+      throw new Error("SHA-256 não suportado: crypto.subtle ou CryptoJS não disponível.");
+    }
+  }
+
+  // Adiciona o script da biblioteca CryptoJS se necessário
+  if (!window.crypto?.subtle && !window.CryptoJS) {
+    const script = document.createElement("script");
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js";
+    script.onload = () => console.log("CryptoJS carregado como fallback.");
+    document.head.appendChild(script);
   }
 
   function getRollColor(hash) {
@@ -38,16 +52,17 @@
     return { media, desdeUltimo };
   }
 
+  // NOVO: prefixo agora com 4 caracteres
   let lookupPrefix = {};
 
   function atualizarLookup(hash, cor) {
-    const prefix = hash.slice(0, 2);
+    const prefix = hash.slice(0, 4);
     if (!lookupPrefix[prefix]) lookupPrefix[prefix] = { BRANCO: 0, VERMELHO: 0, PRETO: 0 };
     lookupPrefix[prefix][cor]++;
   }
 
   function reforcoPrefixo(hash) {
-    const prefix = hash.slice(0, 2);
+    const prefix = hash.slice(0, 4);
     const dados = lookupPrefix[prefix];
     if (!dados) return {};
     const total = dados.BRANCO + dados.VERMELHO + dados.PRETO;
@@ -56,6 +71,11 @@
       VERMELHO: ((dados.VERMELHO / total) * 100).toFixed(2),
       PRETO: ((dados.PRETO / total) * 100).toFixed(2)
     };
+  }
+
+  // NOVA FUNÇÃO: soma dos dígitos hexadecimais da hash
+  function somaHexadecimal(hash) {
+    return hash.split('').reduce((acc, char) => acc + parseInt(char, 16), 0);
   }
 
   async function gerarPrevisao(seed, hist = []) {
@@ -70,8 +90,17 @@
       const { media, desdeUltimo } = calcularIntervaloBranco(hist);
       if (desdeUltimo >= media * 0.8) confianca += 10;
     }
+
+    // REFORÇO: prefixo com 4 caracteres
     const reforco = reforcoPrefixo(novaHash);
     if (reforco[previsao.cor]) confianca += parseFloat(reforco[previsao.cor]) / 10;
+
+    // REFORÇO: soma dos dígitos hexadecimais
+    const soma = somaHexadecimal(novaHash);
+    if (previsao.cor === "VERMELHO" && soma % 2 === 0) confianca += 5;
+    else if (previsao.cor === "PRETO" && soma % 2 !== 0) confianca += 5;
+    else if (previsao.cor === "BRANCO" && soma % 5 === 0) confianca += 8;
+
     let aposta = calcularAposta(confianca);
     return { ...previsao, confianca: Math.min(100, confianca.toFixed(2)), aposta };
   }
