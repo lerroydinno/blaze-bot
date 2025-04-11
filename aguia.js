@@ -1,47 +1,54 @@
-(function() {
+(function () {
   const style = document.createElement('style');
   style.innerHTML = `
-    #painelIA {
+    #blazebotIA {
       position: fixed;
-      top: 100px;
-      right: 20px;
-      width: 300px;
-      background: rgba(0,0,0,0.8);
-      color: #fff;
-      z-index: 9999;
-      padding: 10px;
+      top: 0;
+      left: 0;
+      width: 100%;
+      background-color: #1b1f1d;
+      border-bottom: 2px solid #00ff00;
+      color: #00ff00;
       font-family: Arial, sans-serif;
-      border-radius: 10px;
+      font-size: 14px;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      padding: 6px;
     }
-    #painelIA h2 { font-size: 16px; margin-bottom: 5px; }
-    #painelIA input[type=file] { margin-bottom: 5px; }
-    #painelIA button { margin-top: 5px; }
-    #painelIA p { font-size: 14px; margin: 4px 0; }
+    #blazebotIA span { margin: 0 8px; }
+    #blazebotIA input, #blazebotIA button {
+      background: #000;
+      color: #0f0;
+      border: 1px solid #0f0;
+      padding: 2px 6px;
+      margin-left: 5px;
+      font-size: 12px;
+    }
   `;
   document.head.appendChild(style);
 
   const painel = document.createElement('div');
-  painel.id = 'painelIA';
+  painel.id = 'blazebotIA';
   painel.innerHTML = `
-    <h2>IA Roleta</h2>
-    <input type="file" id="csvInput" accept=".csv"><br>
-    <button id="treinarBtn">Treinar IA</button>
-    <p id="statusIA">IA não treinada</p>
-    <p><strong>Previsão:</strong> <span id="previsaoFinal">---</span></p>
-    <p><strong>Confiança:</strong> <span id="confiancaFinal">0%</span></p>
+    <span><strong>Blaze Bot I.A</strong></span>
+    <span>Previsão: <span id="previsaoFinal">---</span></span>
+    <span>Confiança: <span id="confiancaFinal">0%</span></span>
+    <span><input type="file" id="csvInput" accept=".csv"></span>
+    <span><button id="treinarBtn">Treinar IA</button></span>
+    <span><button id="forcarPrevisao">Prever Agora</button></span>
+    <span id="statusIA">IA não treinada</span>
   `;
   document.body.appendChild(painel);
 
   let resultadosHistoricos = [];
   let redeNeural, markovChain = {}, padroes = {}, brancoStats = {};
-  let confTotal = 0, ultimaCor = null;
 
-  // Adiciona script do Synaptic.js
   const scriptSynaptic = document.createElement('script');
   scriptSynaptic.src = 'https://cdn.jsdelivr.net/npm/synaptic@1.1.4/dist/synaptic.min.js';
   document.head.appendChild(scriptSynaptic);
 
-  // Aguarda Synaptic carregar e prepara a rede
   scriptSynaptic.onload = () => {
     const { Layer, Network } = synaptic;
     const entrada = new Layer(10);
@@ -52,25 +59,22 @@
     redeNeural = new Network({ input: entrada, hidden: [escondida], output: saida });
   };
 
-  // Leitor de CSV
-  document.getElementById("csvInput").addEventListener("change", function(e) {
+  document.getElementById("csvInput").addEventListener("change", function (e) {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = function(evt) {
+    reader.onload = function (evt) {
       const lines = evt.target.result.split('\n').map(l => l.trim()).filter(Boolean);
       resultadosHistoricos = lines.map(l => {
         const val = l.split(',')[1];
         return isNaN(val) ? null : parseInt(val);
       }).filter(v => v !== null);
-      document.getElementById("statusIA").innerText = "CSV carregado com " + resultadosHistoricos.length + " entradas.";
+      document.getElementById("statusIA").innerText = "CSV carregado: " + resultadosHistoricos.length + " entradas";
     };
     reader.readAsText(file);
   });
 
-  // Função para treinar a IA
-  document.getElementById("treinarBtn").addEventListener("click", () => {
-    if (!resultadosHistoricos.length) return alert("Importe um CSV antes!");
+  function treinarIA() {
     for (let i = 10; i < resultadosHistoricos.length - 1; i++) {
       const entrada = resultadosHistoricos.slice(i - 10, i).map(v => v / 14);
       const saida = [0, 0, 0];
@@ -82,9 +86,9 @@
       redeNeural.propagate(0.3, saida);
     }
     document.getElementById("statusIA").innerText = "IA treinada com sucesso!";
-  });
+  }
 
-function analisarMarkov() {
+  function analisarMarkov() {
     markovChain = {};
     for (let i = 0; i < resultadosHistoricos.length - 1; i++) {
       const atual = resultadosHistoricos[i];
@@ -128,7 +132,7 @@ function analisarMarkov() {
   }
 
   function prever() {
-    if (!resultadosHistoricos.length) return;
+    if (!resultadosHistoricos.length || !redeNeural) return;
 
     const ultimos10 = resultadosHistoricos.slice(-10).map(n => n / 14);
     const saida = redeNeural.activate(ultimos10);
@@ -169,13 +173,14 @@ function analisarMarkov() {
     document.getElementById("confiancaFinal").innerText = confiancaFinal + "%";
   }
 
-  // Executa análises após CSV
   document.getElementById("treinarBtn").addEventListener("click", () => {
+    if (!resultadosHistoricos.length) return alert("Importe um CSV primeiro!");
+    treinarIA();
     analisarMarkov();
     analisarBrancoStats();
     analisarPadroesNumericos();
     prever();
   });
-})();
 
-  
+  document.getElementById("forcarPrevisao").addEventListener("click", prever);
+})();
