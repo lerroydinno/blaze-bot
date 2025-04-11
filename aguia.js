@@ -1,164 +1,181 @@
-// ==UserScript== // @name         Blaze Roleta Previsor com IA Avançada // @namespace    http://tampermonkey.net/ // @version      1.0 // @description  Script para previsão de roleta com IA, mantendo estrutura original // @author       Você // @match        https://blaze.com/pt/games/double // @grant        none // ==/UserScript==
-
-(function() { 'use strict';
-
-// == VARIÁVEIS ORIGINAIS ==
-let lastHash = null;
-let results = [];
-let colorHistory = [];
-let whitePositions = [];
-let csvData = [];
-let confidenceScore = 0;
-
-// == INTERFACE ORIGINAL ==
-const style = document.createElement('style');
-style.textContent = `
+(function() {
+  const style = document.createElement('style');
+  style.innerHTML = `
     #painelIA {
-        position: fixed;
-        top: 10px;
-        left: 10px;
-        background-color: rgba(0, 0, 0, 0.8);
-        color: white;
-        padding: 10px;
-        z-index: 9999;
-        font-size: 14px;
-        border-radius: 10px;
+      position: fixed;
+      top: 100px;
+      right: 20px;
+      width: 300px;
+      background: rgba(0,0,0,0.8);
+      color: #fff;
+      z-index: 9999;
+      padding: 10px;
+      font-family: Arial, sans-serif;
+      border-radius: 10px;
     }
-    #painelIA input {
-        margin-top: 5px;
-    }
-`;
-document.head.appendChild(style);
+    #painelIA h2 { font-size: 16px; margin-bottom: 5px; }
+    #painelIA input[type=file] { margin-bottom: 5px; }
+    #painelIA button { margin-top: 5px; }
+    #painelIA p { font-size: 14px; margin: 4px 0; }
+  `;
+  document.head.appendChild(style);
 
-const painel = document.createElement('div');
-painel.id = 'painelIA';
-painel.innerHTML = `
-    <strong>Previsão IA:</strong>
-    <div id="previsao"></div>
-    <input type="file" id="importarCSV">
-    <div id="confiança"></div>
-    <div id="apostaSugestao"></div>
-`;
-document.body.appendChild(painel);
+  const painel = document.createElement('div');
+  painel.id = 'painelIA';
+  painel.innerHTML = `
+    <h2>IA Roleta</h2>
+    <input type="file" id="csvInput" accept=".csv"><br>
+    <button id="treinarBtn">Treinar IA</button>
+    <p id="statusIA">IA não treinada</p>
+    <p><strong>Previsão:</strong> <span id="previsaoFinal">---</span></p>
+    <p><strong>Confiança:</strong> <span id="confiancaFinal">0%</span></p>
+  `;
+  document.body.appendChild(painel);
 
-// == FUNÇÕES ORIGINAIS E MELHORADAS ==
+  let resultadosHistoricos = [];
+  let redeNeural, markovChain = {}, padroes = {}, brancoStats = {};
+  let confTotal = 0, ultimaCor = null;
 
-function importarCSV(file) {
+  // Adiciona script do Synaptic.js
+  const scriptSynaptic = document.createElement('script');
+  scriptSynaptic.src = 'https://cdn.jsdelivr.net/npm/synaptic@1.1.4/dist/synaptic.min.js';
+  document.head.appendChild(scriptSynaptic);
+
+  // Aguarda Synaptic carregar e prepara a rede
+  scriptSynaptic.onload = () => {
+    const { Layer, Network } = synaptic;
+    const entrada = new Layer(10);
+    const escondida = new Layer(6);
+    const saida = new Layer(3);
+    entrada.project(escondida);
+    escondida.project(saida);
+    redeNeural = new Network({ input: entrada, hidden: [escondida], output: saida });
+  };
+
+  // Leitor de CSV
+  document.getElementById("csvInput").addEventListener("change", function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
     const reader = new FileReader();
-    reader.onload = function(event) {
-        const linhas = event.target.result.split('\n');
-        csvData = linhas.map(l => l.split(','));
-        analisarPadrõesCSV();
+    reader.onload = function(evt) {
+      const lines = evt.target.result.split('\n').map(l => l.trim()).filter(Boolean);
+      resultadosHistoricos = lines.map(l => {
+        const val = l.split(',')[1];
+        return isNaN(val) ? null : parseInt(val);
+      }).filter(v => v !== null);
+      document.getElementById("statusIA").innerText = "CSV carregado com " + resultadosHistoricos.length + " entradas.";
     };
     reader.readAsText(file);
-}
+  });
 
-function analisarPadrõesCSV() {
-    // Análise simples por sequência, hora, cor, etc.
-    console.log("Padrões extraídos do CSV:", csvData.length);
-}
+  // Função para treinar a IA
+  document.getElementById("treinarBtn").addEventListener("click", () => {
+    if (!resultadosHistoricos.length) return alert("Importe um CSV antes!");
+    for (let i = 10; i < resultadosHistoricos.length - 1; i++) {
+      const entrada = resultadosHistoricos.slice(i - 10, i).map(v => v / 14);
+      const saida = [0, 0, 0];
+      const prox = resultadosHistoricos[i];
+      if (prox === 0) saida[0] = 1;
+      else if (prox <= 7) saida[1] = 1;
+      else saida[2] = 1;
+      redeNeural.activate(entrada);
+      redeNeural.propagate(0.3, saida);
+    }
+    document.getElementById("statusIA").innerText = "IA treinada com sucesso!";
+  });
 
-function analisarBrancoProfundamente() {
-    const minutosBranco = [];
-    const antesDoBranco = [];
-    const distanciaBranco = [];
-    for (let i = 0; i < results.length; i++) {
-        if (results[i].color === 'white') {
-            const minuto = new Date(results[i].timestamp).getMinutes();
-            minutosBranco.push(minuto);
-            if (i > 0) antesDoBranco.push(results[i - 1].roll);
-            let distancia = 1;
-            while (i + distancia < results.length && results[i + distancia].color !== 'white') {
-                distancia++;
-            }
-            if (i + distancia < results.length) distanciaBranco.push(distancia);
+function analisarMarkov() {
+    markovChain = {};
+    for (let i = 0; i < resultadosHistoricos.length - 1; i++) {
+      const atual = resultadosHistoricos[i];
+      const proximo = resultadosHistoricos[i + 1];
+      if (!markovChain[atual]) markovChain[atual] = {};
+      if (!markovChain[atual][proximo]) markovChain[atual][proximo] = 0;
+      markovChain[atual][proximo]++;
+    }
+  }
+
+  function analisarBrancoStats() {
+    brancoStats = { minutos: {}, antes: {}, delay: {} };
+    for (let i = 1; i < resultadosHistoricos.length; i++) {
+      const atual = resultadosHistoricos[i];
+      const anterior = resultadosHistoricos[i - 1];
+      const hora = new Date().getMinutes();
+      if (atual === 0) {
+        brancoStats.minutos[hora] = (brancoStats.minutos[hora] || 0) + 1;
+        brancoStats.antes[anterior] = (brancoStats.antes[anterior] || 0) + 1;
+        let dist = 1;
+        for (let j = i - 1; j >= 0; j--) {
+          if (resultadosHistoricos[j] === 0) {
+            brancoStats.delay[dist] = (brancoStats.delay[dist] || 0) + 1;
+            break;
+          }
+          dist++;
         }
+      }
     }
-    console.log("Minutos comuns do branco:", minutosBranco);
-    console.log("Números antes do branco:", antesDoBranco);
-    console.log("Distância entre brancos:", distanciaBranco);
-}
+  }
 
-function detectarPadrões() {
-    const ultimas = colorHistory.slice(-5).join('-');
-    if (ultimas === 'red-black-red-black-red') {
-        return 'black';
+  function analisarPadroesNumericos() {
+    padroes = {};
+    for (let i = 5; i < resultadosHistoricos.length; i++) {
+      const seq = resultadosHistoricos.slice(i - 5, i).join("-");
+      const next = resultadosHistoricos[i];
+      if (!padroes[seq]) padroes[seq] = {};
+      if (!padroes[seq][next]) padroes[seq][next] = 0;
+      padroes[seq][next]++;
     }
-    return null;
-}
+  }
 
-function usarIAParaPrever() {
-    const padrão = detectarPadrões();
-    const estatistica = preverPorEstatistica();
-    const branca = preverBranco();
+  function prever() {
+    if (!resultadosHistoricos.length) return;
 
-    const escolhas = [padrão, estatistica, branca].filter(Boolean);
-    if (escolhas.length === 0) return 'Indefinido';
+    const ultimos10 = resultadosHistoricos.slice(-10).map(n => n / 14);
+    const saida = redeNeural.activate(ultimos10);
+    const confiancaIA = Math.max(...saida);
+    const corIA = saida.indexOf(confiancaIA);
 
-    const contagem = {};
-    escolhas.forEach(cor => {
-        contagem[cor] = (contagem[cor] || 0) + 1;
-    });
-    const final = Object.keys(contagem).reduce((a, b) => contagem[a] > contagem[b] ? a : b);
-    confidenceScore = contagem[final] / escolhas.length;
-    return final;
-}
-
-function preverPorEstatistica() {
-    const freq = { red: 0, black: 0, white: 0 };
-    colorHistory.forEach(c => freq[c]++);
-    const total = colorHistory.length;
-    const prob = Object.fromEntries(Object.entries(freq).map(([k, v]) => [k, v / total]));
-    return Object.keys(prob).reduce((a, b) => prob[a] > prob[b] ? a : b);
-}
-
-function preverBranco() {
-    const ultimosMin = new Date().getMinutes();
-    const probBranco = Math.random() < 0.05;
-    return probBranco ? 'white' : null;
-}
-
-function atualizarPainel(previsao) {
-    document.getElementById('previsao').innerText = previsao;
-    document.getElementById('confiança').innerText = `Confiança: ${(confidenceScore * 100).toFixed(1)}%`;
-    const valorBase = 10;
-    const aposta = (valorBase * confidenceScore).toFixed(2);
-    document.getElementById('apostaSugestao').innerText = `Sugestão de aposta: R$${aposta}`;
-}
-
-// == CONEXÃO WS ORIGINAL COM MELHORIA ==
-const ws = new WebSocket('wss://api-v2.blaze.com/replicant/?EIO=3&transport=websocket');
-
-ws.onopen = () => {
-    ws.send("40/double,{}")
-};
-
-ws.onmessage = (event) => {
-    if (event.data.startsWith("42")) {
-        const payload = JSON.parse(event.data.slice(2));
-        if (payload[0] === "double.tick") {
-            const data = payload[1];
-            if (data.status === "complete") {
-                const color = data.color === 0 ? 'red' : data.color === 1 ? 'black' : 'white';
-                const roll = data.roll;
-                const hash = data.hash;
-                if (hash !== lastHash) {
-                    lastHash = hash;
-                    results.push({ color, roll, timestamp: Date.now() });
-                    colorHistory.push(color);
-                    if (color === 'white') whitePositions.push(results.length - 1);
-                    const previsao = usarIAParaPrever();
-                    atualizarPainel(previsao);
-                    analisarBrancoProfundamente();
-                }
-            }
-        }
+    const ultimo = resultadosHistoricos[resultadosHistoricos.length - 1];
+    const markov = markovChain[ultimo] || {};
+    let corMarkov = 1, maxM = 0;
+    for (const [num, cont] of Object.entries(markov)) {
+      const n = parseInt(num);
+      if (cont > maxM) {
+        maxM = cont;
+        corMarkov = n === 0 ? 0 : (n <= 7 ? 1 : 2);
+      }
     }
-};
 
-document.getElementById('importarCSV').addEventListener('change', function(e) {
-    importarCSV(e.target.files[0]);
-});
+    const seq = resultadosHistoricos.slice(-5).join("-");
+    const padrao = padroes[seq] || {};
+    let corPadrao = 1, maxP = 0;
+    for (const [num, cont] of Object.entries(padrao)) {
+      const n = parseInt(num);
+      if (cont > maxP) {
+        maxP = cont;
+        corPadrao = n === 0 ? 0 : (n <= 7 ? 1 : 2);
+      }
+    }
 
+    const votos = [0, 0, 0];
+    votos[corIA]++;
+    votos[corMarkov]++;
+    votos[corPadrao]++;
+    const final = votos.indexOf(Math.max(...votos));
+    const confiancaFinal = ((votos[final] / 3) * 100).toFixed(1);
+
+    const corMap = ['Branco', 'Vermelho', 'Preto'];
+    document.getElementById("previsaoFinal").innerText = corMap[final];
+    document.getElementById("confiancaFinal").innerText = confiancaFinal + "%";
+  }
+
+  // Executa análises após CSV
+  document.getElementById("treinarBtn").addEventListener("click", () => {
+    analisarMarkov();
+    analisarBrancoStats();
+    analisarPadroesNumericos();
+    prever();
+  });
 })();
 
+  
