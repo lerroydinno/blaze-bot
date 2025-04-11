@@ -1,155 +1,186 @@
-// ==UserScript==
-// @name         Blaze Bot I.A
-// @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  Bot de previsão para Blaze com IA avançada
-// @author       Lerroy
-// @match        https://blaze.com/pt/games/double
-// @grant        none
-// ==/UserScript==
+(async function () {
+  const sha256 = async (message) => {
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
 
-(function() {
-    'use strict';
+  const getRollColor = (hash) => {
+    const number = parseInt(hash.slice(0, 8), 16) % 15;
+    if (number === 0) return { color: 'BRANCO', number };
+    if (number <= 7) return { color: 'VERMELHO', number };
+    return { color: 'PRETO', number };
+  };
 
-    // ====== ESTILO E MENU ORIGINAL PRESERVADO ======
-    const panel = document.createElement('div');
-    panel.style = 'position: fixed; top: 80px; right: 20px; background-color: #111; color: white; padding: 15px; border: 2px solid green; z-index: 9999; font-family: Arial; border-radius: 8px; width: 300px;';
-    panel.innerHTML = `
-        <h2 style="color: limegreen;">Blaze Bot I.A</h2>
-        <div><strong>Previsão:</strong> <span id="previsao">Aguardando...</span></div>
-        <div><strong>Confiança:</strong> <span id="confianca">-</span></div>
-        <div><strong>Aposta sugerida:</strong> <span id="aposta">-</span></div>
-        <input type="file" id="csvInput" accept=".csv" style="margin-top:10px;color:white;">
-        <button id="treinarIA" style="margin-top:10px;">Treinar IA</button>
-    `;
-    document.body.appendChild(panel);
-
-    // ====== IMPORTAÇÃO CSV + PADRÕES BRANCO + HISTÓRICO ======
-    let historicoCSV = [], padroesBranco = {};
-    document.getElementById('csvInput').addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            const linhas = event.target.result.split('\n');
-            linhas.forEach(l => {
-                const partes = l.trim().split(',');
-                if(partes.length >= 2){
-                    historicoCSV.push({numero: parseInt(partes[0]), cor: partes[1]});
-                }
-            });
-            extrairPadroesBranco();
-        };
-        reader.readAsText(file);
-    });
-
-    function extrairPadroesBranco(){
-        padroesBranco = {
-            minutos: {}, anterior: {}, intervalos: []
-        };
-        for(let i = 0; i < historicoCSV.length; i++){
-            if(historicoCSV[i].cor === 'branco'){
-                const minuto = i % 60;
-                padroesBranco.minutos[minuto] = (padroesBranco.minutos[minuto] || 0) + 1;
-                if(i > 0){
-                    const ant = historicoCSV[i-1].numero;
-                    padroesBranco.anterior[ant] = (padroesBranco.anterior[ant] || 0) + 1;
-                }
-                let j = 1;
-                while(i-j >= 0 && historicoCSV[i-j].cor !== 'branco') j++;
-                padroesBranco.intervalos.push(j);
-            }
-        }
+  const analisarSequencias = (hist) => {
+    let count = 1;
+    for (let i = hist.length - 1; i > 0; i--) {
+      if (hist[i] === hist[i - 1]) {
+        count++;
+      } else {
+        break;
+      }
     }
+    return count >= 4 ? hist[hist.length - 1] === 'VERMELHO' ? 'PRETO' : 'VERMELHO' : null;
+  };
 
-    // ====== IA AVANÇADA (Synaptic.js) ======
-    const network = new synaptic.Architect.Perceptron(5, 10, 3); // entrada, hidden, saída
-    const trainer = new synaptic.Trainer(network);
-
-    function prepararDadosTreino() {
-        return historicoCSV.slice(5).map((_, i) => {
-            const entrada = historicoCSV.slice(i, i+5).map(j => j.numero/14);
-            const cor = historicoCSV[i+5].cor;
-            const saida = [
-                cor === 'vermelho' ? 1 : 0,
-                cor === 'preto' ? 1 : 0,
-                cor === 'branco' ? 1 : 0
-            ];
-            return {input: entrada, output: saida};
-        });
+  const calcularIntervaloBranco = (hist) => {
+    const indices = hist.map((cor, i) => cor === 'BRANCO' ? i : -1).filter(i => i !== -1);
+    if (indices.length < 2) return { media: null, ultimoIntervalo: null };
+    const intervalos = [];
+    for (let i = 1; i < indices.length; i++) {
+      intervalos.push(indices[i] - indices[i - 1]);
     }
+    const soma = intervalos.reduce((a, b) => a + b, 0);
+    return { media: soma / intervalos.length, ultimoIntervalo: hist.length - 1 - indices[indices.length - 1] };
+  };
 
-    document.getElementById('treinarIA').onclick = () => {
-        const dados = prepararDadosTreino();
-        trainer.train(dados, {rate: 0.1, iterations: 500, error: 0.005});
-        alert("Rede Neural treinada!");
+  const lookupTable = {};
+  const atualizarLookup = (hash, cor) => {
+    const prefix = hash.slice(0, 2);
+    if (!lookupTable[prefix]) lookupTable[prefix] = { VERMELHO: 0, PRETO: 0, BRANCO: 0 };
+    lookupTable[prefix][cor]++;
+  };
+
+  const reforcoPrefixo = (hash) => {
+    const prefix = hash.slice(0, 2);
+    if (!lookupTable[prefix]) return null;
+    const cores = lookupTable[prefix];
+    return Object.keys(cores).reduce((a, b) => cores[a] > cores[b] ? a : b);
+  };
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  const getLastGame = async () => {
+    const res = await fetch("https://blaze.com/api/roulette_games/recent");
+    const data = await res.json();
+    return data[0];
+  };
+
+  const historico = JSON.parse(localStorage.getItem('historico')) || [];
+  const atualizarHistorico = (cor) => {
+    historico.push(cor);
+    if (historico.length > 1000) historico.shift();
+    localStorage.setItem('historico', JSON.stringify(historico));
+  };
+
+  const calcularAposta = (confianca) => {
+    const base = 1;
+    if (confianca < 60) return 0;
+    if (confianca < 70) return base;
+    if (confianca < 80) return base * 2;
+    if (confianca < 90) return base * 4;
+    return base * 8;
+  };
+
+  const painel = document.createElement('div');
+  painel.innerHTML = `
+    <div id="painel" style="position:fixed;top:10px;right:10px;background-color:#111;padding:15px;border:2px solid #00ff00;border-radius:10px;z-index:10000;font-family:Arial;color:#00ff00;width:300px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <strong>Blaze Bot I.A</strong>
+        <button id="minimizar" style="background-color:#222;border:none;color:#0f0;padding:2px 8px;cursor:pointer">_</button>
+      </div>
+      <div id="conteudoPainel">
+        <div id="resultado_cor" style="margin-bottom:8px"></div>
+        <div id="confianca" style="margin-bottom:8px"></div>
+        <div id="aposta" style="margin-bottom:8px"></div>
+        <input type="file" id="importarCSV" accept=".csv" style="margin-bottom:8px;color:#0f0;background:#000;border:1px solid #0f0"/>
+        <button id="exportarCSV" style="background:#000;border:1px solid #0f0;color:#0f0;padding:4px 8px;margin-bottom:8px">Exportar CSV</button>
+        <div style="max-height:150px;overflow:auto">
+          <ul id="historico_cores" style="list-style:none;padding:0;margin:0"></ul>
+        </div>
+      </div>
+    </div>
+    <div id="circuloMinimizado" style="display:none;position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;background-image:url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg');background-size:cover;background-position:center;border:2px solid #00ff00;cursor:pointer;z-index:10000"></div>
+  `;
+  document.body.appendChild(painel);
+
+  document.getElementById('minimizar').onclick = () => {
+    document.getElementById('painel').style.display = 'none';
+    document.getElementById('circuloMinimizado').style.display = 'block';
+  };
+  document.getElementById('circuloMinimizado').onclick = () => {
+    document.getElementById('painel').style.display = 'block';
+    document.getElementById('circuloMinimizado').style.display = 'none';
+  };
+
+  const atualizarPainel = (cor, confianca, aposta, numero) => {
+    document.getElementById('resultado_cor').innerText = `🎯 Resultado: ${cor} (${numero})`;
+    document.getElementById('confianca').innerText = `Confiança: ${confianca}%`;
+    document.getElementById('aposta').innerText = `Aposta sugerida: ${aposta} fichas`;
+    const item = document.createElement('li');
+    item.innerText = cor;
+    item.style.color = cor === 'VERMELHO' ? '#f00' : cor === 'PRETO' ? '#fff' : '#ff0';
+    document.getElementById('historico_cores').prepend(item);
+  };
+
+  document.getElementById('exportarCSV').onclick = () => {
+    const csv = historico.map((cor, i) => `${i + 1},${cor}`).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'historico.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  document.getElementById('importarCSV').onchange = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const linhas = reader.result.split('\n');
+      linhas.forEach(linha => {
+        const partes = linha.split(',');
+        if (partes.length === 2) historico.push(partes[1]);
+      });
+      localStorage.setItem('historico', JSON.stringify(historico));
     };
+    reader.readAsText(file);
+  };
 
-    function preverIA() {
-        if(historicoCSV.length < 5) return null;
-        const entrada = historicoCSV.slice(-5).map(i => i.numero/14);
-        return network.activate(entrada);
+  setInterval(async () => {
+    const jogo = await getLastGame();
+    if (!jogo || !jogo.hash) return;
+    const hash = await sha256(jogo.hash);
+    const { color, number } = getRollColor(hash);
+    atualizarHistorico(color);
+    atualizarLookup(hash, color);
+
+    const previsaoHash = reforcoPrefixo(hash);
+    const previsaoPadrao = analisarSequencias(historico);
+    const { media, ultimoIntervalo } = calcularIntervaloBranco(historico);
+    const previsaoBranco = media && ultimoIntervalo >= Math.floor(media) ? 'BRANCO' : null;
+
+    window.previsaoHash = previsaoHash;
+    window.previsaoPadrao = previsaoPadrao;
+    window.previsaoBranco = previsaoBranco;
+
+    if (window.previsaoRedeNeural && window.previsaoMarkov && window.previsaoHorario) {
+      const reforcoConfluente = () => {
+        const corNN = window.previsaoRedeNeural;
+        const corHash = window.previsaoHash;
+        const corMarkov = window.previsaoMarkov;
+        const corBranco = window.previsaoBranco;
+        const corPadrao = window.previsaoPadrao;
+        const corHorario = window.previsaoHorario;
+
+        const contagem = { VERMELHO: 0, PRETO: 0, BRANCO: 0 };
+        [corNN, corHash, corMarkov, corBranco, corPadrao, corHorario].forEach(cor => {
+          if (cor && contagem[cor] !== undefined) contagem[cor]++;
+        });
+
+        const corFinal = Object.entries(contagem).reduce((a, b) => (b[1] > a[1] ? b : a))[0];
+        const totalFontes = Object.values(contagem).reduce((a, b) => a + b, 0);
+        const confiancaFinal = Math.round((contagem[corFinal] / totalFontes) * 100);
+        const aposta = calcularAposta(confiancaFinal);
+
+        atualizarPainel(corFinal, confiancaFinal, aposta, number);
+      };
+
+      reforcoConfluente();
     }
-
-    // ====== MARKOV CHAIN SIMPLES ======
-    const transicoes = {};
-    function montarMarkov(){
-        for(let i = 0; i < historicoCSV.length - 1; i++){
-            const atual = historicoCSV[i].cor;
-            const prox = historicoCSV[i+1].cor;
-            if(!transicoes[atual]) transicoes[atual] = {};
-            transicoes[atual][prox] = (transicoes[atual][prox] || 0) + 1;
-        }
-    }
-
-    function preverMarkov(){
-        const ult = historicoCSV[historicoCSV.length - 1]?.cor;
-        if(transicoes[ult]){
-            const prov = transicoes[ult];
-            return Object.entries(prov).sort((a,b)=>b[1]-a[1])[0][0];
-        }
-        return null;
-    }
-
-    // ====== ANÁLISE DE HASH + OUTROS PADRÕES ======
-    function analisarHash(hash) {
-        const prefixo = hash.slice(0, 8);
-        const num = parseInt(prefixo, 16) % 15;
-        if (num === 0) return 'branco';
-        else if (num <= 7) return 'vermelho';
-        else return 'preto';
-    }
-
-    function calcularConfianca(confluencias){
-        const contagem = {vermelho: 0, preto: 0, branco: 0};
-        confluencias.forEach(cor => contagem[cor]++);
-        const corFinal = Object.entries(contagem).sort((a,b)=>b[1]-a[1])[0];
-        const confianca = corFinal[1] / confluencias.length;
-        return {cor: corFinal[0], confianca};
-    }
-
-    function sugerirValor(conf) {
-        if(conf >= 0.85) return "Alto";
-        else if(conf >= 0.6) return "Médio";
-        else return "Baixo";
-    }
-
-    // ====== LOOP PRINCIPAL DE PREVISÃO ======
-    setInterval(() => {
-        const corMarkov = preverMarkov();
-        const rede = preverIA();
-        const corIA = rede ? ['vermelho','preto','branco'][rede.indexOf(Math.max(...rede))] : null;
-        const hash = unsafeWindow.game?.currentGame?.hash || '';
-        const corHash = hash ? analisarHash(hash) : null;
-        const minuto = new Date().getMinutes();
-        const freqMinutoBranco = padroesBranco.minutos[minuto] || 0;
-        const corPadraoBranco = freqMinutoBranco > 2 ? 'branco' : null;
-
-        const confluencias = [corMarkov, corIA, corHash, corPadraoBranco].filter(c => c);
-        const resultado = calcularConfianca(confluencias);
-
-        document.getElementById('previsao').textContent = resultado.cor;
-        document.getElementById('confianca').textContent = (resultado.confianca*100).toFixed(1) + '%';
-        document.getElementById('aposta').textContent = sugerirValor(resultado.confianca);
-    }, 6000);
-
+  }, 5000);
 })();
