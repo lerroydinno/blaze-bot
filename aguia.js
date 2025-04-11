@@ -1,127 +1,271 @@
-// ==UserScript==
-// @name         Double Blaze Previsor
-// @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  Script de previsão para o jogo Double da Blaze
-// @author       Lerroy
-// @match        https://blaze.bet/*
-// @grant        none
-// ==/UserScript==
+(async function () {
+const apiURL = "https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
 
-(function() {
-  'use strict';
+async function sha256(message) {
+const msgBuffer = new TextEncoder().encode(message);
+const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+const hashArray = Array.from(new Uint8Array(hashBuffer));
+return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
-  const apiURL = 'https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1';
+function getRollColor(hash) {
+const number = parseInt(hash.slice(0, 8), 16) % 15;
+if (number === 0) return { cor: "BRANCO", numero: 0 };
+if (number <= 7) return { cor: "VERMELHO", numero: number };
+return { cor: "PRETO", numero: number };
+}
 
-  let coresAnteriores = [];
-  let historicoCSV = 'Data;Cor;Número;Hash;Previsão;Confiança\n';
-  let painelAberto = true;
+function analisarSequencias(hist) {
+if (hist.length < 4) return null;
+const ultimas = hist.slice(-4);
+if (ultimas.every(c => c === "PRETO")) return "VERMELHO";
+if (ultimas.every(c => c === "VERMELHO")) return "PRETO";
+if (ultimas[ultimas.length - 1] === "BRANCO") return "PRETO";
+return null;
+}
 
-  const painel = document.createElement('div');
-  painel.id = 'painelPrevisao';
-  painel.style = 'position: fixed; top: 100px; right: 20px; background: black; color: white; padding: 15px; border-radius: 8px; z-index: 9999; width: 300px; font-family: Arial;';
-  painel.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-      <strong>Previsão Double</strong>
-      <button id="togglePainel" style="background: red; color: white; border: none; padding: 5px 10px; cursor: pointer;">Fechar</button>
-    </div>
-    <div id="conteudoPrevisao" style="margin-top: 10px;">
-      <p>Status: <span id="statusPrevisao">Aguardando...</span></p>
-      <p>Próxima cor: <span id="proximaCor">-</span></p>
-      <p>Confiança: <span id="confiancaPrevisao">-</span>%</p>
-      <p>Hash: <span id="hashPrevisao">-</span></p>
-      <p>Resultado: <span id="resultadoAnterior">-</span></p>
-      <button id="botaoPrever" style="margin-top: 10px; background: green; color: white; border: none; padding: 5px 10px; cursor: pointer;">Gerar Previsão</button>
-      <button id="botaoExportar" style="margin-top: 10px; background: blue; color: white; border: none; padding: 5px 10px; cursor: pointer;">Exportar CSV</button>
-    </div>
-  `;
-  document.body.appendChild(painel);
+function calcularIntervaloBranco(hist) {
+let ultPos = -1, intervalos = [];
+hist.forEach((cor, i) => {
+if (cor === "BRANCO") {
+if (ultPos !== -1) intervalos.push(i - ultPos);
+ultPos = i;
+}
+});
+const media = intervalos.length ? intervalos.reduce((a, b) => a + b) / intervalos.length : 0;
+const ultimaBranco = hist.lastIndexOf("BRANCO");
+const desdeUltimo = ultimaBranco !== -1 ? hist.length - ultimaBranco : hist.length;
+return { media, desdeUltimo };
+}
 
-  document.getElementById('togglePainel').onclick = () => {
-    painelAberto = !painelAberto;
-    document.getElementById('conteudoPrevisao').style.display = painelAberto ? 'block' : 'none';
-    document.getElementById('togglePainel').textContent = painelAberto ? 'Fechar' : 'Abrir';
-  };
+let lookupPrefix = {};
 
-  document.getElementById('botaoPrever').onclick = async () => {
-    const novaPrevisao = await gerarPrevisao(await obterUltimaHash(), coresAnteriores);
-    updatePainel('-', '-', await obterUltimaHash(), novaPrevisao);
-  };
+function atualizarLookup(hash, cor) {
+const prefix = hash.slice(0, 2);
+if (!lookupPrefix[prefix]) lookupPrefix[prefix] = { BRANCO: 0, VERMELHO: 0, PRETO: 0 };
+lookupPrefix[prefix][cor]++;
+}
 
-  document.getElementById('botaoExportar').onclick = () => {
-    const blob = new Blob([historicoCSV], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'historico_previsoes.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
+function reforcoPrefixo(hash) {
+const prefix = hash.slice(0, 2);
+const dados = lookupPrefix[prefix];
+if (!dados) return {};
+const total = dados.BRANCO + dados.VERMELHO + dados.PRETO;
+return {
+BRANCO: ((dados.BRANCO / total) * 100).toFixed(2),
+VERMELHO: ((dados.VERMELHO / total) * 100).toFixed(2),
+PRETO: ((dados.PRETO / total) * 100).toFixed(2)
+};
+}
 
-  async function obterUltimaHash() {
-    try {
-      const response = await fetch(apiURL);
-      const data = await response.json();
-      return data[0].hash;
-    } catch (e) {
-      console.error('Erro ao obter última hash:', e);
-      return null;
-    }
-  }
+async function gerarPrevisao(seed, hist = []) {
+const novaHash = await sha256(seed);
+const previsao = getRollColor(novaHash);
+const recente = hist.slice(-100);
+const ocorrencias = recente.filter(c => c === previsao.cor).length;
+let confianca = recente.length ? ((ocorrencias / recente.length) * 100) : 0;
+const sugestaoSequencia = analisarSequencias(hist);
+if (sugestaoSequencia === previsao.cor) confianca += 10;
+if (previsao.cor === "BRANCO") {
+const { media, desdeUltimo } = calcularIntervaloBranco(hist);
+if (desdeUltimo >= media * 0.8) confianca += 10;
+}
+const reforco = reforcoPrefixo(novaHash);
+if (reforco[previsao.cor]) confianca += parseFloat(reforco[previsao.cor]) / 10;
+let aposta = calcularAposta(confianca);
+return { ...previsao, confianca: Math.min(100, confianca.toFixed(2)), aposta };
+}
 
-  async function gerarPrevisao(hash, historico) {
-    // Simulação de análise baseada na hash
-    const valor = parseInt(hash.slice(-4), 16);
-    const cor = valor % 15 === 0 ? 'BRANCO' : valor % 2 === 0 ? 'PRETO' : 'VERMELHO';
-    const confianca = Math.floor(Math.random() * 50) + 50; // Simula confiança entre 50-99%
+function calcularAposta(confianca) {
+const base = 1;
+if (confianca < 60) return 0;
+if (confianca < 70) return base;
+if (confianca < 80) return base * 2;
+if (confianca < 90) return base * 4;
+return base * 8;
+}
 
-    return { cor, confianca };
-  }
+function updatePainel(cor, numero, hash, previsao) {
+document.getElementById('resultado_cor').innerText = 🎯 Resultado: ${cor} (${numero});
+document.getElementById('resultado_hash').innerText = Hash: ${hash};
+document.getElementById('previsao_texto').innerText = 🔮 Próxima: ${previsao.cor} (${previsao.numero})\n🎯 Confiança: ${previsao.confianca}%\n💰 Apostar: ${previsao.aposta}x;
+document.getElementById('previsao_texto').style.color = previsao.confianca >= 90 ? "yellow" : "limegreen";
+document.getElementById('historico_resultados').innerHTML += <div>${cor} (${numero}) - <span style="font-size:10px">${hash.slice(0, 16)}...</span></div>;
+}
 
-  function updatePainel(cor, numero, hash, previsao) {
-    document.getElementById('statusPrevisao').textContent = 'Atualizado';
-    document.getElementById('proximaCor').textContent = previsao.cor;
-    document.getElementById('confiancaPrevisao').textContent = previsao.confianca;
-    document.getElementById('hashPrevisao').textContent = hash;
-    document.getElementById('resultadoAnterior').textContent = `${cor} (${numero})`;
-  }
+function downloadCSV() {
+const blob = new Blob([historicoCSV], { type: "text/csv" });
+const url = URL.createObjectURL(blob);
+const a = document.createElement("a");
+a.href = url;
+a.download = double_historico_${Date.now()}.csv;
+a.click();
+URL.revokeObjectURL(url);
+}
 
-  function salvarHistoricoLocal() {
-    localStorage.setItem('historicoDouble', historicoCSV);
-  }
+function salvarHistoricoLocal() {
+localStorage.setItem("historico_double", historicoCSV);
+}
 
-  function atualizarLookup(hash, cor) {
-    console.log(`Novo resultado: ${cor} | Hash: ${hash}`);
-  }
+function carregarHistoricoLocal() {
+const salvo = localStorage.getItem("historico_double");
+if (salvo) historicoCSV = salvo;
+}
 
-  // ====== MONITORAMENTO AUTOMÁTICO DE RESULTADO DA API ======
+function processarCSV(text) {
+const linhas = text.trim().split("\n").slice(1);
+linhas.forEach(l => {
+const partes = l.split(";");
+if (partes.length >= 4) {
+const cor = partes[1];
+const hash = partes[3];
+coresAnteriores.push(cor);
+atualizarLookup(hash, cor);
+}
+});
+}
 
-  let lastHash = null;
+let historicoCSV = "Data;Cor;Número;Hash;Previsão;Confiança\n";
+let lastHash = "";
+let coresAnteriores = [];
 
-  async function verificarNovoResultado() {
-    try {
-      const response = await fetch(apiURL);
-      const data = await response.json();
-      const { hash, color, roll } = data[0];
+carregarHistoricoLocal();
 
-      if (hash !== lastHash) {
-        lastHash = hash;
-        const corTexto = color === 0 ? "BRANCO" : color === 1 ? "VERMELHO" : "PRETO";
-        
-        const previsao = await gerarPrevisao(hash, coresAnteriores);
-        coresAnteriores.push(corTexto);
-        atualizarLookup(hash, corTexto);
+const painel = document.createElement("div");
+painel.id = "painel_previsao";
+painel.style =   position: fixed; top: 60px; left: 50%; transform: translateX(-50%);   z-index: 99999; background: #000000cc; border: 2px solid limegreen; border-radius: 20px;   color: limegreen; padding: 20px; font-family: monospace; text-align: center; width: 360px;  ;
+painel.innerHTML =   <div style="display:flex;justify-content:space-between;align-items:center;">   <h3 style="margin:0;">Blaze<br>Bot I.A</h3>   <button id="btn_minimizar" style="background:none;border:none;color:limegreen;font-weight:bold;font-size:20px;">−</button>   </div>   <div id="resultado_cor">🎯 Resultado: aguardando...</div>   <div id="resultado_hash" style="font-size: 10px; word-break: break-all;">Hash: --</div>   <div id="previsao_texto" style="margin-top: 10px;">🔮 Previsão: aguardando...</div>   <input type="file" id="import_csv" accept=".csv" style="margin:10px;" />   <button id="btn_prever" style="margin-top:5px;">🔁 Gerar previsão manual</button>   <button id="btn_baixar" style="margin-top:5px;">⬇️ Baixar CSV</button>   <div id="historico_resultados" style="margin-top:10px;max-height:100px;overflow:auto;text-align:left;font-size:12px;"></div>  ;
+document.body.appendChild(painel);
 
-        historicoCSV += `${new Date().toLocaleString()};${corTexto};${roll};${hash};${previsao.cor};${previsao.confianca}\n`;
-        salvarHistoricoLocal();
-        updatePainel(corTexto, roll, hash, previsao);
-      }
-    } catch (err) {
-      console.error("Erro ao buscar resultado:", err);
-    }
-  }
+const icone = document.createElement("div");
+icone.id = "icone_flutuante";
+icone.style =   display: none; position: fixed; bottom: 20px; right: 20px; z-index: 99999;   width: 60px; height: 60px; border-radius: 50%;   background-image: url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg');   background-size: cover; background-repeat: no-repeat; background-position: center;   border: 2px solid limegreen; box-shadow: 0 0 10px limegreen, 0 0 20px limegreen inset;   cursor: pointer; animation: neonPulse 1s infinite;  ;
+document.body.appendChild(icone);
 
-  setInterval(verificarNovoResultado, 5000);
+const estilo = document.createElement("style");
+estilo.innerHTML =   @keyframes neonPulse {   0% { box-shadow: 0 0 5px limegreen, 0 0 10px limegreen inset; }   50% { box-shadow: 0 0 20px limegreen, 0 0 40px limegreen inset; }   100% { box-shadow: 0 0 5px limegreen, 0 0 10px limegreen inset; }   }  ;
+document.head.appendChild(estilo);
 
+document.getElementById('btn_minimizar').onclick = () => {
+painel.style.display = "none";
+icone.style.display = "block";
+};
+
+icone.onclick = () => {
+painel.style.display = "block";
+icone.style.display = "none";
+};
+
+document.getElementById('btn_baixar').onclick = downloadCSV;
+
+document.getElementById('btn_prever').onclick = async () => {
+if (lastHash && lastHash !== "indefinido") {
+const previsao = await gerarPrevisao(lastHash, coresAnteriores);
+document.getElementById('previsao_texto').innerText = 🔮 Próxima: ${previsao.cor} (${previsao.numero})\n🎯 Confiança: ${previsao.confianca}%\n💰 Apostar: ${previsao.aposta}x;
+}
+};
+
+document.getElementById('import_csv').addEventListener('change', e => {
+const file = e.target.files[0];
+if (!file) return;
+const reader = new FileReader();
+reader.onload = e => processarCSV(e.target.result);
+reader.readAsText(file);
+});
+
+setInterval(async () => {
+try {
+const res = await fetch(apiURL);
+const data = await res.json();
+const ultimo = data[0];
+const corNum = Number(ultimo.color);
+const cor = corNum === 0 ? "BRANCO" : corNum <= 7 ? "VERMELHO" : "PRETO";
+const numero = ultimo.roll;
+const hash = ultimo.hash || ultimo.server_seed || "indefinido";
+
+if (!document.getElementById(`log_${hash}`) && hash !== "indefinido") {  
+    atualizarLookup(hash, cor);  
+    const previsao = await gerarPrevisao(hash, coresAnteriores);  
+    updatePainel(cor, numero, hash, previsao);  
+    historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash};${previsao.cor};${previsao.confianca}%\n`;  
+    salvarHistoricoLocal();  
+    coresAnteriores.push(cor);  
+    if (coresAnteriores.length > 200) coresAnteriores.shift();  
+    lastHash = hash;  
+    document.getElementById('historico_resultados').innerHTML += `<div id="log_${hash}">${cor} (${numero})</div>`;  
+  }  
+} catch (e) {  
+  console.error("Erro ao buscar API:", e);  
+}
+
+}, 8000);
 })();
+(function() {
+const reforcoConfluente = () => {
+const corNN = window.previsaoRedeNeural;
+const corHash = window.previsaoHash;
+const corMarkov = window.previsaoMarkov;
+const corBranco = window.previsaoBranco;
+const corPadrao = window.previsaoPadrao;
+const corHorario = window.previsaoHorario;
+
+const contagem = { VERMELHO: 0, PRETO: 0, BRANCO: 0 };  
+[corNN, corHash, corMarkov, corBranco, corPadrao, corHorario].forEach(cor => {  
+  if (cor && contagem[cor] !== undefined) contagem[cor]++;  
+});  
+
+const corFinal = Object.entries(contagem).reduce((a, b) => (b[1] > a[1] ? b : a))[0];  
+const totalFontes = Object.values(contagem).reduce((a, b) => a + b, 0);  
+const confiancaFinal = Math.round((contagem[corFinal] / totalFontes) * 100);  
+
+let valorAposta = "0x";  
+if (confiancaFinal >= 80) valorAposta = "3x";  
+else if (confiancaFinal >= 60) valorAposta = "2x";  
+else if (confiancaFinal >= 40) valorAposta = "1x";  
+
+const painel = document.getElementById("painelIA") || document.getElementById("painel-ia");  
+if (painel) {  
+  let divReforco = document.getElementById("reforcoPrevisao");  
+  if (!divReforco) {  
+    divReforco = document.createElement("div");  
+    divReforco.id = "reforcoPrevisao";  
+    divReforco.style = "margin-top:10px;padding-top:10px;border-top:1px solid lime;font-size:13px;";  
+    painel.appendChild(divReforco);  
+  }  
+  divReforco.innerHTML = `  
+    <b>Previsão Confluente:</b> ${corFinal}<br>  
+    <b>Confluência:</b> ${confiancaFinal}%<br>  
+    <b>Aposta sugerida:</b> ${valorAposta}  
+  `;  
+}
+
+};
+
+// Atualiza a cada 5 segundos
+setInterval(async () => {
+  try {
+    const res = await fetch(apiURL);
+    const data = await res.json();
+    const ultimo = data[0];
+    const corNum = Number(ultimo.color);
+    const cor = corNum === 0 ? "BRANCO" : corNum <= 7 ? "VERMELHO" : "PRETO";
+    const numero = ultimo.roll;
+    const hash = ultimo.hash || ultimo.server_seed || "indefinido";
+
+    if (hash !== lastHash) {
+      lastHash = hash;
+      coresAnteriores.push(cor);
+      atualizarLookup(hash, cor);
+      const previsao = await gerarPrevisao(hash, coresAnteriores);
+      updatePainel(cor, numero, hash, previsao);
+
+      const agora = new Date().toLocaleString();
+      historicoCSV += `${agora};${cor};${numero};${hash};${previsao.cor};${previsao.confianca}%\n`;
+      salvarHistoricoLocal();
+    }
+  } catch (err) {
+    console.error("Erro ao obter dados:", err);
+  }
+}, 5000); // a cada 5 segundos.
+})();
+
