@@ -229,7 +229,7 @@
   }, 8000);
 })();
 (function() {
-  const reinforcePrediction = () => {
+  const reforcoConfluente = () => {
     const corNN = window.previsaoRedeNeural;
     const corHash = window.previsaoHash;
     const corMarkov = window.previsaoMarkov;
@@ -251,22 +251,23 @@
     else if (confiancaFinal >= 60) valorAposta = "2x";
     else if (confiancaFinal >= 40) valorAposta = "1x";
 
-    // Interface
-    const resultadoBox = document.querySelector("#painel-ia") || document.createElement("div");
-    resultadoBox.id = "painel-ia";
-    resultadoBox.style = `
-      background: #000; border: 2px solid lime; color: lime; padding: 10px;
-      font-family: monospace; font-size: 13px; position: absolute;
-      top: 100px; left: 10px; z-index: 9999; max-width: 90vw;
-    `;
-    resultadoBox.innerHTML = `
-      <b>Previsão Confluente:</b> ${corFinal}<br>
-      <b>Confluência:</b> ${confiancaFinal}%<br>
-      <b>Aposta sugerida:</b> ${valorAposta}
-    `;
-    document.body.appendChild(resultadoBox);
+    const painel = document.getElementById("painelIA") || document.getElementById("painel-ia");
+    if (painel) {
+      let divReforco = document.getElementById("reforcoPrevisao");
+      if (!divReforco) {
+        divReforco = document.createElement("div");
+        divReforco.id = "reforcoPrevisao";
+        divReforco.style = "margin-top:10px;padding-top:10px;border-top:1px solid lime;font-size:13px;";
+        painel.appendChild(divReforco);
+      }
+      divReforco.innerHTML = `
+        <b>Previsão Confluente:</b> ${corFinal}<br>
+        <b>Confluência:</b> ${confiancaFinal}%<br>
+        <b>Aposta sugerida:</b> ${valorAposta}
+      `;
+    }
   };
 
-  // Delay curto para esperar outras previsões carregarem
-  setTimeout(reinforcePrediction, 1500);
+  // Atualiza a cada 5 segundos
+  setInterval(reforcoConfluente, 5000);
 })();
