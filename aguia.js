@@ -1,154 +1,266 @@
-// Código final - Blaze Bot I.A completo com todas as funções ativadas
 (async () => {
-  const script = document.createElement('script');
-  script.src = 'https://cdn.jsdelivr.net/npm/synaptic@1.1.4/dist/synaptic.min.js';
-  document.head.appendChild(script);
-  await new Promise(resolve => script.onload = resolve);
+  const scriptURL = "https://cdn.jsdelivr.net/gh/lerroydinno/blazebotia@main/funcionalidades_completas.js";
+  const synapticURL = "https://cdn.jsdelivr.net/npm/synaptic@1.1.4/dist/synaptic.min.js";
 
-  const painel = document.createElement("div");
-  painel.innerHTML = `
-    <div id="painelIA" style="position: fixed; bottom: 100px; left: 10px; background-color: black; border: 2px solid lime; color: lime; padding: 10px; font-family: monospace; z-index: 9999; border-radius: 10px;">
-      <div style="font-size: 18px; font-weight: bold;">Blaze Bot I.A</div>
-      <br/>
-      <input type="file" id="csvFileInput" accept=".csv" />
-      <button id="analisarCSV" style="display:block; margin-top:10px;">Analisar CSV</button>
-      <br/>
-      <div id="previsaoIA">Última previsão: ---</div>
-      <div id="confiancaIA">Confiança: ---</div>
-      <div id="recomendacaoIA">Recomendação: ---</div>
-      <div id="resultadoBranco">Análise Branco: ---</div>
-      <div id="hashAnalise">Hash: ---</div>
-      <div id="historicoResultados" style="margin-top:10px;"></div>
-    </div>`;
-  document.body.appendChild(painel);
+  const loadScript = (src) =>
+    new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
 
-  function hashSHA256(str) {
-    const buffer = new TextEncoder().encode(str);
-    return crypto.subtle.digest("SHA-256", buffer).then(hash =>
-      Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, "0")).join("")
-    );
-  }
+  await loadScript(synapticURL);
+  await loadScript(scriptURL);
 
-  function analisarBrancoDetalhado(resultados) {
-    const minutosBranco = {}, antesDoBranco = {}, brancosSeguidos = [];
-    for (let i = 1; i < resultados.length; i++) {
-      const atual = resultados[i], anterior = resultados[i - 1];
-      if (atual.color === 'white') {
-        const minuto = new Date(atual.timestamp).getMinutes();
-        minutosBranco[minuto] = (minutosBranco[minuto] || 0) + 1;
-        if (anterior?.number !== undefined) antesDoBranco[anterior.number] = (antesDoBranco[anterior.number] || 0) + 1;
-        let d = 1;
-        while (i + d < resultados.length) {
-          if (resultados[i + d].color === 'white') { brancosSeguidos.push(d); break; }
-          d++;
-        }
+  const criarPainel = () => {
+    const estiloPainel = `
+      #painel-blaze {
+        position: fixed;
+        top: 50px;
+        left: 10px;
+        width: 320px;
+        background-color: #111;
+        color: #0f0;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        border: 2px solid #0f0;
+        border-radius: 10px;
+        padding: 10px;
+        z-index: 9999;
+        box-shadow: 0 0 10px #0f0;
       }
+      #painel-blaze h2 {
+        margin: 0 0 10px;
+        font-size: 18px;
+        text-align: center;
+      }
+      #painel-blaze ul {
+        list-style-type: none;
+        padding: 0;
+        max-height: 200px;
+        overflow-y: auto;
+        margin-bottom: 10px;
+      }
+      #painel-blaze li {
+        padding: 2px 0;
+      }
+      #painel-blaze button {
+        background-color: #0f0;
+        color: #111;
+        border: none;
+        padding: 5px 10px;
+        margin-right: 5px;
+        cursor: pointer;
+        border-radius: 5px;
+      }
+      #painel-blaze .minimizado {
+        height: 30px;
+        overflow: hidden;
+        cursor: pointer;
+        background-image: url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg');
+        background-size: cover;
+        background-position: center;
+      }
+    `;
+    const style = document.createElement("style");
+    style.innerHTML = estiloPainel;
+    document.head.appendChild(style);
+
+    const painel = document.createElement("div");
+    painel.id = "painel-blaze";
+    painel.innerHTML = `
+      <h2>Blaze Bot I.A</h2>
+      <ul id="historico-cores"></ul>
+      <div id="previsao"></div>
+      <div id="confiança"></div>
+      <div id="recomendacao"></div>
+      <button onclick="exportarCSV()">Exportar CSV</button>
+      <input type="file" id="importar-csv" accept=".csv" />
+      <button onclick="minimizarPainel()">Minimizar</button>
+    `;
+    document.body.appendChild(painel);
+  };
+
+  const minimizarPainel = () => {
+    const painel = document.getElementById("painel-blaze");
+    painel.classList.toggle("minimizado");
+  };
+
+  criarPainel();
+
+  let coresAnteriores = [];
+  let lastHash = "";
+
+  const importarCSV = (conteudoCSV) => {
+    const linhas = conteudoCSV.split("\n").slice(1);
+    for (const linha of linhas) {
+      const [timestamp, cor] = linha.split(",");
+      if (cor) coresAnteriores.push(cor.trim());
     }
-    const topMinuto = Object.entries(minutosBranco).sort((a, b) => b[1] - a[1])[0];
-    const topAntes = Object.entries(antesDoBranco).sort((a, b) => b[1] - a[1])[0];
-    const mediaBrancoDepois = (brancosSeguidos.reduce((a, b) => a + b, 0) / brancosSeguidos.length || 0).toFixed(2);
-    document.getElementById("resultadoBranco").innerHTML =
-      `Análise Branco:<br/>Minuto: ${topMinuto?.[0] ?? '---'}<br/>Antes: ${topAntes?.[0] ?? '---'}<br/>Média após: ${mediaBrancoDepois}`;
-  }
+  };
 
-  function gerarEntradaSaida(resultados) {
-    const entradas = [], saidas = [];
-    for (let i = 3; i < resultados.length; i++) {
-      const entrada = [resultados[i-3].number, resultados[i-2].number, resultados[i-1].number].map(n => n/14);
-      const cor = resultados[i].color;
-      const saida = cor === 'red' ? [1,0,0] : cor === 'black' ? [0,1,0] : [0,0,1];
-      entradas.push(entrada); saidas.push(saida);
-    }
-    return { entradas, saidas };
-  }
-
-  function treinarRede(entradas, saidas) {
-    const net = new synaptic.Architect.Perceptron(3, 6, 3);
-    const trainer = new synaptic.Trainer(net);
-    trainer.train(entradas.map((input, i) => ({ input, output: saidas[i] })), { iterations: 2000, error: 0.005 });
-    return net;
-  }
-
-  function previsaoRede(net, ultimos3) {
-    const input = ultimos3.map(n => n / 14);
-    const output = net.activate(input);
-    const maxIndex = output.indexOf(Math.max(...output));
-    const cores = ["red", "black", "white"];
-    return { cor: cores[maxIndex], confianca: (output[maxIndex] * 100).toFixed(2) + "%" };
-  }
-
-  function previsaoMarkov(resultados) {
-    const transicoes = {};
-    for (let i = 1; i < resultados.length; i++) {
-      const anterior = resultados[i - 1].color;
-      const atual = resultados[i].color;
-      if (!transicoes[anterior]) transicoes[anterior] = {};
-      transicoes[anterior][atual] = (transicoes[anterior][atual] || 0) + 1;
-    }
-    const ultima = resultados[resultados.length - 1].color;
-    const provavel = transicoes[ultima] ? Object.entries(transicoes[ultima]).sort((a,b) => b[1]-a[1])[0]?.[0] : "---";
-    return provavel;
-  }
-
-  function reforcoCruzado(rede, ultimos3, resultados) {
-    const redeRes = previsaoRede(rede, ultimos3);
-    const markovRes = previsaoMarkov(resultados);
-    const votos = { red: 0, black: 0, white: 0 };
-    votos[redeRes.cor]++;
-    votos[markovRes]++;
-    const final = Object.entries(votos).sort((a,b) => b[1]-a[1])[0][0];
-    return { cor: final, confianca: redeRes.confianca };
-  }
-
-  document.getElementById("analisarCSV").addEventListener("click", () => {
-    const input = document.getElementById("csvFileInput");
-    if (!input.files.length) return alert("Selecione um arquivo CSV!");
-
+  const inputCSV = document.getElementById("importar-csv");
+  inputCSV.addEventListener("change", (event) => {
+    const file = event.target.files[0];
     const reader = new FileReader();
-    reader.onload = function (e) {
-      const linhas = e.target.result.split("\n").filter(Boolean);
-      const resultados = linhas.map(l => {
-        const [number, color, timestamp] = l.split(",");
-        return { number: parseInt(number), color: color.trim(), timestamp: timestamp.trim() };
-      });
+    reader.onload = (e) => importarCSV(e.target.result);
+    reader.readAsText(file);
+  });
 
-      analisarBrancoDetalhado(resultados);
-      const { entradas, saidas } = gerarEntradaSaida(resultados);
-      const rede = treinarRede(entradas, saidas);
-      const ultimos3 = resultados.slice(-3).map(r => r.number);
-      const previsao = reforcoCruzado(rede, ultimos3, resultados);
+  const exportarCSV = () => {
+    let csv = "timestamp,cor\n";
+    for (let i = 0; i < coresAnteriores.length; i++) {
+      csv += `${Date.now()},${coresAnteriores[i]}\n`;
+    }
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "resultados_blaze.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
-      document.getElementById("previsaoIA").textContent = "Última previsão: " + previsao.cor.toUpperCase();
-      document.getElementById("confiancaIA").textContent = "Confiança: " + previsao.confianca;
-      document.getElementById("recomendacaoIA").textContent = "Recomendação: Apostar em " + previsao.cor.toUpperCase();
-    };
-    reader.readAsText(input.files[0]);
-  });// === Coleta Automática de Resultados em Tempo Real ===
-setInterval(async () => {
-  try {
-    const response = await fetch("https://blaze.com/api/roulette_games/recent");
-    const data = await response.json();
-    if (Array.isArray(data) && data.length > 0) {
-      const latest = data[0];
-      const color = latest.color; // 0 = vermelho, 1 = preto, 2 = branco
-      const number = latest.roll;
-      const timestamp = new Date(latest.created_at).toLocaleTimeString();
+  const intervaloEntreBrancos = [];
+  let contadorAposBranco = 0;
+  const analiseAvancadaBranco = () => {
+    const minutosBranco = [];
+    const numeroAntesDoBranco = {};
+    let ultimoBranco = -1;
 
-      // Armazena no histórico global se ainda não estiver presente
-      if (!historico.some(h => h.roll === number && h.created_at === latest.created_at)) {
-        historico.unshift({ roll: number, color, created_at: latest.created_at });
-        if (historico.length > 1000) historico.pop(); // limita tamanho do histórico
-
-        // Atualiza interface, IA e previsões
-        atualizarPainel();
-        analisarPadroes();
-        preverProximaCor();
-        atualizarGrafico();
-        atualizarEstatisticasBranco();
+    for (let i = 0; i < coresAnteriores.length; i++) {
+      const cor = coresAnteriores[i];
+      if (cor === "branco") {
+        const minuto = new Date().getMinutes();
+        minutosBranco.push(minuto);
+        if (i > 0) {
+          const anterior = coresAnteriores[i - 1];
+          numeroAntesDoBranco[anterior] = (numeroAntesDoBranco[anterior] || 0) + 1;
+        }
+        if (ultimoBranco !== -1) {
+          intervaloEntreBrancos.push(i - ultimoBranco);
+        }
+        ultimoBranco = i;
       }
     }
-  } catch (e) {
-    console.warn("Erro na coleta automática:", e);
-  }
-}, 5000); // coleta a cada 5 segundos
+
+    const maisComumAntesBranco = Object.entries(numeroAntesDoBranco).sort((a, b) => b[1] - a[1])[0];
+    const mediaEntreBrancos =
+      intervaloEntreBrancos.reduce((acc, val) => acc + val, 0) / intervaloEntreBrancos.length || 0;
+
+    return {
+      minutosBranco,
+      maisComumAntesBranco: maisComumAntesBranco ? maisComumAntesBranco[0] : "N/A",
+      mediaEntreBrancos: Math.round(mediaEntreBrancos),
+    };
+  };
+
+  const analisarPadroesRepetidos = () => {
+    const padroes = {};
+    for (let i = 0; i < coresAnteriores.length - 2; i++) {
+      const padrao = coresAnteriores.slice(i, i + 3).join("-");
+      padroes[padrao] = (padroes[padrao] || 0) + 1;
+    }
+    const padraoMaisFrequente = Object.entries(padroes).sort((a, b) => b[1] - a[1])[0];
+    return padraoMaisFrequente ? padraoMaisFrequente[0].split("-") : [];
+  };
+
+  const calcularConfianca = (previsoes) => {
+    const contagem = {};
+    previsoes.forEach((p) => (contagem[p] = (contagem[p] || 0) + 1));
+    const maisProvavel = Object.entries(contagem).sort((a, b) => b[1] - a[1])[0];
+    return {
+      cor: maisProvavel[0],
+      confianca: (maisProvavel[1] / previsoes.length) * 100,
+    };
+  };
+
+  const redeNeural = new synaptic.Architect.Perceptron(5, 6, 3);
+  const trainer = new synaptic.Trainer(redeNeural);
+
+  const treinarRede = () => {
+    const treinamento = [];
+    for (let i = 5; i < coresAnteriores.length; i++) {
+      const entrada = coresAnteriores.slice(i - 5, i).map((cor) => (cor === "vermelho" ? 0 : cor === "preto" ? 1 : 0.5));
+      const saida = [0, 0, 0];
+      if (coresAnteriores[i] === "vermelho") saida[0] = 1;
+      if (coresAnteriores[i] === "preto") saida[1] = 1;
+      if (coresAnteriores[i] === "branco") saida[2] = 1;
+      treinamento.push({ input: entrada, output: saida });
+    }
+    trainer.train(treinamento, { iterations: 200, error: 0.005 });
+  };
+
+  const preverRede = () => {
+    if (coresAnteriores.length < 5) return null;
+    const entrada = coresAnteriores.slice(-5).map((cor) => (cor === "vermelho" ? 0 : cor === "preto" ? 1 : 0.5));
+    const resultado = redeNeural.activate(entrada);
+    const max = Math.max(...resultado);
+    if (max === resultado[0]) return "vermelho";
+    if (max === resultado[1]) return "preto";
+    return "branco";
+  };
+
+  const aplicarCadeiaDeMarkov = () => {
+    const transicoes = {};
+    for (let i = 0; i < coresAnteriores.length - 1; i++) {
+      const atual = coresAnteriores[i];
+      const proximo = coresAnteriores[i + 1];
+      if (!transicoes[atual]) transicoes[atual] = {};
+      transicoes[atual][proximo] = (transicoes[atual][proximo] || 0) + 1;
+    }
+    const ultima = coresAnteriores[coresAnteriores.length - 1];
+    const possiveis = transicoes[ultima];
+    if (!possiveis) return null;
+    return Object.entries(possiveis).sort((a, b) => b[1] - a[1])[0][0];
+  };
+
+  const preverCor = () => {
+    const resultadoHash = window.verificarResultadoPorHash();
+    const padrao = analisarPadroesRepetidos();
+    const brancoInfo = analiseAvancadaBranco();
+    const neural = preverRede();
+    const markov = aplicarCadeiaDeMarkov();
+
+    const previsoes = [resultadoHash, padrao[0], neural, markov].filter(Boolean);
+    const { cor, confianca } = calcularConfianca(previsoes);
+
+    const divPrevisao = document.getElementById("previsao");
+    const divConfianca = document.getElementById("confiança");
+    const divRecomendacao = document.getElementById("recomendacao");
+
+    divPrevisao.innerText = `Próxima Cor: ${cor}`;
+    divConfianca.innerText = `Confiança: ${confianca.toFixed(2)}%`;
+    divRecomendacao.innerText = `Aposte: ${confianca > 75 ? "ALTO" : "BAIXO"} - ${cor}`;
+
+    console.log("Minutos com branco:", brancoInfo.minutosBranco);
+    console.log("Mais comum antes do branco:", brancoInfo.maisComumAntesBranco);
+    console.log("Média entre brancos:", brancoInfo.mediaEntreBrancos);
+  };
+
+  setInterval(async () => {
+    try {
+      const res = await fetch("https://blaze.com/api/roulette_games/recent");
+      const data = await res.json();
+      const jogoAtual = data[0];
+      const hash = jogoAtual.hash;
+      const cor = jogoAtual.color === 1 ? "vermelho" : jogoAtual.color === 2 ? "preto" : "branco";
+
+      if (hash !== lastHash) {
+        const historico = document.getElementById("historico-cores");
+        const li = document.createElement("li");
+        li.textContent = `${new Date().toLocaleTimeString()} - ${cor}`;
+        historico.insertBefore(li, historico.firstChild);
+        coresAnteriores.push(cor);
+        if (coresAnteriores.length > 500) coresAnteriores.shift(); // Limita o histórico a 500 entradas
+        lastHash = hash;
+        treinarRede();
+        preverCor();
+      }
+    } catch (e) {
+      console.error("Erro ao obter dados da API:", e);
+    }
+  }, 5000);
 })();
