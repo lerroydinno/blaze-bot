@@ -38,61 +38,6 @@
     return { media, desdeUltimo };
   }
 
-  function analisarPorHorario() {
-    const horarios = {};
-    const agora = new Date();
-    const horaAtual = agora.getHours();
-    const linhas = historicoCSV.trim().split("\n").slice(1);
-    linhas.forEach(l => {
-      const [dataStr, cor] = l.split(";");
-      const hora = new Date(dataStr).getHours();
-      if (!horarios[hora]) horarios[hora] = { total: 0, branco: 0 };
-      horarios[hora].total++;
-      if (cor === "BRANCO") horarios[hora].branco++;
-    });
-    if (horarios[horaAtual] && horarios[horaAtual].total > 0) {
-      const prob = (horarios[horaAtual].branco / horarios[horaAtual].total) * 100;
-      return prob.toFixed(2);
-    }
-    return "0.00";
-  }
-
-  function detectarZebraOuReversa(hist) {
-    if (hist.length < 6) return false;
-    const ultimas = hist.slice(-6);
-    const zebra = ultimas.every((cor, i, arr) => i < arr.length - 1 ? cor !== arr[i + 1] : true);
-    const reversa = ultimas.join("") === [...ultimas].reverse().join("");
-    return zebra || reversa;
-  }
-
-  function probabilidadeBrancoCadaX(hist, intervalo = 20) {
-    let count = 0;
-    for (let i = 0; i < hist.length; i += intervalo) {
-      const fatia = hist.slice(i, i + intervalo);
-      if (fatia.includes("BRANCO")) count++;
-    }
-    return ((count / Math.ceil(hist.length / intervalo)) * 100).toFixed(2);
-  }
-
-  function reforcoPadraoHistorico(hist) {
-    const padroes = {};
-    for (let i = 3; i < hist.length; i++) {
-      const key = hist.slice(i - 3, i).join("-");
-      const corSeguinte = hist[i];
-      if (!padroes[key]) padroes[key] = { BRANCO: 0, VERMELHO: 0, PRETO: 0 };
-      padroes[key][corSeguinte]++;
-    }
-    const atual = hist.slice(-3).join("-");
-    const dados = padroes[atual];
-    if (!dados) return {};
-    const total = dados.BRANCO + dados.VERMELHO + dados.PRETO;
-    return {
-      BRANCO: ((dados.BRANCO / total) * 100).toFixed(2),
-      VERMELHO: ((dados.VERMELHO / total) * 100).toFixed(2),
-      PRETO: ((dados.PRETO / total) * 100).toFixed(2)
-    };
-  }
-
   let lookupPrefix = {};
 
   function atualizarLookup(hash, cor) {
@@ -119,26 +64,14 @@
     const recente = hist.slice(-100);
     const ocorrencias = recente.filter(c => c === previsao.cor).length;
     let confianca = recente.length ? ((ocorrencias / recente.length) * 100) : 0;
-
     const sugestaoSequencia = analisarSequencias(hist);
     if (sugestaoSequencia === previsao.cor) confianca += 10;
-
     if (previsao.cor === "BRANCO") {
       const { media, desdeUltimo } = calcularIntervaloBranco(hist);
       if (desdeUltimo >= media * 0.8) confianca += 10;
-      const porHorario = parseFloat(analisarPorHorario());
-      if (porHorario > 0) confianca += porHorario / 10;
-      const porIntervalo = parseFloat(probabilidadeBrancoCadaX(hist));
-      if (porIntervalo > 0) confianca += porIntervalo / 10;
     }
-
-    const reforco1 = reforcoPrefixo(novaHash);
-    const reforco2 = reforcoPadraoHistorico(hist);
-    if (reforco1[previsao.cor]) confianca += parseFloat(reforco1[previsao.cor]) / 10;
-    if (reforco2[previsao.cor]) confianca += parseFloat(reforco2[previsao.cor]) / 10;
-
-    if (detectarZebraOuReversa(hist)) confianca += 5;
-
+    const reforco = reforcoPrefixo(novaHash);
+    if (reforco[previsao.cor]) confianca += parseFloat(reforco[previsao.cor]) / 10;
     let aposta = calcularAposta(confianca);
     return { ...previsao, confianca: Math.min(100, confianca.toFixed(2)), aposta };
   }
@@ -279,19 +212,4 @@
       const numero = ultimo.roll;
       const hash = ultimo.hash || ultimo.server_seed || "indefinido";
 
-      if (!document.getElementById(`log_${hash}`) && hash !== "indefinido") {
-        atualizarLookup(hash, cor);
-        const previsao = await gerarPrevisao(hash, coresAnteriores);
-        updatePainel(cor, numero, hash, previsao);
-        historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash};${previsao.cor};${previsao.confianca}%\n`;
-        salvarHistoricoLocal();
-        coresAnteriores.push(cor);
-        if (coresAnteriores.length > 200) coresAnteriores.shift();
-        lastHash = hash;
-        document.getElementById('historico_resultados').innerHTML += `<div id="log_${hash}">${cor} (${numero})</div>`;
-      }
-    } catch (e) {
-      console.error("Erro ao buscar API:", e);
-    }
-  }, 8000);
-})();
+      if (!document.getElementById(`
