@@ -1,4 +1,4 @@
-(function() {
+(function () {
   const style = document.createElement('style');
   style.innerHTML = `
     #painelIA {
@@ -34,14 +34,12 @@
 
   let resultadosHistoricos = [];
   let redeNeural, markovChain = {}, padroes = {}, brancoStats = {};
-  let confTotal = 0, ultimaCor = null;
+  let iaPronta = false;
 
-  // Adiciona script do Synaptic.js
   const scriptSynaptic = document.createElement('script');
   scriptSynaptic.src = 'https://cdn.jsdelivr.net/npm/synaptic@1.1.4/dist/synaptic.min.js';
   document.head.appendChild(scriptSynaptic);
 
-  // Aguarda Synaptic carregar e prepara a rede
   scriptSynaptic.onload = () => {
     const { Layer, Network } = synaptic;
     const entrada = new Layer(10);
@@ -50,14 +48,14 @@
     entrada.project(escondida);
     escondida.project(saida);
     redeNeural = new Network({ input: entrada, hidden: [escondida], output: saida });
+    iaPronta = true;
   };
 
-  // Leitor de CSV
-  document.getElementById("csvInput").addEventListener("change", function(e) {
+  document.getElementById("csvInput").addEventListener("change", function (e) {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = function(evt) {
+    reader.onload = function (evt) {
       const lines = evt.target.result.split('\n').map(l => l.trim()).filter(Boolean);
       resultadosHistoricos = lines.map(l => {
         const val = l.split(',')[1];
@@ -68,23 +66,7 @@
     reader.readAsText(file);
   });
 
-  // Função para treinar a IA
-  document.getElementById("treinarBtn").addEventListener("click", () => {
-    if (!resultadosHistoricos.length) return alert("Importe um CSV antes!");
-    for (let i = 10; i < resultadosHistoricos.length - 1; i++) {
-      const entrada = resultadosHistoricos.slice(i - 10, i).map(v => v / 14);
-      const saida = [0, 0, 0];
-      const prox = resultadosHistoricos[i];
-      if (prox === 0) saida[0] = 1;
-      else if (prox <= 7) saida[1] = 1;
-      else saida[2] = 1;
-      redeNeural.activate(entrada);
-      redeNeural.propagate(0.3, saida);
-    }
-    document.getElementById("statusIA").innerText = "IA treinada com sucesso!";
-  });
-
-function analisarMarkov() {
+  function analisarMarkov() {
     markovChain = {};
     for (let i = 0; i < resultadosHistoricos.length - 1; i++) {
       const atual = resultadosHistoricos[i];
@@ -128,7 +110,7 @@ function analisarMarkov() {
   }
 
   function prever() {
-    if (!resultadosHistoricos.length) return;
+    if (!resultadosHistoricos.length || !iaPronta) return;
 
     const ultimos10 = resultadosHistoricos.slice(-10).map(n => n / 14);
     const saida = redeNeural.activate(ultimos10);
@@ -169,13 +151,32 @@ function analisarMarkov() {
     document.getElementById("confiancaFinal").innerText = confiancaFinal + "%";
   }
 
-  // Executa análises após CSV
   document.getElementById("treinarBtn").addEventListener("click", () => {
+    if (!resultadosHistoricos.length) {
+      alert("Importe um CSV antes!");
+      return;
+    }
+
+    if (!iaPronta) {
+      alert("Aguarde o carregamento da IA.");
+      return;
+    }
+
+    for (let i = 10; i < resultadosHistoricos.length - 1; i++) {
+      const entrada = resultadosHistoricos.slice(i - 10, i).map(v => v / 14);
+      const saida = [0, 0, 0];
+      const prox = resultadosHistoricos[i];
+      if (prox === 0) saida[0] = 1;
+      else if (prox <= 7) saida[1] = 1;
+      else saida[2] = 1;
+      redeNeural.activate(entrada);
+      redeNeural.propagate(0.3, saida);
+    }
+
+    document.getElementById("statusIA").innerText = "IA treinada com sucesso!";
     analisarMarkov();
     analisarBrancoStats();
     analisarPadroesNumericos();
     prever();
   });
 })();
-
-  
