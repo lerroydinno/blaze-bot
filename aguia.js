@@ -18,16 +18,9 @@
   function analisarSequencias(hist) {
     if (hist.length < 4) return null;
     const ultimas = hist.slice(-4);
-
     if (ultimas.every(c => c === "PRETO")) return "VERMELHO";
     if (ultimas.every(c => c === "VERMELHO")) return "PRETO";
-
-    // Padrão zebra (alternância)
-    const zebra = ultimas.every((c, i, arr) => i === 0 || c !== arr[i - 1]);
-    if (zebra) return ultimas[0]; // Seguir o padrão da alternância
-
     if (ultimas[ultimas.length - 1] === "BRANCO") return "PRETO";
-
     return null;
   }
 
@@ -138,6 +131,7 @@
 
   carregarHistoricoLocal();
 
+  // Menu Flutuante
   const painel = document.createElement("div");
   painel.id = "painel_previsao";
   painel.style = `
