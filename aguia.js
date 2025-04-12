@@ -175,4 +175,23 @@
     painel.style.display = "block";
     icone.style.display = "none";
   };
+
+  // Ações dos botões
+  document.getElementById("btn_prever").onclick = async () => {
+    const previsao = await gerarPrevisao(lastHash, coresAnteriores);
+    updatePainel("Aguardando...", 0, lastHash, previsao);
+  };
+
+  document.getElementById("btn_baixar").onclick = downloadCSV;
+
+  document.getElementById("import_csv").onchange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        processarCSV(event.target.result);
+      };
+      reader.readAsText(file);
+    }
+  };
 })();
