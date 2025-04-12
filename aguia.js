@@ -1,182 +1,183 @@
-(function () {
-  const style = document.createElement('style');
-  style.innerHTML = `
-    #painelIA {
-      position: fixed;
-      top: 100px;
-      right: 20px;
-      width: 300px;
-      background: rgba(0,0,0,0.8);
-      color: #fff;
-      z-index: 9999;
-      padding: 10px;
-      font-family: Arial, sans-serif;
-      border-radius: 10px;
-    }
-    #painelIA h2 { font-size: 16px; margin-bottom: 5px; }
-    #painelIA input[type=file] { margin-bottom: 5px; }
-    #painelIA button { margin-top: 5px; }
-    #painelIA p { font-size: 14px; margin: 4px 0; }
-  `;
-  document.head.appendChild(style);
+(async () => {
+  if (window.blazeBotIA) return;
+  window.blazeBotIA = true;
 
-  const painel = document.createElement('div');
-  painel.id = 'painelIA';
+  // Carrega Synaptic.js para rede neural
+  const synapticScript = document.createElement("script");
+  synapticScript.src = "https://cdn.jsdelivr.net/npm/synaptic@1.1.4/dist/synaptic.min.js";
+  document.head.appendChild(synapticScript);
+
+  while (!window.synaptic) await new Promise(r => setTimeout(r, 100));
+
+  const { Layer, Network, Trainer } = synaptic;
+
+  let historico = [];
+  let padroes = {};
+  let statsBranco = { minutos: {}, anterior: {}, apos: {} };
+  let redeNeural;
+  let apostasSugeridas = [];
+
+  // Painel visual
+  const painel = document.createElement("div");
   painel.innerHTML = `
-    <h2>IA Roleta</h2>
-    <input type="file" id="csvInput" accept=".csv"><br>
-    <button id="treinarBtn">Treinar IA</button>
-    <p id="statusIA">IA não treinada</p>
-    <p><strong>Previsão:</strong> <span id="previsaoFinal">---</span></p>
-    <p><strong>Confiança:</strong> <span id="confiancaFinal">0%</span></p>
-  `;
+    <div id="painelBlaze" style="position:fixed;top:20px;right:20px;z-index:9999;background:#111;border:2px solid #00ff00;padding:10px;color:white;font-family:Arial;border-radius:10px;">
+      <div style="font-size:18px;font-weight:bold;margin-bottom:10px;">Blaze Bot I.A</div>
+      <div id="previsaoBlaze">Carregando previsão...</div>
+      <button id="importarCSV" style="margin-top:10px;">Importar CSV</button>
+      <input type="file" id="arquivoCSV" accept=".csv" style="display:none;">
+    </div>`;
   document.body.appendChild(painel);
 
-  let resultadosHistoricos = [];
-  let redeNeural, markovChain = {}, padroes = {}, brancoStats = {};
-  let iaPronta = false;
-
-  const scriptSynaptic = document.createElement('script');
-  scriptSynaptic.src = 'https://cdn.jsdelivr.net/npm/synaptic@1.1.4/dist/synaptic.min.js';
-  document.head.appendChild(scriptSynaptic);
-
-  scriptSynaptic.onload = () => {
-    const { Layer, Network } = synaptic;
-    const entrada = new Layer(10);
-    const escondida = new Layer(6);
-    const saida = new Layer(3);
-    entrada.project(escondida);
-    escondida.project(saida);
-    redeNeural = new Network({ input: entrada, hidden: [escondida], output: saida });
-    iaPronta = true;
+  document.getElementById("importarCSV").onclick = () => {
+    document.getElementById("arquivoCSV").click();
   };
 
-  document.getElementById("csvInput").addEventListener("change", function (e) {
+  document.getElementById("arquivoCSV").addEventListener("change", (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
     const reader = new FileReader();
-    reader.onload = function (evt) {
-      const lines = evt.target.result.split('\n').map(l => l.trim()).filter(Boolean);
-      resultadosHistoricos = lines.map(l => {
-        const val = l.split(',')[1];
-        return isNaN(val) ? null : parseInt(val);
-      }).filter(v => v !== null);
-      document.getElementById("statusIA").innerText = "CSV carregado com " + resultadosHistoricos.length + " entradas.";
+    reader.onload = (evt) => {
+      const linhas = evt.target.result.split("\n");
+      linhas.forEach((linha) => {
+        const campos = linha.split("\t");
+        const numero = parseInt(campos[0]);
+        const cor = campos[1]?.trim();
+        const hora = campos[2]?.trim();
+        const segundo = campos[3]?.trim();
+        const hash = campos[10]?.trim();
+
+        if (!isNaN(numero) && ["red", "black", "white"].includes(cor)) {
+          historico.push({ numero, cor, hora, segundo, hash });
+        }
+      });
+      processarHistorico();
+      atualizarPrevisao();
     };
     reader.readAsText(file);
   });
 
-  function analisarMarkov() {
-    markovChain = {};
-    for (let i = 0; i < resultadosHistoricos.length - 1; i++) {
-      const atual = resultadosHistoricos[i];
-      const proximo = resultadosHistoricos[i + 1];
-      if (!markovChain[atual]) markovChain[atual] = {};
-      if (!markovChain[atual][proximo]) markovChain[atual][proximo] = 0;
-      markovChain[atual][proximo]++;
-    }
-  }
+  function processarHistorico() {
+    padroes = {};
+    statsBranco = { minutos: {}, anterior: {}, apos: {} };
 
-  function analisarBrancoStats() {
-    brancoStats = { minutos: {}, antes: {}, delay: {} };
-    for (let i = 1; i < resultadosHistoricos.length; i++) {
-      const atual = resultadosHistoricos[i];
-      const anterior = resultadosHistoricos[i - 1];
-      const hora = new Date().getMinutes();
-      if (atual === 0) {
-        brancoStats.minutos[hora] = (brancoStats.minutos[hora] || 0) + 1;
-        brancoStats.antes[anterior] = (brancoStats.antes[anterior] || 0) + 1;
-        let dist = 1;
-        for (let j = i - 1; j >= 0; j--) {
-          if (resultadosHistoricos[j] === 0) {
-            brancoStats.delay[dist] = (brancoStats.delay[dist] || 0) + 1;
+    for (let i = 0; i < historico.length; i++) {
+      const atual = historico[i];
+      const minuto = atual.hora?.split(":")[1];
+
+      // Padrões numéricos
+      const seq = historico.slice(i, i + 3).map(e => e.cor).join("-");
+      padroes[seq] = (padroes[seq] || 0) + 1;
+
+      // Estatísticas branco
+      if (atual.cor === "white") {
+        if (minuto) statsBranco.minutos[minuto] = (statsBranco.minutos[minuto] || 0) + 1;
+        const anterior = historico[i - 1];
+        if (anterior) {
+          statsBranco.anterior[anterior.numero] = (statsBranco.anterior[anterior.numero] || 0) + 1;
+        }
+        for (let j = 1; j <= 5; j++) {
+          if (historico[i + j] && historico[i + j].cor === "white") {
+            statsBranco.apos[j] = (statsBranco.apos[j] || 0) + 1;
             break;
           }
-          dist++;
         }
       }
     }
+
+    treinarRedeNeural();
   }
 
-  function analisarPadroesNumericos() {
-    padroes = {};
-    for (let i = 5; i < resultadosHistoricos.length; i++) {
-      const seq = resultadosHistoricos.slice(i - 5, i).join("-");
-      const next = resultadosHistoricos[i];
-      if (!padroes[seq]) padroes[seq] = {};
-      if (!padroes[seq][next]) padroes[seq][next] = 0;
-      padroes[seq][next]++;
-    }
+  function treinarRedeNeural() {
+    if (historico.length < 20) return;
+
+    redeNeural = new Network({
+      input: new Layer(4),
+      hidden: [new Layer(6)],
+      output: new Layer(3)
+    });
+    redeNeural.layers.input.project(redeNeural.layers.hidden[0]);
+    redeNeural.layers.hidden[0].project(redeNeural.layers.output);
+
+    const trainer = new Trainer(redeNeural);
+    const dadosTreino = historico.map(h => {
+      return {
+        input: [
+          h.numero / 14,
+          h.cor === "red" ? 1 : 0,
+          h.cor === "black" ? 1 : 0,
+          h.cor === "white" ? 1 : 0
+        ],
+        output: h.cor === "red" ? [1,0,0] : h.cor === "black" ? [0,1,0] : [0,0,1]
+      };
+    });
+
+    trainer.train(dadosTreino, { iterations: 200, log: false });
   }
 
-  function prever() {
-    if (!resultadosHistoricos.length || !iaPronta) return;
+  function atualizarPrevisao() {
+    const ultima = historico[historico.length - 1];
+    if (!ultima) return;
 
-    const ultimos10 = resultadosHistoricos.slice(-10).map(n => n / 14);
-    const saida = redeNeural.activate(ultimos10);
-    const confiancaIA = Math.max(...saida);
-    const corIA = saida.indexOf(confiancaIA);
+    const entrada = [
+      ultima.numero / 14,
+      ultima.cor === "red" ? 1 : 0,
+      ultima.cor === "black" ? 1 : 0,
+      ultima.cor === "white" ? 1 : 0
+    ];
 
-    const ultimo = resultadosHistoricos[resultadosHistoricos.length - 1];
-    const markov = markovChain[ultimo] || {};
-    let corMarkov = 1, maxM = 0;
-    for (const [num, cont] of Object.entries(markov)) {
-      const n = parseInt(num);
-      if (cont > maxM) {
-        maxM = cont;
-        corMarkov = n === 0 ? 0 : (n <= 7 ? 1 : 2);
+    const rede = redeNeural?.activate(entrada) || [0.33, 0.33, 0.33];
+    const metodos = {
+      rede,
+      markov: previsaoMarkov(),
+      horario: previsaoHorario(ultima.hora)
+    };
+
+    const final = combinarPrevisoes(metodos);
+    const sugestao = final.cor.toUpperCase();
+    const confianca = (final.conf * 100).toFixed(2);
+
+    document.getElementById("previsaoBlaze").innerHTML =
+      `<b>Previsão:</b> ${sugestao} (${confianca}%)<br>
+       <b>Aposta sugerida:</b> ${sugestao === "WHITE" ? "R$ 1 (conservador)" : "R$ 2"}`;
+  }
+
+  function previsaoMarkov() {
+    const ultimas = historico.slice(-3).map(e => e.cor).join("-");
+    const proxs = {};
+    Object.keys(padroes).forEach(k => {
+      if (k.startsWith(ultimas)) {
+        const proxima = k.split("-")[3];
+        if (proxima) proxs[proxima] = (proxs[proxima] || 0) + 1;
       }
-    }
-
-    const seq = resultadosHistoricos.slice(-5).join("-");
-    const padrao = padroes[seq] || {};
-    let corPadrao = 1, maxP = 0;
-    for (const [num, cont] of Object.entries(padrao)) {
-      const n = parseInt(num);
-      if (cont > maxP) {
-        maxP = cont;
-        corPadrao = n === 0 ? 0 : (n <= 7 ? 1 : 2);
-      }
-    }
-
-    const votos = [0, 0, 0];
-    votos[corIA]++;
-    votos[corMarkov]++;
-    votos[corPadrao]++;
-    const final = votos.indexOf(Math.max(...votos));
-    const confiancaFinal = ((votos[final] / 3) * 100).toFixed(1);
-
-    const corMap = ['Branco', 'Vermelho', 'Preto'];
-    document.getElementById("previsaoFinal").innerText = corMap[final];
-    document.getElementById("confiancaFinal").innerText = confiancaFinal + "%";
+    });
+    return normalizarProbs(proxs);
   }
 
-  document.getElementById("treinarBtn").addEventListener("click", () => {
-    if (!resultadosHistoricos.length) {
-      alert("Importe um CSV antes!");
-      return;
-    }
+  function previsaoHorario(hora) {
+    const minuto = hora?.split(":")[1];
+    const branco = statsBranco.minutos[minuto] || 0;
+    return { red: 0.33, black: 0.33, white: branco > 1 ? 1 : 0 };
+  }
 
-    if (!iaPronta) {
-      alert("Aguarde o carregamento da IA.");
-      return;
-    }
+  function normalizarProbs(contagem) {
+    const total = Object.values(contagem).reduce((a,b) => a+b, 0);
+    if (total === 0) return { red: 0.33, black: 0.33, white: 0.33 };
+    return {
+      red: (contagem.red || 0) / total,
+      black: (contagem.black || 0) / total,
+      white: (contagem.white || 0) / total
+    };
+  }
 
-    for (let i = 10; i < resultadosHistoricos.length - 1; i++) {
-      const entrada = resultadosHistoricos.slice(i - 10, i).map(v => v / 14);
-      const saida = [0, 0, 0];
-      const prox = resultadosHistoricos[i];
-      if (prox === 0) saida[0] = 1;
-      else if (prox <= 7) saida[1] = 1;
-      else saida[2] = 1;
-      redeNeural.activate(entrada);
-      redeNeural.propagate(0.3, saida);
+  function combinarPrevisoes({ rede, markov, horario }) {
+    const soma = [0,0,0];
+    for (let i = 0; i < 3; i++) {
+      soma[i] = rede[i] + markov[["red","black","white"][i]] + horario[["red","black","white"][i]];
     }
+    const max = Math.max(...soma);
+    const cor = ["red","black","white"][soma.indexOf(max)];
+    return { cor, conf: max / 3 };
+  }
 
-    document.getElementById("statusIA").innerText = "IA treinada com sucesso!";
-    analisarMarkov();
-    analisarBrancoStats();
-    analisarPadroesNumericos();
-    prever();
-  });
 })();
