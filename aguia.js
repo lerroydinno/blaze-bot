@@ -175,4 +175,56 @@
   `;
   document.head.appendChild(estilo);
 
-  document.getElementById('btn_minimizar').
+  document.getElementById('btn_minimizar').onclick = () => {
+    painel.style.display = "none";
+    icone.style.display = "block";
+  };
+
+  icone.onclick = () => {
+    painel.style.display = "block";
+    icone.style.display = "none";
+  };
+
+  document.getElementById('btn_baixar').onclick = downloadCSV;
+
+  document.getElementById('btn_prever').onclick = async () => {
+    if (lastHash && lastHash !== "indefinido") {
+      const previsao = await gerarPrevisao(lastHash, coresAnteriores);
+      document.getElementById('previsao_texto').innerText = `🔮 Próxima: ${previsao.cor} (${previsao.numero})\n🎯 Confiança: ${previsao.confianca}%\n💰 Apostar: ${previsao.aposta}x`;
+    }
+  };
+
+  document.getElementById('import_csv').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => processarCSV(e.target.result);
+    reader.readAsText(file);
+  });
+
+  setInterval(async () => {
+    try {
+      const res = await fetch(apiURL);
+      const data = await res.json();
+      const ultimo = data[0];
+      const corNum = Number(ultimo.color);
+      const cor = corNum === 0 ? "BRANCO" : corNum <= 7 ? "VERMELHO" : "PRETO";
+      const numero = ultimo.roll;
+      const hash = ultimo.hash || ultimo.server_seed || "indefinido";
+
+      if (!document.getElementById(`log_${hash}`) && hash !== "indefinido") {
+        atualizarLookup(hash, cor);
+        const previsao = await gerarPrevisao(hash, coresAnteriores);
+        updatePainel(cor, numero, hash, previsao);
+        historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash};${previsao.cor};${previsao.confianca}%\n`;
+        salvarHistoricoLocal();
+        coresAnteriores.push(cor);
+        if (coresAnteriores.length > 200) coresAnteriores.shift();
+        lastHash = hash;
+        document.getElementById('historico_resultados').innerHTML += `<div id="log_${hash}">${cor} (${numero})</div>`;
+      }
+    } catch (e) {
+      console.error("Erro ao buscar API:", e);
+    }
+  }, 8000);
+})();
