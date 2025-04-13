@@ -1,204 +1,122 @@
-(async function () {
-  const apiURL = "https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
+const apiURL = 'https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent';
 
-  async function sha256(message) {
-    const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+const floatingButton = document.getElementById('floating-button');
+const menuContainer = document.getElementById('menu-container');
+const closeButton = document.getElementById('close-menu');
+const predictionBox = document.getElementById('prediction');
+const gameStatus = document.getElementById('game-status');
+const generateButton = document.getElementById('generate-prediction');
+
+let history = [];
+
+// Converte o hash para cor (regra Blaze)
+function getColorFromHash(hash) {
+  const number = parseInt(hash.slice(0, 8), 16);
+  const result = number % 15;
+  if (result === 0) return 'Branco';
+  if (result >= 1 && result <= 7) return 'Vermelho';
+  return 'Preto';
+}
+
+// Pega os jogos recentes
+async function fetchLatestGames(limit = 100) {
+  try {
+    const response = await fetch(`${apiURL}?limit=${limit}`);
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Erro ao buscar jogos:', error);
+    return [];
+  }
+}
+
+// Analisa quantos brancos por horário
+function analisarHorario(games) {
+  const horas = {};
+  for (const game of games) {
+    const hora = new Date(game.created_at).getHours();
+    const color = getColorFromHash(game.hash);
+    if (!horas[hora]) horas[hora] = { branco: 0, total: 0 };
+    if (color === 'Branco') horas[hora].branco++;
+    horas[hora].total++;
+  }
+  return horas;
+}
+
+// Verifica padrão zebra ou reverso
+function detectarZebraOuReversa(games) {
+  const cores = games.map(g => getColorFromHash(g.hash));
+  let zebra = false;
+  let reversa = false;
+
+  if (cores.length >= 6) {
+    zebra = cores.slice(-6).every((c, i, arr) => i < arr.length - 1 ? c !== arr[i + 1] : true);
+    reversa = cores.slice(-4).join(',') === ['Preto', 'Vermelho', 'Preto', 'Vermelho'].join(',');
   }
 
-  function getRollColor(hash) {
-    const number = parseInt(hash.slice(0, 8), 16) % 15;
-    if (number === 0) return { cor: "BRANCO", numero: 0 };
-    if (number >= 1 && number <= 7) return { cor: "VERMELHO", numero: number };
-    return { cor: "PRETO", numero: number };
+  return { zebra, reversa };
+}
+
+// Avalia a probabilidade de Branco baseado no intervalo
+function probabilidadeBranco(games) {
+  const intervalo = games.findIndex(g => getColorFromHash(g.hash) === 'Branco');
+  return intervalo === -1 ? 'Muito alta (sem branco recente)' : `${intervalo} rodadas atrás`;
+}
+
+// Aprende padrões simples do histórico
+function aprenderHistorico(games) {
+  const padroes = [];
+  for (let i = 0; i < games.length - 3; i++) {
+    const seq = games.slice(i, i + 3).map(g => getColorFromHash(g.hash));
+    const next = getColorFromHash(games[i + 3].hash);
+    padroes.push({ padrao: seq, proxima: next });
+  }
+  return padroes;
+}
+
+// Gera tudo junto
+async function gerarAnaliseCompleta() {
+  gameStatus.textContent = 'Analisando...';
+  predictionBox.textContent = '...';
+
+  const games = await fetchLatestGames(100);
+  if (!games.length) {
+    predictionBox.textContent = 'Erro ao carregar jogos.';
+    return;
   }
 
-  function analisarSequencias(hist) {
-    if (hist.length < 4) return null;
-    const ultimas = hist.slice(-4);
-    if (ultimas.every(c => c === "PRETO")) return "VERMELHO";
-    if (ultimas.every(c => c === "VERMELHO")) return "PRETO";
-    if (ultimas[ultimas.length - 1] === "BRANCO") return "PRETO";
-    return null;
-  }
+  const ultima = games[0];
+  const cor = getColorFromHash(ultima.hash);
 
-  function calcularIntervaloBranco(hist) {
-    let ultPos = -1, intervalos = [];
-    hist.forEach((cor, i) => {
-      if (cor === "BRANCO") {
-        if (ultPos !== -1) intervalos.push(i - ultPos);
-        ultPos = i;
-      }
-    });
-    const media = intervalos.length ? intervalos.reduce((a, b) => a + b) / intervalos.length : 0;
-    const ultimaBranco = hist.lastIndexOf("BRANCO");
-    const desdeUltimo = ultimaBranco !== -1 ? hist.length - ultimaBranco : hist.length;
-    return { media, desdeUltimo };
-  }
+  const analiseHorario = analisarHorario(games);
+  const zebraReversa = detectarZebraOuReversa(games);
+  const probBranco = probabilidadeBranco(games);
+  const aprendizado = aprenderHistorico(games);
 
-  let lookupPrefix = {};
-  let lookupSufix = {};
+  history = [...games];
 
-  function atualizarLookup(hash, cor) {
-    const prefix = hash.slice(0, 2);
-    const sufix = hash.slice(-2);
-    if (!lookupPrefix[prefix]) lookupPrefix[prefix] = { BRANCO: 0, VERMELHO: 0, PRETO: 0 };
-    if (!lookupSufix[sufix]) lookupSufix[sufix] = { BRANCO: 0, VERMELHO: 0, PRETO: 0 };
-    lookupPrefix[prefix][cor]++;
-    lookupSufix[sufix][cor]++;
-  }
+  predictionBox.innerHTML = `
+    Última Cor: <b>${cor}</b><br>
+    Probabilidade Branco: <b>${probBranco}</b><br>
+    Padrão Zebra: <b>${zebraReversa.zebra ? 'Sim' : 'Não'}</b><br>
+    Sequência Reversa: <b>${zebraReversa.reversa ? 'Sim' : 'Não'}</b><br>
+  `;
 
-  function reforcoPrefixo(hash) {
-    const prefix = hash.slice(0, 2);
-    const dados = lookupPrefix[prefix];
-    if (!dados) return {};
-    const total = dados.BRANCO + dados.VERMELHO + dados.PRETO;
-    return {
-      BRANCO: ((dados.BRANCO / total) * 100).toFixed(2),
-      VERMELHO: ((dados.VERMELHO / total) * 100).toFixed(2),
-      PRETO: ((dados.PRETO / total) * 100).toFixed(2)
-    };
-  }
+  gameStatus.textContent = 'Análise concluída';
+}
 
-  function reforcoSufixo(hash) {
-    const sufix = hash.slice(-2);
-    const dados = lookupSufix[sufix];
-    if (!dados) return {};
-    const total = dados.BRANCO + dados.VERMELHO + dados.PRETO;
-    return {
-      BRANCO: ((dados.BRANCO / total) * 100).toFixed(2),
-      VERMELHO: ((dados.VERMELHO / total) * 100).toFixed(2),
-      PRETO: ((dados.PRETO / total) * 100).toFixed(2)
-    };
-  }
+// Ações de clique nos botões
+floatingButton.onclick = () => {
+  menuContainer.style.display = 'block';
+  floatingButton.style.display = 'none';
+};
 
-  async function gerarPrevisao(seed, hist = []) {
-    const novaHash = await sha256(seed);
-    const previsao = getRollColor(novaHash);
-    const recente = hist.slice(-100);
-    const ocorrencias = recente.filter(c => c === previsao.cor).length;
+closeButton.onclick = () => {
+  menuContainer.style.display = 'none';
+  floatingButton.style.display = 'flex';
+};
 
-    const totalPreto = recente.filter(c => c === "PRETO").length;
-    const totalVermelho = recente.filter(c => c === "VERMELHO").length;
-    const totalBranco = recente.filter(c => c === "BRANCO").length;
-    const total = totalPreto + totalVermelho + totalBranco;
+generateButton.onclick = gerarAnaliseCompleta;
 
-    let confianca = total ? ((ocorrencias / total) * 100) : 0;
-
-    const sugestaoSequencia = analisarSequencias(hist);
-    if (sugestaoSequencia === previsao.cor) confianca += 10;
-
-    if (previsao.cor === "BRANCO") {
-      const { media, desdeUltimo } = calcularIntervaloBranco(hist);
-      if (desdeUltimo >= media * 0.8) confianca += 10;
-    }
-
-    const reforcoPrefixoData = reforcoPrefixo(novaHash);
-    const reforcoSufixoData = reforcoSufixo(novaHash);
-
-    if (reforcoPrefixoData[previsao.cor]) confianca += parseFloat(reforcoPrefixoData[previsao.cor]) / 10;
-    if (reforcoSufixoData[previsao.cor]) confianca += parseFloat(reforcoSufixoData[previsao.cor]) / 10;
-
-    if (previsao.cor === "VERMELHO" && totalVermelho > totalPreto + 5) confianca -= 5;
-    if (previsao.cor === "PRETO" && totalPreto > totalVermelho + 5) confianca -= 5;
-
-    let aposta = calcularAposta(confianca);
-    return { ...previsao, confianca: Math.min(100, confianca.toFixed(2)), aposta };
-  }
-
-  function calcularAposta(confianca) {
-    const base = 1;
-    if (confianca < 60) return 0;
-    if (confianca < 70) return base;
-    if (confianca < 80) return base * 2;
-    if (confianca < 90) return base * 4;
-    return base * 8;
-  }
-
-  function updatePainel(cor, numero, hash, previsao) {
-    document.getElementById('resultado_cor').innerText = `🎯 Resultado: ${cor} (${numero})`;
-    document.getElementById('resultado_hash').innerText = `Hash: ${hash}`;
-    document.getElementById('previsao_texto').innerText = `🔮 Próxima: ${previsao.cor} (${previsao.numero})\n🎯 Confiança: ${previsao.confianca}%\n💰 Apostar: ${previsao.aposta}x`;
-    document.getElementById('previsao_texto').style.color = previsao.confianca >= 90 ? "yellow" : "limegreen";
-    document.getElementById('historico_resultados').innerHTML += `<div>${cor} (${numero}) - <span style="font-size:10px">${hash.slice(0, 16)}...</span></div>`;
-  }
-
-  function downloadCSV() {
-    const blob = new Blob([historicoCSV], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `double_historico_${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function salvarHistoricoLocal() {
-    localStorage.setItem("historico_double", historicoCSV);
-  }
-
-  function carregarHistoricoLocal() {
-    const salvo = localStorage.getItem("historico_double");
-    if (salvo) historicoCSV = salvo;
-  }
-
-  function processarCSV(text) {
-    const linhas = text.trim().split("\n").slice(1);
-    linhas.forEach(l => {
-      const partes = l.split(";");
-      if (partes.length >= 4) {
-        const cor = partes[1];
-        const hash = partes[3];
-        coresAnteriores.push(cor);
-        atualizarLookup(hash, cor);
-      }
-    });
-  }
-
-  let historicoCSV = "Data;Cor;Número;Hash;Previsão;Confiança\n";
-  let lastHash = "";
-  let coresAnteriores = [];
-
-  carregarHistoricoLocal();
-
-  document.getElementById('btn_baixar').onclick = downloadCSV;
-
-  document.getElementById('btn_prever').onclick = async () => {
-    if (lastHash && lastHash !== "indefinido") {
-      const previsao = await gerarPrevisao(lastHash, coresAnteriores);
-      document.getElementById('previsao_texto').innerText = `🔮 Próxima: ${previsao.cor} (${previsao.numero})\n🎯 Confiança: ${previsao.confianca}%\n💰 Apostar: ${previsao.aposta}x`;
-    }
-  };
-
-  document.getElementById('import_csv').addEventListener('change', e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = e => processarCSV(e.target.result);
-    reader.readAsText(file);
-  });
-
-  setInterval(async () => {
-    try {
-      const res = await fetch(apiURL);
-      const data = await res.json();
-      const ultimo = data[0];
-      const corNum = Number(ultimo.color);
-      const cor = corNum === 0 ? "BRANCO" : corNum <= 7 ? "VERMELHO" : "PRETO";
-      const numero = ultimo.roll;
-      const hash = ultimo.hash || ultimo.server_seed || "indefinido";
-
-      if (!document.getElementById('resultado_cor')) return;
-
-      updatePainel(cor, numero, hash, await gerarPrevisao(hash, coresAnteriores));
-      coresAnteriores.push(cor);
-      atualizarLookup(hash, cor);
-      historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash}\n`;
-
-    } catch (err) {
-      console.error(err);
-    }
-  }, 10000);
-})();
+// Primeira análise automática
+gerarAnaliseCompleta();
