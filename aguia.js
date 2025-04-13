@@ -11,7 +11,7 @@
   function getRollColor(hash) {
     const number = parseInt(hash.slice(0, 8), 16) % 15;
     if (number === 0) return { cor: "BRANCO", numero: 0 };
-    if (number <= 7) return { cor: "VERMELHO", numero: number };
+    if (number >= 1 && number <= 7) return { cor: "VERMELHO", numero: number };
     return { cor: "PRETO", numero: number };
   }
 
@@ -227,7 +227,7 @@
         document.getElementById('historico_resultados').innerHTML += `<div id="log_${hash}">${cor} (${numero})</div>`;
 
         // Atualizar barra de progresso
-        const progresso = (historicoCSV.split("\n").length - 1) / 100; // Ajustar conforme necessário
+        const progresso = (historicoCSV.split("\n").length - 1) / 100;
         document.getElementById('progresso').style.width = `${progresso}%`;
       }
     } catch (e) {
