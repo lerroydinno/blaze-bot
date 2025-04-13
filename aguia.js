@@ -39,16 +39,32 @@
   }
 
   let lookupPrefix = {};
+  let lookupSufix = {};
 
   function atualizarLookup(hash, cor) {
     const prefix = hash.slice(0, 2);
+    const sufix = hash.slice(-2);
     if (!lookupPrefix[prefix]) lookupPrefix[prefix] = { BRANCO: 0, VERMELHO: 0, PRETO: 0 };
+    if (!lookupSufix[sufix]) lookupSufix[sufix] = { BRANCO: 0, VERMELHO: 0, PRETO: 0 };
     lookupPrefix[prefix][cor]++;
+    lookupSufix[sufix][cor]++;
   }
 
   function reforcoPrefixo(hash) {
     const prefix = hash.slice(0, 2);
     const dados = lookupPrefix[prefix];
+    if (!dados) return {};
+    const total = dados.BRANCO + dados.VERMELHO + dados.PRETO;
+    return {
+      BRANCO: ((dados.BRANCO / total) * 100).toFixed(2),
+      VERMELHO: ((dados.VERMELHO / total) * 100).toFixed(2),
+      PRETO: ((dados.PRETO / total) * 100).toFixed(2)
+    };
+  }
+
+  function reforcoSufixo(hash) {
+    const sufix = hash.slice(-2);
+    const dados = lookupSufix[sufix];
     if (!dados) return {};
     const total = dados.BRANCO + dados.VERMELHO + dados.PRETO;
     return {
@@ -79,8 +95,11 @@
       if (desdeUltimo >= media * 0.8) confianca += 10;
     }
 
-    const reforco = reforcoPrefixo(novaHash);
-    if (reforco[previsao.cor]) confianca += parseFloat(reforco[previsao.cor]) / 10;
+    const reforcoPrefixoData = reforcoPrefixo(novaHash);
+    const reforcoSufixoData = reforcoSufixo(novaHash);
+
+    if (reforcoPrefixoData[previsao.cor]) confianca += parseFloat(reforcoPrefixoData[previsao.cor]) / 10;
+    if (reforcoSufixoData[previsao.cor]) confianca += parseFloat(reforcoSufixoData[previsao.cor]) / 10;
 
     if (previsao.cor === "VERMELHO" && totalVermelho > totalPreto + 5) confianca -= 5;
     if (previsao.cor === "PRETO" && totalPreto > totalVermelho + 5) confianca -= 5;
@@ -228,24 +247,4 @@
       const numero = ultimo.roll;
       const hash = ultimo.hash || ultimo.server_seed || "indefinido";
 
-      if (!document.getElementById(`log_${hash}`) && hash !== "indefinido") {
-        atualizarLookup(hash, cor);
-        const previsao = await gerarPrevisao(hash, coresAnteriores);
-        updatePainel(cor, numero, hash, previsao);
-        historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash};${previsao.cor};${previsao.confianca}%\n`;
-        salvarHistoricoLocal();
-        coresAnteriores.push(cor);
-        if (coresAnteriores.length > 200) coresAnteriores.shift();
-        lastHash = hash;
-        document.getElementById('historico_resultados').innerHTML += `<div id="log_${hash}">${cor} (${numero})</div>`;
-
-        // Atualizando a barra de progresso
-        const totalEntradas = historicoCSV.split("\n").length - 1;
-        const progresso = totalEntradas / 4000 * 100; // Ajuste para 4000 entradas
-        document.getElementById('progresso').style.width = `${Math.min(progresso, 100)}%`;
-      }
-    } catch (e) {
-      console.error("Erro ao buscar API:", e);
-    }
-  }, 8000);
-})();
+      if (!document.getElement
