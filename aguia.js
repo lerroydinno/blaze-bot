@@ -1,5 +1,5 @@
 (async function () {
-  const apiURL = "https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
+  const apiURL = "https://jonbet.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
 
   async function sha256(message) {
     const msgBuffer = new TextEncoder().encode(message);
@@ -11,9 +11,8 @@
   function getRollColor(hash) {
     const number = parseInt(hash.slice(0, 8), 16) % 15;
     if (number === 0) return { cor: "BRANCO", numero: 0 };
-    else if (number >= 1 && number <= 7) return { cor: "VERMELHO", numero: number };
-    else if (number >= 8 && number <= 14) return { cor: "PRETO", numero: number };
-    else return { cor: "DESCONHECIDO", numero: number };
+    if (number >= 1 && number <= 7) return { cor: "VERMELHO", numero: number };
+    return { cor: "PRETO", numero: number };
   }
 
   function analisarSequencias(hist) {
@@ -64,15 +63,28 @@
     const previsao = getRollColor(novaHash);
     const recente = hist.slice(-100);
     const ocorrencias = recente.filter(c => c === previsao.cor).length;
-    let confianca = recente.length ? ((ocorrencias / recente.length) * 100) : 0;
+
+    const totalPreto = recente.filter(c => c === "PRETO").length;
+    const totalVermelho = recente.filter(c => c === "VERMELHO").length;
+    const totalBranco = recente.filter(c => c === "BRANCO").length;
+    const total = totalPreto + totalVermelho + totalBranco;
+
+    let confianca = total ? ((ocorrencias / total) * 100) : 0;
+
     const sugestaoSequencia = analisarSequencias(hist);
     if (sugestaoSequencia === previsao.cor) confianca += 10;
+
     if (previsao.cor === "BRANCO") {
       const { media, desdeUltimo } = calcularIntervaloBranco(hist);
       if (desdeUltimo >= media * 0.8) confianca += 10;
     }
+
     const reforco = reforcoPrefixo(novaHash);
     if (reforco[previsao.cor]) confianca += parseFloat(reforco[previsao.cor]) / 10;
+
+    if (previsao.cor === "VERMELHO" && totalVermelho > totalPreto + 5) confianca -= 5;
+    if (previsao.cor === "PRETO" && totalPreto > totalVermelho + 5) confianca -= 5;
+
     let aposta = calcularAposta(confianca);
     return { ...previsao, confianca: Math.min(100, confianca.toFixed(2)), aposta };
   }
