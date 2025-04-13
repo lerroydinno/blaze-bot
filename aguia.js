@@ -1,5 +1,5 @@
 (async function () {
-  const apiURL = "https://jonbet.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
+  const apiURL = "https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
 
   async function sha256(message) {
     const msgBuffer = new TextEncoder().encode(message);
