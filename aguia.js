@@ -239,8 +239,10 @@
         lastHash = hash;
         document.getElementById('historico_resultados').innerHTML += `<div id="log_${hash}">${cor} (${numero})</div>`;
 
-        const progresso = (historicoCSV.split("\n").length - 1) / 100;
-        document.getElementById('progresso').style.width = `${progresso}%`;
+        // Atualizando a barra de progresso
+        const totalEntradas = historicoCSV.split("\n").length - 1;
+        const progresso = totalEntradas / 4000 * 100; // Ajuste para 4000 entradas
+        document.getElementById('progresso').style.width = `${Math.min(progresso, 100)}%`;
       }
     } catch (e) {
       console.error("Erro ao buscar API:", e);
