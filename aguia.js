@@ -61,7 +61,7 @@
   async function gerarPrevisao(seed, hist = []) {
     const novaHash = await sha256(seed);
     const previsao = getRollColor(novaHash);
-    const recente = hist.slice(-100);
+    const recente = hist;
     const ocorrencias = recente.filter(c => c === previsao.cor).length;
 
     const totalPreto = recente.filter(c => c === "PRETO").length;
