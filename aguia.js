@@ -163,63 +163,6 @@
 
   carregarHistoricoLocal();
 
-  const painel = document.createElement("div");
-  painel.id = "painel_previsao";
-  painel.style = `
-    position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
-    z-index: 99999; background: #000000cc; border: 2px solid limegreen; border-radius: 20px;
-    color: limegreen; padding: 20px; font-family: monospace; text-align: center; width: 360px;
-  `;
-  painel.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;">
-      <h3 style="margin:0;">Blaze<br>Bot I.A</h3>
-      <button id="btn_minimizar" style="background:none;border:none;color:limegreen;font-weight:bold;font-size:20px;">−</button>
-    </div>
-    <div id="resultado_cor">🎯 Resultado: aguardando...</div>
-    <div id="resultado_hash" style="font-size: 10px; word-break: break-all;">Hash: --</div>
-    <div id="previsao_texto" style="margin-top: 10px;">🔮 Previsão: aguardando...</div>
-    <input type="file" id="import_csv" accept=".csv" style="margin:10px;" />
-    <button id="btn_prever" style="margin-top:5px;">🔁 Gerar previsão manual</button>
-    <button id="btn_baixar" style="margin-top:5px;">⬇️ Baixar CSV</button>
-    <div id="historico_resultados" style="margin-top:10px;max-height:100px;overflow:auto;text-align:left;font-size:12px;"></div>
-    <div id="barra_progresso" style="margin-top:10px; height: 10px; background: #ccc; border-radius: 5px;">
-      <div id="progresso" style="width: 0%; height: 100%; background: limegreen; border-radius: 5px;"></div>
-    </div>
-  `;
-  document.body.appendChild(painel);
-
-  const icone = document.createElement("div");
-  icone.id = "icone_flutuante";
-  icone.style = `
-    display: none; position: fixed; bottom: 20px; right: 20px; z-index: 99999;
-    width: 60px; height: 60px; border-radius: 50%;
-    background-image: url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg');
-    background-size: cover; background-repeat: no-repeat; background-position: center;
-    border: 2px solid limegreen; box-shadow: 0 0 10px limegreen, 0 0 20px limegreen inset;
-    cursor: pointer; animation: neonPulse 1s infinite;
-  `;
-  document.body.appendChild(icone);
-
-  const estilo = document.createElement("style");
-  estilo.innerHTML = `
-    @keyframes neonPulse {
-      0% { box-shadow: 0 0 5px limegreen, 0 0 10px limegreen inset; }
-      50% { box-shadow: 0 0 20px limegreen, 0 0 40px limegreen inset; }
-      100% { box-shadow: 0 0 5px limegreen, 0 0 10px limegreen inset; }
-    }
-  `;
-  document.head.appendChild(estilo);
-
-  document.getElementById('btn_minimizar').onclick = () => {
-    painel.style.display = "none";
-    icone.style.display = "block";
-  };
-
-  icone.onclick = () => {
-    painel.style.display = "block";
-    icone.style.display = "none";
-  };
-
   document.getElementById('btn_baixar').onclick = downloadCSV;
 
   document.getElementById('btn_prever').onclick = async () => {
@@ -247,4 +190,15 @@
       const numero = ultimo.roll;
       const hash = ultimo.hash || ultimo.server_seed || "indefinido";
 
-      if (!document.getElement
+      if (!document.getElementById('resultado_cor')) return;
+
+      updatePainel(cor, numero, hash, await gerarPrevisao(hash, coresAnteriores));
+      coresAnteriores.push(cor);
+      atualizarLookup(hash, cor);
+      historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash}\n`;
+
+    } catch (err) {
+      console.error(err);
+    }
+  }, 10000);
+})();
