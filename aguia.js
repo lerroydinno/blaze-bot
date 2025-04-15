@@ -1,108 +1,137 @@
-// ==UserScript== // @name         Blaze Double Bot com Painel Flutuante // @namespace    http://tampermonkey.net/ // @version      1.0 // @description  Previsão com hash + painel estilo hacker + exportação CSV // @author       HackAI // @match        https://blaze.bet/* // @grant        none // ==/UserScript==
+// ==UserScript== // @name         Blaze Double Bot Avançado com Análise CSV // @namespace    http://tampermonkey.net/ // @version      1.3 // @description  Bot com previsão, interceptação de WebSocket, coleta de hash, exportação/importação CSV, detecção de padrões e painel flutuante // @author       IA Hacker // @match        https://blaze.bet/* // @grant        none // ==/UserScript==
 
 (function() { 'use strict';
 
-let lastWhiteIndex = 0;
-let rodada = 0;
-let history = [];
+let lastHash = null;
+let rodadaAtual = null;
+let historico = [];
+let padroes = {};
 
-// Cria painel
-const panel = document.createElement('div');
-panel.id = 'hack-bot-panel';
-panel.style.cssText = `
-    position: fixed;
-    bottom: 10px;
-    right: 10px;
-    width: 250px;
-    background: black;
-    color: #00ff00;
-    border: 2px solid #00ff00;
-    padding: 10px;
-    font-family: monospace;
-    z-index: 9999;
-    border-radius: 10px;
-    box-shadow: 0 0 15px #00ff00;
+// Criar menu flutuante
+const menu = document.createElement('div');
+menu.style = 'position: fixed; bottom: 10px; right: 10px; background: black; border: 2px solid lime; color: lime; font-family: monospace; padding: 10px; border-radius: 15px; z-index: 99999; box-shadow: 0 0 15px lime;';
+menu.innerHTML = `
+    <div id="status">Status: Iniciando...</div>
+    <div id="previsao">Previsão: ---</div>
+    <div id="confianca">Confiança: ---</div>
+    <div id="intervalo">Intervalo Branco: ---</div>
+    <div id="hora">Horário: ---</div>
+    <button id="exportarCSV" style="margin-top: 5px;">Exportar CSV</button>
+    <input type="file" id="importarCSV" accept=".csv" style="color:lime; margin-top:5px;"/>
 `;
-panel.innerHTML = `
-    <div id="panel-content">
-        <div>Status: <span id="status">Iniciando...</span></div>
-        <div>Previsão: <span id="previsao">---</span></div>
-        <div>Confiança: <span id="confianca">---</span></div>
-        <div>Intervalo Branco: <span id="intervalo">---</span></div>
-        <div>Horário: <span id="horario">---</span></div>
-        <button id="exportar" style="margin-top: 10px; width: 100%; background: black; color: #00ff00; border: 1px solid #00ff00;">Exportar CSV</button>
-    </div>
-    <button id="minimizar" style="margin-top: 10px; width: 100%; background: #00ff00; color: black; border: none;">Minimizar</button>
-`;
-document.body.appendChild(panel);
+document.body.appendChild(menu);
 
-const content = document.getElementById('panel-content');
-const minimizarBtn = document.getElementById('minimizar');
-
-minimizarBtn.onclick = () => {
-    if (content.style.display === 'none') {
-        content.style.display = 'block';
-        minimizarBtn.textContent = 'Minimizar';
-    } else {
-        content.style.display = 'none';
-        minimizarBtn.textContent = 'Maximizar';
-    }
-};
-
-function exportarCSV() {
-    const csv = 'Rodada,Cor,Hash,Previsao\n' + history.map(h => `${h.rodada},${h.cor},${h.hash},${h.previsao}`).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
+document.getElementById('exportarCSV').onclick = () => {
+    const csv = historico.map(r => `${r.time},${r.color},${r.hash}`).join("\n");
+    const blob = new Blob(["time,color,hash\n" + csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'historico_blaze.csv';
     a.click();
-}
-
-document.getElementById('exportar').onclick = exportarCSV;
-
-function analisarHash(hash) {
-    const lastChar = hash.slice(-1);
-    const charCode = lastChar.charCodeAt(0);
-    const cor = (charCode % 15 === 0) ? 'branco' : (charCode % 2 === 0 ? 'preto' : 'vermelho');
-    const confianca = charCode % 15 === 0 ? 'Alta' : 'Média';
-    return { cor, confianca };
-}
-
-function atualizarPainel(dado) {
-    const horario = new Date().toLocaleTimeString();
-    document.getElementById('status').textContent = 'Rodada #' + rodada;
-    document.getElementById('previsao').textContent = dado.previsao;
-    document.getElementById('confianca').textContent = dado.confianca;
-    document.getElementById('intervalo').textContent = rodada - lastWhiteIndex;
-    document.getElementById('horario').textContent = horario;
-}
-
-const originalWebSocket = window.WebSocket;
-window.WebSocket = function(url, protocols) {
-    const socket = protocols ? new originalWebSocket(url, protocols) : new originalWebSocket(url);
-
-    socket.addEventListener('message', event => {
-        try {
-            const data = JSON.parse(event.data);
-            if (data && data[0]?.game && data[0].game.hash) {
-                const hash = data[0].game.hash;
-                const color = data[0].color;
-                rodada++;
-
-                const analise = analisarHash(hash);
-
-                if (color === 1) lastWhiteIndex = rodada;
-
-                history.push({ rodada, cor: color, hash, previsao: analise.cor });
-                atualizarPainel({ previsao: analise.cor, confianca: analise.confianca });
-            }
-        } catch (e) {}
-    });
-
-    return socket;
 };
-window.WebSocket.prototype = originalWebSocket.prototype;
+
+document.getElementById('importarCSV').addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const lines = e.target.result.split("\n").slice(1);
+            lines.forEach(line => {
+                const [time, color, hash] = line.split(',');
+                if (time && color && hash) {
+                    historico.push({ time, color, hash });
+                    registrarPadrao(hash, color);
+                }
+            });
+            alert("Padrões importados: " + Object.keys(padroes).length);
+        };
+        reader.readAsText(file);
+    }
+});
+
+function registrarPadrao(hash, color) {
+    const prefix = hash.substring(0, 3);
+    if (!padroes[prefix]) padroes[prefix] = { vermelho: 0, preto: 0, branco: 0 };
+    if (color.toLowerCase().includes('vermelho')) padroes[prefix].vermelho++;
+    else if (color.toLowerCase().includes('preto')) padroes[prefix].preto++;
+    else if (color.toLowerCase().includes('branco')) padroes[prefix].branco++;
+}
+
+// Interceptação WebSocket
+const OriginalWebSocket = window.WebSocket;
+window.WebSocket = function(...args) {
+    const ws = new OriginalWebSocket(...args);
+    const originalAddEventListener = ws.addEventListener;
+    ws.addEventListener = function(type, listener, options) {
+        if (type === 'message') {
+            const customListener = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data && data[0] && data[0].game && data[0].game.color) {
+                        rodadaAtual = data[0].game;
+                        processarRodada(rodadaAtual);
+                    }
+                } catch (e) {}
+                listener.call(this, event);
+            };
+            return originalAddEventListener.call(ws, type, customListener, options);
+        }
+        return originalAddEventListener.call(ws, type, listener, options);
+    };
+    return ws;
+}
+
+function processarRodada(jogo) {
+    const cor = jogo.color;
+    const hash = jogo.hash || '---';
+    const horario = new Date().toLocaleTimeString();
+    const corTexto = cor === 0 ? 'Vermelho' : cor === 1 ? 'Preto' : 'Branco';
+    const confianca = calcularConfianca(hash);
+    const previsao = preverProxima(hash);
+
+    historico.push({ time: horario, color: corTexto, hash });
+    registrarPadrao(hash, corTexto);
+
+    document.getElementById('status').innerText = `Status: OK`;
+    document.getElementById('previsao').innerText = `Previsão: ${previsao}`;
+    document.getElementById('confianca').innerText = `Confiança: ${confianca}%`;
+    document.getElementById('intervalo').innerText = `Intervalo Branco: ${calcularIntervaloBranco()}`;
+    document.getElementById('hora').innerText = `Horário: ${horario}`;
+}
+
+function preverProxima(hash) {
+    const prefix = hash.substring(0, 3);
+    if (padroes[prefix]) {
+        const prob = padroes[prefix];
+        const max = Math.max(prob.vermelho, prob.preto, prob.branco);
+        if (max === prob.branco) return 'Branco (Padrão)';
+        if (max === prob.preto) return 'Preto (Padrão)';
+        return 'Vermelho (Padrão)';
+    } else {
+        const lastChar = hash[hash.length - 1];
+        const hex = parseInt(lastChar, 16);
+        if (hex >= 14) return 'Branco';
+        return (hex % 2 === 0) ? 'Preto' : 'Vermelho';
+    }
+}
+
+function calcularConfianca(hash) {
+    const lastChar = hash[hash.length - 1];
+    const hex = parseInt(lastChar, 16);
+    return Math.round((hex / 15) * 100);
+}
+
+function calcularIntervaloBranco() {
+    let ultimoBranco = -1;
+    for (let i = historico.length - 1; i >= 0; i--) {
+        if (historico[i].color === 'Branco') {
+            ultimoBranco = i;
+            break;
+        }
+    }
+    return ultimoBranco === -1 ? 'N/A' : (historico.length - ultimoBranco - 1);
+}
 
 })();
 
