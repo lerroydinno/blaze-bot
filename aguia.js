@@ -9,17 +9,14 @@
       position: fixed;
       bottom: 80px;
       right: 20px;
-      width: 300px;
-      background: #111;
-      border: 2px solid #0f0;
-      border-radius: 10px;
+      width: 320px;
+      background: black;
+      border: 2px solid lime;
+      border-radius: 15px;
       padding: 15px;
       z-index: 9999;
       font-family: Arial;
-      color: #0f0;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+      color: lime;
     }
     #blazeBotToggle {
       position: fixed;
@@ -31,38 +28,48 @@
       background-image: url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg');
       background-size: cover;
       background-position: center;
-      border: 2px solid #0f0;
+      border: 2px solid lime;
       cursor: pointer;
       z-index: 9999;
     }
-    .bot-title { font-size: 18px; font-weight: bold; text-align: center; }
-    .bot-section { margin-top: 5px; font-size: 14px; }
+    .bot-section { margin: 5px 0; }
+    button, input[type="file"] {
+      width: 100%;
+      margin-top: 5px;
+      padding: 6px;
+      border: none;
+      border-radius: 5px;
+      font-weight: bold;
+    }
   `;
   document.head.appendChild(style);
 
   const panel = document.createElement("div");
   panel.id = "blazeBotPanel";
   panel.innerHTML = `
-    <div class="bot-title">Blaze Bot I.A</div>
-    <div class="bot-section" id="prediction">Previsão: Carregando...</div>
-    <div class="bot-section" id="confidence">Confiabilidade: --%</div>
-    <div class="bot-section" id="bet">Aposta sugerida: --</div>
-    <div class="bot-section" id="whiteAnalysis">Análise do Branco: --</div>
+    <div><b>Blaze<br>Bot<br>I.A</b></div>
+    <div class="bot-section" id="prediction">🎯 Resultado: --</div>
+    <div class="bot-section" id="hash">Hash: --</div>
+    <div class="bot-section" id="next">🔮 Próxima: --</div>
+    <div class="bot-section" id="confidence">🎯 Confiança: --%</div>
+    <div class="bot-section" id="bet">💰 Apostar: --</div>
     <input type="file" id="csvImport" />
+    <button onclick="manualPrediction()">⚙️ Gerar previsão manual</button>
+    <button onclick="downloadCSV()">⬇️ Baixar CSV</button>
+    <div class="bot-section" id="historyLog"></div>
   `;
   document.body.appendChild(panel);
 
   const toggleBtn = document.createElement("div");
   toggleBtn.id = "blazeBotToggle";
   toggleBtn.onclick = () => {
-    panel.style.display = panel.style.display === "none" ? "flex" : "none";
+    panel.style.display = panel.style.display === "none" ? "block" : "none";
   };
   document.body.appendChild(toggleBtn);
 
   let history = [];
-  let redCount = 0, blackCount = 0, whiteCount = 0;
-  const markov = {};
   let brain;
+  const markov = {};
 
   function trainNeuralNet() {
     brain = new synaptic.Architect.Perceptron(5, 10, 3);
@@ -83,8 +90,7 @@
     const output = brain.activate(input);
     const max = Math.max(...output);
     const color = ['red', 'black', 'white'][output.indexOf(max)];
-    const confidence = (max * 100).toFixed(1);
-    return { color, confidence, output };
+    return { color, confidence: (max * 100).toFixed(1) };
   }
 
   function updateMarkov(data) {
@@ -95,64 +101,45 @@
     }
   }
 
-  function predictMarkov() {
+  function predict() {
+    if (history.length < 10) return;
+    trainNeuralNet();
+    const ai = predictWithAI();
     const last = history[history.length - 1];
-    const freq = markov[last];
-    if (!freq) return null;
-    const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]);
-    return sorted.length ? sorted[0][0] : null;
-  }
+    const hash = "hash_placeholder";
 
-  function analyzeWhiteTiming() {
-    const whiteIndexes = history.map((v, i) => v === 'white' ? i : -1).filter(i => i >= 0);
-    const afterWhite = whiteIndexes.map((idx, i, arr) => (arr[i + 1] ? arr[i + 1] - idx : null)).filter(Boolean);
-    const beforeWhite = whiteIndexes.map(i => history[i - 1]).filter(Boolean);
-    const modeBefore = beforeWhite.sort((a,b) =>
-      beforeWhite.filter(v => v===a).length - beforeWhite.filter(v => v===b).length
-    ).pop();
-    return {
-      before: modeBefore,
-      interval: afterWhite.reduce((a, b) => a + b, 0) / afterWhite.length || 0
-    };
+    document.getElementById("prediction").innerText = `🎯 Resultado: ${last.toUpperCase()}`;
+    document.getElementById("hash").innerText = `Hash: ${hash}`;
+
+    if (ai && ai.confidence >= 85) {
+      document.getElementById("next").innerText = `🔮 Próxima: ${ai.color.toUpperCase()}`;
+      document.getElementById("confidence").innerText = `🎯 Confiança: ${ai.confidence}%`;
+      document.getElementById("bet").innerText = `💰 Apostar: ${ai.color.toUpperCase()}`;
+    } else {
+      document.getElementById("next").innerText = `🔮 Próxima: --`;
+      document.getElementById("confidence").innerText = `🎯 Confiança: ${ai ? ai.confidence : "--"}%`;
+      document.getElementById("bet").innerText = `💰 Apostar: 0x`;
+    }
   }
 
   function fetchResults() {
     fetch("https://blaze.com/api/roulette_games/recent")
-      .then(r => r.json())
+      .then(res => res.json())
       .then(data => {
         const newHistory = data.map(d => d.color === 1 ? 'red' : d.color === 2 ? 'black' : 'white').reverse();
         if (JSON.stringify(newHistory) !== JSON.stringify(history)) {
           history = newHistory;
-          redCount = history.filter(x => x === 'red').length;
-          blackCount = history.filter(x => x === 'black').length;
-          whiteCount = history.filter(x => x === 'white').length;
           updateMarkov(history);
-          trainNeuralNet();
-
-          const ai = predictWithAI();
-          const markovColor = predictMarkov();
-          const hashPrediction = history[history.length - 1]; // Placeholder, pode incluir SHA real aqui
-
-          let final = null;
-
-          if (ai && parseFloat(ai.confidence) >= 85) {
-            const confluence = [ai.color, markovColor, hashPrediction];
-            final = confluence.sort((a, b) =>
-              confluence.filter(v => v === a).length - confluence.filter(v => v === b).length
-            ).pop();
-          }
-
-          document.getElementById("prediction").innerText = `Previsão: ${final || "Aguardando alta confiança..."}`;
-          document.getElementById("confidence").innerText = `Confiabilidade: ${ai?.confidence || "--"}%`;
-          document.getElementById("bet").innerText = ai && ai.confidence >= 85 ? "Aposta sugerida: Alta" : "Aposta sugerida: --";
-
-          const white = analyzeWhiteTiming();
-          document.getElementById("whiteAnalysis").innerText = `Antes do branco: ${white.before || "--"}, Intervalo médio: ${white.interval.toFixed(1)}`;
+          predict();
+          updateHistoryLog();
         }
       });
   }
 
-  setInterval(fetchResults, 5000);
+  function updateHistoryLog() {
+    const log = history.slice(-10).map((val, idx) => `${val.toUpperCase()} (${idx})`).join("<br>");
+    document.getElementById("historyLog").innerHTML = log;
+  }
 
   document.getElementById("csvImport").addEventListener("change", function (e) {
     const file = e.target.files[0];
@@ -171,4 +158,17 @@
     };
     reader.readAsText(file);
   });
+
+  window.manualPrediction = predict;
+
+  window.downloadCSV = function () {
+    const csvContent = history.join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "historico.csv";
+    link.click();
+  };
+
+  setInterval(fetchResults, 5000);
 })();
