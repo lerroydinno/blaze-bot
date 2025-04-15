@@ -46,6 +46,7 @@
     <div class="bot-title">Blaze Bot I.A</div>
     <div class="bot-section" id="prediction">Previsão: Carregando...</div>
     <div class="bot-section" id="confidence">Confiabilidade: --%</div>
+    <div class="bot-section" id="confidenceAll">Red: --%, Black: --%, White: --%</div>
     <div class="bot-section" id="bet">Aposta sugerida: --</div>
     <div class="bot-section" id="whiteAnalysis">Análise do Branco: --</div>
     <input type="file" id="csvImport" />
@@ -81,17 +82,16 @@
     if (!brain || history.length < 5) return null;
     const input = history.slice(-5).map(v => v / 14);
     const output = brain.activate(input);
-    const redConfidence = (output[0] * 100).toFixed(1);
-    const blackConfidence = (output[1] * 100).toFixed(1);
-    const whiteConfidence = (output[2] * 100).toFixed(1);
-
-    const color = ['red', 'black', 'white'][output.indexOf(Math.max(...output))];
+    const max = Math.max(...output);
+    const index = output.indexOf(max);
+    const color = ['red', 'black', 'white'][index];
     return {
       color,
-      confidence: {
-        red: redConfidence,
-        black: blackConfidence,
-        white: whiteConfidence
+      confidence: (max * 100).toFixed(1),
+      confidences: {
+        red: (output[0] * 100).toFixed(1),
+        black: (output[1] * 100).toFixed(1),
+        white: (output[2] * 100).toFixed(1)
       }
     };
   }
@@ -115,7 +115,6 @@
   function analyzeWhiteTiming() {
     const whiteIndexes = history.map((v, i) => v === 'white' ? i : -1).filter(i => i >= 0);
     const afterWhite = whiteIndexes.map((idx, i, arr) => (arr[i + 1] ? arr[i + 1] - idx : null)).filter(Boolean);
-    const minuteFreq = {};
     const beforeWhite = whiteIndexes.map(i => history[i - 1]).filter(Boolean);
     const modeBefore = beforeWhite.sort((a,b) =>
       beforeWhite.filter(v => v===a).length - beforeWhite.filter(v => v===b).length
@@ -141,25 +140,24 @@
 
           const ai = predictWithAI();
           const markovColor = predictMarkov();
-          const hashPrediction = history[history.length - 1]; // Placeholder, pode incluir SHA real aqui
+          const hashPrediction = history[history.length - 1]; // Placeholder
 
           const confluence = [ai?.color, markovColor, hashPrediction];
           const final = confluence.sort((a,b) =>
             confluence.filter(v => v===a).length - confluence.filter(v => v===b).length
           ).pop();
 
-          // Só mostra a previsão quando a confiança é maior que 85%
-          if (ai && Math.max(...Object.values(ai.confidence)) > 85) {
-            document.getElementById("prediction").innerText = `Previsão: ${final || "..."}`;
-            document.getElementById("confidence").innerText = `
-              Confiabilidade Red: ${ai.confidence.red}% | Black: ${ai.confidence.black}% | White: ${ai.confidence.white}%
-            `;
-            document.getElementById("bet").innerText = `Aposta sugerida: ${ai.confidence.red > 85 ? "Alta" : ai.confidence.red > 50 ? "Média" : "Baixa"}`;
+          if (ai && ai.confidence >= 85) {
+            document.getElementById("prediction").innerText = `Previsão: ${final}`;
+            document.getElementById("bet").innerText = `Aposta sugerida: ${ai.confidence > 90 ? "Alta" : "Média"}`;
           } else {
-            document.getElementById("prediction").innerText = "Previsão: -";
-            document.getElementById("confidence").innerText = "Confiabilidade: -";
-            document.getElementById("bet").innerText = "Aposta sugerida: Baixa";
+            document.getElementById("prediction").innerText = `Previsão: Aguardando confiança...`;
+            document.getElementById("bet").innerText = `Aposta sugerida: --`;
           }
+
+          document.getElementById("confidence").innerText = `Confiabilidade: ${ai?.confidence || "--"}%`;
+          document.getElementById("confidenceAll").innerText =
+            `Red: ${ai?.confidences.red || "--"}%, Black: ${ai?.confidences.black || "--"}%, White: ${ai?.confidences.white || "--"}%`;
 
           const white = analyzeWhiteTiming();
           document.getElementById("whiteAnalysis").innerText = `Antes do branco: ${white.before || "--"}, Intervalo médio: ${white.interval.toFixed(1)}`;
