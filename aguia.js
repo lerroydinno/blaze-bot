@@ -1,139 +1,108 @@
-// Bot para Blaze com interceptação de WebSocket e painel flutuante
-(function () {
-    const historico = [];
+// ==UserScript== // @name         Blaze Double Bot com Painel Flutuante // @namespace    http://tampermonkey.net/ // @version      1.0 // @description  Previsão com hash + painel estilo hacker + exportação CSV // @author       HackAI // @match        https://blaze.bet/* // @grant        none // ==/UserScript==
 
-    const ui = document.createElement('div');
-    ui.style = `
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        z-index: 9999;
-        background: black;
-        border: 2px solid lime;
-        color: lime;
-        padding: 10px;
-        font-family: monospace;
-        font-size: 14px;
-        border-radius: 10px;
-        box-shadow: 0 0 15px lime;
-        width: 260px;
-    `;
-    ui.innerHTML = `
-        <div><b>Status:</b> <span id="status">Iniciando...</span></div>
-        <div><b>Previsão:</b> <span id="previsao">---</span></div>
-        <div><b>Confiança:</b> <span id="confianca">---</span></div>
-        <div><b>Intervalo Branco:</b> <span id="intervalo">---</span></div>
-        <div><b>Horário:</b> <span id="hora">---</span></div>
-        <button id="baixarCSV" style="margin-top:6px;background:#111;color:lime;border:1px solid lime;padding:5px;border-radius:5px;width:100%;cursor:pointer;">Exportar CSV</button>
-    `;
-    document.body.appendChild(ui);
+(function() { 'use strict';
 
-    const statusEl = document.getElementById('status');
-    const previsaoEl = document.getElementById('previsao');
-    const confiancaEl = document.getElementById('confianca');
-    const intervaloEl = document.getElementById('intervalo');
-    const horaEl = document.getElementById('hora');
-    const btnCSV = document.getElementById('baixarCSV');
+let lastWhiteIndex = 0;
+let rodada = 0;
+let history = [];
 
-    function corPorNumero(num) {
-        if (num === 0) return 'branco';
-        if (num >= 1 && num <= 7) return 'vermelho';
-        return 'preto';
+// Cria painel
+const panel = document.createElement('div');
+panel.id = 'hack-bot-panel';
+panel.style.cssText = `
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    width: 250px;
+    background: black;
+    color: #00ff00;
+    border: 2px solid #00ff00;
+    padding: 10px;
+    font-family: monospace;
+    z-index: 9999;
+    border-radius: 10px;
+    box-shadow: 0 0 15px #00ff00;
+`;
+panel.innerHTML = `
+    <div id="panel-content">
+        <div>Status: <span id="status">Iniciando...</span></div>
+        <div>Previsão: <span id="previsao">---</span></div>
+        <div>Confiança: <span id="confianca">---</span></div>
+        <div>Intervalo Branco: <span id="intervalo">---</span></div>
+        <div>Horário: <span id="horario">---</span></div>
+        <button id="exportar" style="margin-top: 10px; width: 100%; background: black; color: #00ff00; border: 1px solid #00ff00;">Exportar CSV</button>
+    </div>
+    <button id="minimizar" style="margin-top: 10px; width: 100%; background: #00ff00; color: black; border: none;">Minimizar</button>
+`;
+document.body.appendChild(panel);
+
+const content = document.getElementById('panel-content');
+const minimizarBtn = document.getElementById('minimizar');
+
+minimizarBtn.onclick = () => {
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        minimizarBtn.textContent = 'Minimizar';
+    } else {
+        content.style.display = 'none';
+        minimizarBtn.textContent = 'Maximizar';
     }
+};
 
-    function preverPorHash(hash) {
-        const lastChar = hash.slice(-1).toLowerCase();
-        const prefixo = hash.slice(0, 2);
-        const num = parseInt(lastChar, 16);
-        let cor = '';
-        let confianca = 'Média';
+function exportarCSV() {
+    const csv = 'Rodada,Cor,Hash,Previsao\n' + history.map(h => `${h.rodada},${h.cor},${h.hash},${h.previsao}`).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'historico_blaze.csv';
+    a.click();
+}
 
-        if (prefixo === '00') {
-            cor = 'branco';
-            confianca = 'Alta';
-        } else if (num <= 5) {
-            cor = 'preto';
-        } else if (num <= 12) {
-            cor = 'vermelho';
-        } else {
-            cor = 'branco';
-            confianca = 'Baixa';
-        }
+document.getElementById('exportar').onclick = exportarCSV;
 
-        return { cor, confianca };
-    }
+function analisarHash(hash) {
+    const lastChar = hash.slice(-1);
+    const charCode = lastChar.charCodeAt(0);
+    const cor = (charCode % 15 === 0) ? 'branco' : (charCode % 2 === 0 ? 'preto' : 'vermelho');
+    const confianca = charCode % 15 === 0 ? 'Alta' : 'Média';
+    return { cor, confianca };
+}
 
-    function intervaloSemBranco() {
-        let count = 0;
-        for (let i = 0; i < historico.length; i++) {
-            if (historico[i].color === 'branco') break;
-            count++;
-        }
-        return count;
-    }
+function atualizarPainel(dado) {
+    const horario = new Date().toLocaleTimeString();
+    document.getElementById('status').textContent = 'Rodada #' + rodada;
+    document.getElementById('previsao').textContent = dado.previsao;
+    document.getElementById('confianca').textContent = dado.confianca;
+    document.getElementById('intervalo').textContent = rodada - lastWhiteIndex;
+    document.getElementById('horario').textContent = horario;
+}
 
-    function analisarHorario(date) {
-        const hora = new Date(date).getHours();
-        horaEl.textContent = hora + 'h';
-        return hora >= 20 || hora < 2 ? 'Alta' : 'Média';
-    }
+const originalWebSocket = window.WebSocket;
+window.WebSocket = function(url, protocols) {
+    const socket = protocols ? new originalWebSocket(url, protocols) : new originalWebSocket(url);
 
-    function atualizarInterface(dado) {
-        const { hash, color, created_at } = dado;
-        const { cor, confianca } = preverPorHash(hash);
-        const horarioConfianca = analisarHorario(created_at);
-        const intervalo = intervaloSemBranco();
+    socket.addEventListener('message', event => {
+        try {
+            const data = JSON.parse(event.data);
+            if (data && data[0]?.game && data[0].game.hash) {
+                const hash = data[0].game.hash;
+                const color = data[0].color;
+                rodada++;
 
-        let confiancaFinal = confianca;
-        if (cor === 'branco') {
-            if (intervalo > 20) confiancaFinal = 'Alta';
-            else if (intervalo > 10) confiancaFinal = 'Média';
-        }
+                const analise = analisarHash(hash);
 
-        statusEl.textContent = 'OK';
-        previsaoEl.textContent = cor;
-        confiancaEl.textContent = confiancaFinal;
-        intervaloEl.textContent = intervalo + ' jogos';
-    }
+                if (color === 1) lastWhiteIndex = rodada;
 
-    function exportarCSV() {
-        let csv = 'Data,Cor,Hash\n';
-        historico.forEach(item => {
-            const data = new Date(item.created_at).toLocaleString();
-            csv += `${data},${item.color},${item.hash}\n`;
-        });
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', 'historico_blaze.csv');
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
+                history.push({ rodada, cor: color, hash, previsao: analise.cor });
+                atualizarPainel({ previsao: analise.cor, confianca: analise.confianca });
+            }
+        } catch (e) {}
+    });
 
-    btnCSV.onclick = exportarCSV;
+    return socket;
+};
+window.WebSocket.prototype = originalWebSocket.prototype;
 
-    // Intercepta WebSocket
-    const OriginalWebSocket = window.WebSocket;
-    window.WebSocket = function (url, protocols) {
-        const socket = protocols ? new OriginalWebSocket(url, protocols) : new OriginalWebSocket(url);
-        socket.addEventListener('message', event => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data && data[0] && data[0].game && data[0].game.color !== undefined) {
-                    const resultado = {
-                        color: corPorNumero(data[0].game.color),
-                        hash: data[0].game.hash,
-                        created_at: data[0].game.created_at
-                    };
-                    historico.unshift(resultado);
-                    if (historico.length > 100) historico.pop();
-                    atualizarInterface(resultado);
-                }
-            } catch (e) {}
-        });
-        return socket;
-    };
-    window.WebSocket.prototype = OriginalWebSocket.prototype;
 })();
+
