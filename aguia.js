@@ -46,7 +46,6 @@
     <div class="bot-title">Blaze Bot I.A</div>
     <div class="bot-section" id="prediction">Previsão: Carregando...</div>
     <div class="bot-section" id="confidence">Confiabilidade: --%</div>
-    <div class="bot-section" id="confidenceAll">Red: --%, Black: --%, White: --%</div>
     <div class="bot-section" id="bet">Aposta sugerida: --</div>
     <div class="bot-section" id="whiteAnalysis">Análise do Branco: --</div>
     <input type="file" id="csvImport" />
@@ -83,17 +82,9 @@
     const input = history.slice(-5).map(v => v / 14);
     const output = brain.activate(input);
     const max = Math.max(...output);
-    const index = output.indexOf(max);
-    const color = ['red', 'black', 'white'][index];
-    return {
-      color,
-      confidence: (max * 100).toFixed(1),
-      confidences: {
-        red: (output[0] * 100).toFixed(1),
-        black: (output[1] * 100).toFixed(1),
-        white: (output[2] * 100).toFixed(1)
-      }
-    };
+    const color = ['red', 'black', 'white'][output.indexOf(max)];
+    const confidence = (max * 100).toFixed(1);
+    return { color, confidence, output };
   }
 
   function updateMarkov(data) {
@@ -140,24 +131,20 @@
 
           const ai = predictWithAI();
           const markovColor = predictMarkov();
-          const hashPrediction = history[history.length - 1]; // Placeholder
+          const hashPrediction = history[history.length - 1]; // Placeholder, pode incluir SHA real aqui
 
-          const confluence = [ai?.color, markovColor, hashPrediction];
-          const final = confluence.sort((a,b) =>
-            confluence.filter(v => v===a).length - confluence.filter(v => v===b).length
-          ).pop();
+          let final = null;
 
-          if (ai && ai.confidence >= 85) {
-            document.getElementById("prediction").innerText = `Previsão: ${final}`;
-            document.getElementById("bet").innerText = `Aposta sugerida: ${ai.confidence > 90 ? "Alta" : "Média"}`;
-          } else {
-            document.getElementById("prediction").innerText = `Previsão: Aguardando confiança...`;
-            document.getElementById("bet").innerText = `Aposta sugerida: --`;
+          if (ai && parseFloat(ai.confidence) >= 85) {
+            const confluence = [ai.color, markovColor, hashPrediction];
+            final = confluence.sort((a, b) =>
+              confluence.filter(v => v === a).length - confluence.filter(v => v === b).length
+            ).pop();
           }
 
+          document.getElementById("prediction").innerText = `Previsão: ${final || "Aguardando alta confiança..."}`;
           document.getElementById("confidence").innerText = `Confiabilidade: ${ai?.confidence || "--"}%`;
-          document.getElementById("confidenceAll").innerText =
-            `Red: ${ai?.confidences.red || "--"}%, Black: ${ai?.confidences.black || "--"}%, White: ${ai?.confidences.white || "--"}%`;
+          document.getElementById("bet").innerText = ai && ai.confidence >= 85 ? "Aposta sugerida: Alta" : "Aposta sugerida: --";
 
           const white = analyzeWhiteTiming();
           document.getElementById("whiteAnalysis").innerText = `Antes do branco: ${white.before || "--"}, Intervalo médio: ${white.interval.toFixed(1)}`;
