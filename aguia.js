@@ -69,7 +69,7 @@
     const trainer = new synaptic.Trainer(brain);
     const trainingSet = history.slice(-200).map((h, i, arr) => {
       if (i < 5) return null;
-      const input = arr.slice(i - 5, i).map(v => v / 14);
+      const input = arr.slice(i - 5, i).map(v => v === 'red' ? 0 : v === 'black' ? 1 : 2).map(n => n / 2);
       const output = [0, 0, 0];
       output[h === 'red' ? 0 : h === 'black' ? 1 : 2] = 1;
       return { input, output };
@@ -79,7 +79,7 @@
 
   function predictWithAI() {
     if (!brain || history.length < 5) return null;
-    const input = history.slice(-5).map(v => v / 14);
+    const input = history.slice(-5).map(v => v === 'red' ? 0 : v === 'black' ? 1 : 2).map(n => n / 2);
     const output = brain.activate(input);
     const max = Math.max(...output);
     const color = ['red', 'black', 'white'][output.indexOf(max)];
@@ -105,7 +105,6 @@
   function analyzeWhiteTiming() {
     const whiteIndexes = history.map((v, i) => v === 'white' ? i : -1).filter(i => i >= 0);
     const afterWhite = whiteIndexes.map((idx, i, arr) => (arr[i + 1] ? arr[i + 1] - idx : null)).filter(Boolean);
-    const minuteFreq = {};
     const beforeWhite = whiteIndexes.map(i => history[i - 1]).filter(Boolean);
     const modeBefore = beforeWhite.sort((a,b) =>
       beforeWhite.filter(v => v===a).length - beforeWhite.filter(v => v===b).length
@@ -131,7 +130,7 @@
 
           const ai = predictWithAI();
           const markovColor = predictMarkov();
-          const hashPrediction = history[history.length - 1]; // Placeholder
+          const hashPrediction = history[history.length - 1];
 
           const confluence = [ai?.color, markovColor, hashPrediction];
           const final = confluence.sort((a,b) =>
@@ -153,18 +152,32 @@
   document.getElementById("csvImport").addEventListener("change", function (e) {
     const file = e.target.files[0];
     if (!file) return;
+
     const reader = new FileReader();
     reader.onload = function (event) {
       const lines = event.target.result.split("\n").map(l => l.trim()).filter(Boolean);
+
+      // Remover cabeçalho se houver
+      if (lines[0].toLowerCase().includes("cor")) lines.shift();
+
       const imported = lines.map(line => {
-        const color = line.toLowerCase();
-        return color === 'vermelho' ? 'red' : color === 'preto' ? 'black' : 'white';
-      });
+        const parts = line.split(",");
+        const color = parts[1]?.toLowerCase().trim();
+        return color === "vermelho"
+          ? "red"
+          : color === "preto"
+          ? "black"
+          : color === "branco"
+          ? "white"
+          : color; // já pode estar em inglês
+      }).filter(c => c === "red" || c === "black" || c === "white");
+
       history = imported.concat(history).slice(-300);
       updateMarkov(history);
       trainNeuralNet();
       alert("Histórico CSV importado com sucesso!");
     };
+
     reader.readAsText(file);
   });
 })();
