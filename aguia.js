@@ -1,65 +1,80 @@
-(() => {
-  const painel = document.createElement("div");
-  painel.id = "painel-interceptador";
-  painel.style.position = "fixed";
-  painel.style.top = "20px";
-  painel.style.right = "20px";
-  painel.style.zIndex = "999999";
-  painel.style.background = "#1f1f1f";
-  painel.style.color = "#fff";
-  painel.style.padding = "12px";
-  painel.style.borderRadius = "12px";
-  painel.style.boxShadow = "0 0 10px rgba(0,0,0,0.4)";
-  painel.style.fontFamily = "Arial";
-  painel.innerHTML = `
-    <strong>Status:</strong> <span id="status-conexao">🔴 Desconectado</span><br>
-    <strong>Última Hash:</strong> <span id="ultima-hash">--</span><br><br>
-    <button id="minimizar-painel" style="margin-top:5px; padding:4px 10px;">Minimizar</button>
-  `;
-  document.body.appendChild(painel);
+// ==UserScript== // @name         Blaze Predict Tool (Clean Version) // @namespace    http://tampermonkey.net/ // @version      1.0 // @description  Script limpo para prever cores na roleta da Blaze // @author       Você // @match        https://blaze.com/pt/games/double // @grant        none // ==/UserScript==
 
-  const statusSpan = document.getElementById("status-conexao");
-  const hashSpan = document.getElementById("ultima-hash");
-  const btnMinimizar = document.getElementById("minimizar-painel");
+(function() { 'use strict';
 
-  let minimizado = false;
-  btnMinimizar.onclick = () => {
-    minimizado = !minimizado;
-    painel.style.height = minimizado ? "25px" : "";
-    painel.style.overflow = minimizado ? "hidden" : "visible";
-    btnMinimizar.textContent = minimizado ? "🔼" : "Minimizar";
-  };
+// Cria o painel flutuante
+const panel = document.createElement('div');
+panel.id = 'blaze-panel';
+panel.style = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 200px;
+    background: #111;
+    color: #fff;
+    padding: 15px;
+    z-index: 9999;
+    font-family: Arial, sans-serif;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+`;
+panel.innerHTML = `
+    <div>Status: <span id="blaze-status">Desconectado</span></div>
+    <div>Previsão: <span id="blaze-prediction">--</span></div>
+    <div>Confiança: <span id="blaze-confidence">--</span></div>
+    <button id="blaze-force-predict" style="margin-top:10px;width:100%;">Nova Previsão</button>
+`;
+document.body.appendChild(panel);
 
-  const wsOrig = window.WebSocket;
-  class Interceptor extends wsOrig {
-    constructor(url, protocols) {
-      super(url, protocols);
-      if (url.includes("jonbet")) {
-        console.log("[Interceptador] WebSocket conectado:", url);
-        statusSpan.textContent = "🟢 Conectado";
+const statusEl = document.getElementById('blaze-status');
+const predictionEl = document.getElementById('blaze-prediction');
+const confidenceEl = document.getElementById('blaze-confidence');
+const button = document.getElementById('blaze-force-predict');
 
-        this.addEventListener("message", (event) => {
-          try {
-            const data = event.data;
-            if (typeof data === "string" && data.includes("hash")) {
-              const match = data.match(/[a-f0-9]{64}/);
-              if (match) {
-                const hash = match[0];
-                hashSpan.textContent = hash;
-                console.log("🔥 Hash interceptada:", hash);
-              }
+// Utilitário para prever a cor baseado no hash
+function predictColorFromHash(hash) {
+    const lastChar = hash.slice(-1);
+    const decimal = parseInt(lastChar, 16);
+
+    let color = 'Vermelho';
+    if (decimal <= 3) color = 'Branco';
+    else if (decimal <= 7) color = 'Preto';
+
+    const confidence = ((decimal / 15) * 100).toFixed(2) + '%';
+    return { color, confidence };
+}
+
+// Intercepta a conexão WebSocket
+const OriginalWebSocket = window.WebSocket;
+window.WebSocket = function(url, protocols) {
+    const ws = protocols ? new OriginalWebSocket(url, protocols) : new OriginalWebSocket(url);
+
+    ws.addEventListener('message', event => {
+        try {
+            const data = JSON.parse(event.data);
+
+            // Verifica se é um resultado de jogo
+            if (data[0]?.game?.hash) {
+                const hash = data[0].game.hash;
+                const { color, confidence } = predictColorFromHash(hash);
+
+                predictionEl.innerText = color;
+                confidenceEl.innerText = confidence;
+                statusEl.innerText = 'Conectado';
             }
-          } catch (e) {
-            console.error("[Erro de parsing]", e);
-          }
-        });
+        } catch (e) {
+            console.error('Erro ao processar mensagem:', e);
+        }
+    });
 
-        this.addEventListener("close", () => {
-          statusSpan.textContent = "🔴 Desconectado";
-        });
-      }
-    }
-  }
-  window.WebSocket = Interceptor;
-  console.log("[+] Script de interceptação ativado");
+    return ws;
+};
+
+// Força nova previsão (caso queira simular manualmente)
+button.addEventListener('click', () => {
+    predictionEl.innerText = '--';
+    confidenceEl.innerText = '--';
+});
+
 })();
+
