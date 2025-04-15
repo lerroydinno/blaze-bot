@@ -60,7 +60,6 @@
   document.body.appendChild(toggleBtn);
 
   let history = [];
-  let redCount = 0, blackCount = 0, whiteCount = 0;
   const markov = {};
   let brain;
 
@@ -122,9 +121,6 @@
         const newHistory = data.map(d => d.color === 1 ? 'red' : d.color === 2 ? 'black' : 'white').reverse();
         if (JSON.stringify(newHistory) !== JSON.stringify(history)) {
           history = newHistory;
-          redCount = history.filter(x => x === 'red').length;
-          blackCount = history.filter(x => x === 'black').length;
-          whiteCount = history.filter(x => x === 'white').length;
           updateMarkov(history);
           trainNeuralNet();
 
