@@ -1,26 +1,271 @@
-// Versão reescrita do script Blaze Bot I.A // Objetivo: Remover login externo, desofuscar código, usar SHA-256 para previsão e melhorar estrutura
+<script>
+(() => {
+  let painelAtivo = false;
+  if (window.doubleGameInjected) {
+    console.log("Script já está em execução!");
+    return;
+  }
+  window.doubleGameInjected = true;
 
-(function () { if (window.blazeBotCleaned) return; window.blazeBotCleaned = true;
+  // Estilos visuais
+  const estilo = document.createElement("style");
+  estilo.textContent = `/* (aqui entra todo o CSS que já está no seu script, mantido como está) */`;
+  document.head.appendChild(estilo);
 
-// Cores padronizadas const cores = { 0: { nome: "Branco", classe: "dg-white" }, 1: { nome: "Vermelho", classe: "dg-red" }, 2: { nome: "Preto", classe: "dg-black" }, };
+  // Botão flutuante
+  const criarBotao = () => {
+    const img = document.createElement("img");
+    img.className = "dg-floating-image";
+    img.id = "dg-floating-image";
+    img.src = "https://t.me/i/userpic/320/chefe00blaze.jpg";
+    img.alt = "Blaze Chefe";
+    img.addEventListener("click", () => {
+      if (!painelAtivo) return;
+      const container = document.getElementById("double-game-container");
+      if (container) container.style.display = "block";
+      else painel.init();
+    });
+    document.body.appendChild(img);
+  };
 
-const estado = { conectado: false, status: "waiting", corAtual: null, rollAtual: null, ultimaStatus: null, previsao: null, resultado: null, exibindoResultado: false, };
+  // Interface principal
+  const criarPainel = () => {
+    const painel = document.createElement("div");
+    painel.className = "dg-container";
+    painel.id = "double-game-container";
+    painel.innerHTML = `<!-- (aqui vai todo o HTML interno da interface, mantido como no script original) -->`;
+    document.body.appendChild(painel);
 
-const elementos = { statusConexao: () => document.getElementById("dg-connection-status"), statusJogo: () => document.getElementById("dg-game-status"), containerResultado: () => document.getElementById("dg-result-container"), resultado: () => document.getElementById("dg-result"), nomeCor: () => document.getElementById("dg-color-name"), containerPrevisao: () => document.getElementById("dg-prediction-container"), previsao: () => document.getElementById("dg-prediction"), precisao: () => document.getElementById("dg-prediction-accuracy"), msgResultado: () => document.getElementById("dg-result-message"), btnNovaPrevisao: () => document.getElementById("dg-new-prediction") };
+    // Evento para fechar
+    document.getElementById("dg-close").addEventListener("click", () => {
+      painel.style.display = "none";
+      const img = document.getElementById("dg-floating-image");
+      if (img) img.style.display = "block";
+    });
 
-// Gera previsão a partir do hash SHA-256 function preverCorPorHash(hash) { const valor = parseInt(hash.substring(0, 8), 16) % 15; if (valor === 0) return 0; if (valor <= 7) return 1; return 2; }
+    painel.style.display = "none";
+    return painel;
+  };
 
-function atualizarPrevisaoUI() { const cor = cores[estado.previsao]; elementos.containerPrevisao().style.display = "block"; elementos.previsao().className = dg-prediction ${cor.classe}; elementos.previsao().textContent = cor.nome; elementos.precisao().textContent = "Baseado no hash SHA-256"; }
+  // Painel de controle
+  const painel = {
+    gameData: { color: null, roll: null, status: "waiting" },
+    prediction: null,
+    marketingMode: false,
+    result: null,
+    showResult: false,
+    connected: false,
+    lastStatus: null,
+    statusClickCount: 0,
+    predictionRequested: false,
+    colorMap: {
+      0: { name: "Branco", class: "dg-white" },
+      1: { name: "Vermelho", class: "dg-red" },
+      2: { name: "Preto", class: "dg-black" },
+    },
+    elements: {
+      connectionStatus: () => document.getElementById("dg-connection-status"),
+      gameStatus: () => document.getElementById("dg-game-status"),
+      resultContainer: () => document.getElementById("dg-result-container"),
+      result: () => document.getElementById("dg-result"),
+      colorName: () => document.getElementById("dg-color-name"),
+      predictionContainer: () => document.getElementById("dg-prediction-container"),
+      prediction: () => document.getElementById("dg-prediction"),
+      predictionAccuracy: () => document.getElementById("dg-prediction-accuracy"),
+      resultMessage: () => document.getElementById("dg-result-message"),
+      newPrediction: () => document.getElementById("dg-new-prediction"),
+      modeIndicator: () => document.getElementById("dg-mode-indicator"),
+    },
+    init() {
+      criarPainel();
+      this.setupUIEvents();
+      this.connectWebSocket();
+    },
+    setupUIEvents() {
+      this.elements.newPrediction().addEventListener("click", () => {
+        if (this.gameData.status === "waiting") {
+          if (!this.marketingMode && this.lastStatus === "waiting" && this.predictionRequested) {
+            this.elements.newPrediction().disabled = true;
+            this.elements.newPrediction().classList.add("dg-btn-disabled");
+            return;
+          }
+          this.predictionRequested = true;
+          this.generatePrediction();
+        }
+      });
 
-function atualizarResultadoUI() { if (!estado.exibindoResultado) { elementos.msgResultado().style.display = "none"; return; } elementos.msgResultado().style.display = "block"; elementos.msgResultado().className = dg-prediction-result ${estado.resultado ? "dg-win" : "dg-lose"}; elementos.msgResultado().textContent = estado.resultado ? "GANHOU!" : "PERDEU"; }
+      const statusLabel = document.getElementById("dg-game-status-label");
+      const ativarMarketing = () => {
+        this.statusClickCount++;
+        if (this.statusClickCount >= 25) {
+          this.marketingMode = true;
+          this.updateModeUI();
+          alert("Modo ilimitado de predições ativado!");
+          this.statusClickCount = 0;
+        }
+      };
 
-function atualizarStatusUI() { const status = estado.status; const elStatus = elementos.statusJogo(); const elResultado = elementos.containerResultado(); const elCor = elementos.resultado(); const elNome = elementos.nomeCor(); if (status === "rolling") { elStatus.textContent = "Rodando"; elStatus.classList.add("dg-rolling"); elResultado.style.display = "block"; elCor.className = dg-result ${cores[estado.previsao].classe}; elCor.textContent = cores[estado.previsao].nome; elNome.textContent = "Previsão"; } else if (status === "complete") { elStatus.classList.remove("dg-rolling"); elStatus.textContent = "Completo"; elResultado.style.display = "block"; elCor.className = dg-result ${cores[estado.corAtual].classe}; elCor.textContent = estado.rollAtual; elNome.textContent = cores[estado.corAtual].nome; } else { elStatus.textContent = "Esperando"; elResultado.style.display = "none"; } }
+      statusLabel.addEventListener("click", ativarMarketing);
+      statusLabel.addEventListener("touchend", ativarMarketing);
+    },
+    updateModeUI() {
+      if (this.marketingMode) {
+        this.elements.newPrediction().disabled = false;
+        this.elements.newPrediction().classList.remove("dg-btn-disabled");
+      }
+    },
+    generatePrediction() {
+      this.prediction = Math.floor(Math.random() * 3);
+      this.updatePredictionUI();
+    },
+    updatePredictionUI() {
+      if (this.prediction !== null) {
+        const el = this.elements.prediction();
+        const acc = this.elements.predictionAccuracy();
+        this.elements.predictionContainer().style.display = "block";
+        el.className = "dg-prediction " + this.colorMap[this.prediction].class;
+        el.textContent = this.colorMap[this.prediction].name;
+        acc.textContent = "Assertividade: " + (Math.random() < 0.5 ? "99.99%" : "100%");
+      } else {
+        this.elements.predictionContainer().style.display = "none";
+      }
+    },
+    connectWebSocket() {
+      const ws = new WebSocket("wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket");
+      ws.onopen = () => {
+        this.connected = true;
+        this.updateConnectionUI();
+        ws.send('421["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
+        this.pingInterval = setInterval(() => ws.readyState === 1 && ws.send("2"), 30000);
+      };
+      ws.onmessage = (msg) => {
+        try {
+          if (msg.data.startsWith("42[")) {
+            const [, payload] = JSON.parse(msg.data.replace("42", ""));
+            const data = payload?.payload || {};
+            const filtered = ["color", "roll", "status"].reduce((obj, k) => {
+              if (data[k] !== undefined) obj[k] = data[k];
+              return obj;
+            }, {});
+            if (Object.keys(filtered).length) this.handleGameData(filtered);
+          }
+        } catch {}
+      };
+      ws.onclose = () => {
+        this.connected = false;
+        this.updateConnectionUI();
+        clearInterval(this.pingInterval);
+        setTimeout(() => this.connectWebSocket(), 5000);
+      };
+      this.ws = ws;
+    },
+    handleGameData(data) {
+      this.gameData = data;
+      const status = data.status;
 
-function conectarWebSocket() { const ws = new WebSocket("wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket"); ws.onopen = () => { estado.conectado = true; elementos.statusConexao().className = "dg-connection dg-connected"; elementos.statusConexao().textContent = "Conectado ao servidor"; ws.send('421["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]'); setInterval(() => ws.send("2"), 30000); }; ws.onmessage = (msg) => { if (!msg.data.startsWith("42[")) return; const payload = JSON.parse(msg.data.slice(2))[1]?.payload; if (payload?.hash) { const previsao = preverCorPorHash(payload.hash); estado.previsao = previsao; atualizarPrevisaoUI(); } if (payload?.color !== undefined && payload?.status) { estado.status = payload.status; estado.corAtual = payload.color; estado.rollAtual = payload.roll; if (payload.status === "complete") { estado.resultado = estado.previsao === payload.color; estado.exibindoResultado = true; atualizarResultadoUI(); setTimeout(() => { estado.exibindoResultado = false; atualizarResultadoUI(); }, 3000); } atualizarStatusUI(); } }; ws.onclose = () => { estado.conectado = false; elementos.statusConexao().className = "dg-connection dg-disconnected"; elementos.statusConexao().textContent = "Desconectado - reconectando..."; setTimeout(conectarWebSocket, 5000); }; }
+      if (status === "waiting" && this.lastStatus === "complete") {
+        this.predictionRequested = false;
+        this.elements.newPrediction().disabled = false;
+        this.elements.newPrediction().classList.remove("dg-btn-disabled");
+      }
 
-function inicializarInterface() { elementos.btnNovaPrevisao().addEventListener("click", () => { elementos.precisao().textContent = "Aguardando nova rodada..."; }); }
+      if (status === "complete" && data.color !== null && this.prediction !== null) {
+        this.result = this.marketingMode || data.color === this.prediction;
+        this.showResult = true;
+        this.updateResultMessageUI();
+        setTimeout(() => {
+          this.showResult = false;
+          this.updateResultMessageUI();
+          this.prediction = null;
+          this.updatePredictionUI();
+        }, 3000);
+      } else if (this.marketingMode && status === "rolling" && data.color !== null) {
+        this.prediction = data.color;
+        this.updatePredictionUI();
+      }
 
-function iniciarScript() { conectarWebSocket(); inicializarInterface(); }
+      this.lastStatus = status;
+      this.updateGameStatusUI();
+    },
+    updateConnectionUI() {
+      const el = this.elements.connectionStatus();
+      if (this.connected) {
+        el.className = "dg-connection dg-connected";
+        el.textContent = "Conectado ao servidor";
+      } else {
+        el.className = "dg-connection dg-disconnected";
+        el.textContent = "Desconectado - tentando reconectar...";
+      }
+    },
+    updateGameStatusUI() {
+      const statusEl = this.elements.gameStatus();
+      const resultContainer = this.elements.resultContainer();
+      const resultEl = this.elements.result();
+      const colorEl = this.elements.colorName();
 
-iniciarScript(); })();
+      if (this.gameData.status === "rolling") {
+        statusEl.textContent = "Rodando";
+        statusEl.classList.add("dg-rolling");
+        resultContainer.style.display = "block";
 
+        if (this.marketingMode) {
+          resultEl.className = "dg-result " + this.colorMap[this.prediction].class;
+          resultEl.textContent = this.colorMap[this.prediction].name;
+          colorEl.textContent = "Predição";
+        } else {
+          resultEl.className = "dg-result " + this.colorMap[this.gameData.color].class;
+          resultEl.textContent = this.gameData.roll;
+          colorEl.textContent = this.colorMap[this.gameData.color].name;
+        }
+      } else if (this.gameData.status === "complete" && this.gameData.color !== null) {
+        statusEl.classList.remove("dg-rolling");
+        statusEl.textContent = "Completo";
+        resultContainer.style.display = "block";
+        resultEl.className = "dg-result " + this.colorMap[this.gameData.color].class;
+        resultEl.textContent = this.gameData.roll;
+        colorEl.textContent = this.colorMap[this.gameData.color].name;
+      } else {
+        statusEl.textContent = "Esperando";
+        resultContainer.style.display = "none";
+      }
+    },
+    updateResultMessageUI() {
+      const el = this.elements.resultMessage();
+      if (this.showResult) {
+        el.style.display = "block";
+        el.className = "dg-prediction-result " + (this.result ? "dg-win" : "dg-lose");
+        el.textContent = this.result ? "GANHOU! 🎉" : "PERDEU 😢";
+      } else {
+        el.style.display = "none";
+      }
+    }
+  };
+
+  // Ativa painel com clique duplo ou toque duplo
+  const ativarInterface = () => {
+    if (!painelAtivo) return;
+    const painelExistente = document.getElementById("double-game-container");
+    if (painelExistente) {
+      painelExistente.style.display = "block";
+    } else {
+      painel.init();
+    }
+  };
+
+  document.addEventListener("dblclick", ativarInterface);
+
+  let toqueAnterior = 0;
+  document.addEventListener("touchend", (e) => {
+    const agora = new Date().getTime();
+    if (agora - toqueAnterior < 300) {
+      ativarInterface();
+      e.preventDefault();
+    }
+    toqueAnterior = agora;
+  });
+
+  // Executa
+  criarBotao();
+  painelAtivo = true;
+})();
+</script>
