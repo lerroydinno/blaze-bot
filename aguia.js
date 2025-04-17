@@ -1,326 +1,108 @@
-// ==UserScript==
-// @name         Blaze Previsor Avançado com Estilo
-// @namespace    http://tampermonkey.net/
-// @version      2.1
-// @description  Previsor com IA, SHA-256 aprimorado e visual melhorado
-// @author       Lerroy
-// @match        *://blaze.com/*
-// @grant        none
-// ==/UserScript==
+(async () => {
+  if (window.doubleGameInjected) {
+    console.log("Script já em execução!");
+    return;
+  }
+  window.doubleGameInjected = true;
 
-(function () {
-  const imageURL = 'https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg';
-
-  const menu = document.createElement('div');
-  menu.id = 'blaze-menu';
-  document.body.appendChild(menu);
-
-  const style = document.createElement('style');
+  const style = document.createElement("style");
   style.textContent = `
-#blaze-menu {
-  position: fixed;
-  top: 100px;
-  right: 20px;
-  width: 220px;
-  padding: 10px;
-  background: rgba(0, 0, 0, 0.7) url('${imageURL}') no-repeat center/cover;
-  border: 2px solid;
-  border-image: linear-gradient(45deg, #00f, #0ff) 1;
-  animation: glow 1s infinite alternate;
-  border-radius: 10px;
-  color: white;
-  font-family: sans-serif;
-  z-index: 9999;
-  cursor: move;
-  box-sizing: border-box;
-}
-@keyframes glow {
-  from { box-shadow: 0 0 5px #00f; }
-  to { box-shadow: 0 0 15px #00f; }
-}
-.blaze-circle {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  margin: 10px auto;
-  font-size: 18px;
-  font-weight: bold;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-#blaze-prediction-result {
-  text-align: center;
-  font-size: 14px;
-  margin-top: 5px;
-}
-#blaze-min-btn {
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  width: 20px;
-  height: 20px;
-  font-size: 12px;
-  color: white;
-  background: none;
-  border: 1px solid white;
-  border-radius: 50%;
-  cursor: pointer;
-}
-#blaze-minimized {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  width: 60px;
-  height: 60px;
-  background: url('${imageURL}') no-repeat center/cover;
-  border-radius: 50%;
-  border: 2px solid #00f;
-  box-shadow: 0 0 10px #00f;
-  z-index: 9999;
-  display: none;
-  cursor: pointer;
-}
-#blaze-csv {
-  width: 100%;
-  box-sizing: border-box;
-  margin-top: 10px;
-}
-`;
+    .dg-container { position: fixed; top: 20px; right: 20px; width: 320px; background-color: #1f2937; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.5); font-family: Arial,sans-serif; z-index: 999999; max-height: 90vh; overflow-y: auto; color: #f3f4f6; }
+    .dg-header { background-color: #111827; color: #f3f4f6; padding: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .dg-header h1 { margin: 0; font-size: 16px; flex: 1; text-align: center; }
+    .dg-close-btn, .dg-drag-handle { background: none; border: none; color: #f3f4f6; cursor: pointer; font-size: 16px; width: 30px; text-align: center; }
+    .dg-content { padding: 15px; background-image: url('https://t.me/i/userpic/320/chefe00blaze.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat; position: relative; }
+    .dg-content::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(31, 41, 55, 0.85); z-index: -1; }
+    .dg-section { margin-bottom: 15px; background-color: #111827c9; border-radius: 6px; padding: 10px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); position: relative; z-index: 1; }
+    .dg-section-title { font-weight: bold; margin-bottom: 10px; font-size: 14px; }
+    .dg-btn { padding: 6px 10px; border-radius: 4px; border: none; cursor: pointer; font-size: 12px; color: #f3f4f6; background-color: #3b82f6; width: 100%; margin-top: 10px; }
+    .dg-result { width: 40px; height: 40px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; margin: 0 auto; border: 2px solid; }
+    .dg-white { background-color: #f3f4f6; color: #1f2937; border-color: #d1d5db; }
+    .dg-red { background-color: #dc2626; color: #f3f4f6; border-color: #b91c1c; }
+    .dg-black { background-color: #000; color: #f3f4f6; border-color: #4b5563; }
+    .dg-floating-image { position: fixed; bottom: 20px; right: 20px; width: 80px; height: 80px; border-radius: 50%; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.3); z-index: 999998; transition: transform 0.2s; border: 3px solid #3b82f6; }
+    .dg-floating-image:hover { transform: scale(1.05); }
+  `;
   document.head.appendChild(style);
 
-  menu.innerHTML = `
-    <button id="blaze-min-btn">–</button>
-    <div id="blaze-result" class="blaze-circle" style="background: gray;">?</div>
-    <div id="blaze-prediction" class="blaze-circle" style="background: transparent; display: none;"></div>
-    <div id="blaze-prediction-result">Aguardando...</div>
-    <button id="blaze-generate" style="margin: 10px auto; display: block;">Gerar Previsão</button>
-    <input id="blaze-csv" type="file" accept=".csv">
-    <select id="blaze-mode" style="width: 100%; margin-top: 10px;">
-      <option value="sequencia">Sequência</option>
-      <option value="ia">IA</option>
-      <option value="sha">SHA-256</option>
-      <option value="todos" selected>Todos</option>
-    </select>
+  const panel = document.createElement("div");
+  panel.className = "dg-container";
+  panel.id = "double-game-panel";
+  panel.style.display = "none";
+  panel.innerHTML = `
+    <div class="dg-header">
+      <div class="dg-drag-handle">⋮⋮</div>
+      <h1>Blaze Bot I.A</h1>
+      <button class="dg-close-btn" id="dg-close">×</button>
+    </div>
+    <div class="dg-content">
+      <div class="dg-section">
+        <div class="dg-section-title">Previsão da Próxima Cor</div>
+        <div class="dg-result" id="prediction">?</div>
+        <button class="dg-btn" id="generate-prediction">Gerar Previsão</button>
+      </div>
+    </div>
   `;
+  document.body.appendChild(panel);
 
-  const minimized = document.createElement('div');
-  minimized.id = 'blaze-minimized';
-  document.body.appendChild(minimized);
-
-  document.getElementById('blaze-min-btn').onclick = () => {
-    menu.style.display = 'none';
-    minimized.style.display = 'block';
-  };
-  minimized.onclick = () => {
-    menu.style.display = 'block';
-    minimized.style.display = 'none';
+  document.getElementById("dg-close").onclick = () => {
+    panel.style.display = "none";
+    document.getElementById("dg-float-img").style.display = "block";
   };
 
-  let isDragging = false, offsetX, offsetY;
-  menu.onmousedown = (e) => {
-    isDragging = true;
-    offsetX = e.clientX - menu.offsetLeft;
-    offsetY = e.clientY - menu.offsetTop;
+  const img = document.createElement("img");
+  img.src = "https://t.me/i/userpic/320/chefe00blaze.jpg";
+  img.className = "dg-floating-image";
+  img.id = "dg-float-img";
+  img.onclick = () => {
+    panel.style.display = "block";
+    img.style.display = "none";
   };
-  document.onmouseup = () => isDragging = false;
-  document.onmousemove = (e) => {
-    if (isDragging) {
-      menu.style.left = e.clientX - offsetX + 'px';
-      menu.style.top = e.clientY - offsetY + 'px';
-      menu.style.right = 'auto';
-    }
-  };
+  document.body.appendChild(img);
 
-  const emitter = new (function () {
-    this.events = {};
-    this.on = (e, l) => (this.events[e] = (this.events[e] || []).concat(l));
-    this.emit = (e, ...a) => (this.events[e] || []).forEach(f => f(...a));
-  })();
-
-  const ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
-  const rounds = [];
-  const history = JSON.parse(localStorage.getItem('history') || '[]');
-  let lastPrediction = null;
-  let predictionMode = 'todos';
-
-  ws.onopen = () => {
-    ws.send('420["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
-  };
-
-  ws.onmessage = (event) => {
-    let data = event.data.toString();
-    try {
-      data = data.replace(/^\d+/, '');
-      if (!data) return;
-      data = JSON.parse(data)[1];
-      if (!data) return;
-      const { id, payload } = data;
-      if (id !== 'double.tick') return;
-
-      const { id: idRound, status, color, roll, seed } = payload;
-      const colors = ['white', 'red', 'black'];
-      const dataParsed = {
-        id: idRound,
-        status,
-        color: colors[color] || color,
-        roll,
-        seed: seed || null,
-        minute: new Date().getMinutes()
-      };
-
-      if (status === 'waiting' && !rounds.includes(idRound)) {
-        emitter.emit('newRoll', dataParsed);
-        rounds.push(idRound);
-      }
-
-      if (status === 'complete' && rounds.includes(idRound)) {
-        rounds.splice(rounds.indexOf(idRound), 1);
-        history.push(dataParsed);
-        localStorage.setItem('history', JSON.stringify(history));
-        emitter.emit('rollComplete', dataParsed);
-        ws.send('2');
-      }
-    } catch (err) {
-      console.log('Erro websocket:', err);
-    }
-  };
-
-  function setPredictionDisplay(prediction) {
-    const predCircle = document.getElementById('blaze-prediction');
-    const resultBox = document.getElementById('blaze-prediction-result');
-    const colorMap = { white: '#fff', red: 'red', black: 'black' };
-    predCircle.style.background = colorMap[prediction] || 'transparent';
-    predCircle.style.display = 'flex';
-    resultBox.innerHTML = `Previsão: ${prediction.toUpperCase()}`;
-    lastPrediction = prediction;
-  }
-
-  function showResult(data) {
-    const res = document.getElementById('blaze-result');
-    const colorMap = { white: '#fff', red: 'red', black: 'black' };
-    res.style.background = colorMap[data.color];
-    res.textContent = data.roll;
-
-    if (lastPrediction) {
-      const win = lastPrediction === data.color;
-      const resultBox = document.getElementById('blaze-prediction-result');
-      resultBox.innerHTML += win ? ' 🎉 Ganhou!' : ' 😢 Perdeu!';
-      lastPrediction = null;
-    }
-  }
-
-  async function generatePrediction() {
-    if (history.length < 10) return { prediction: false };
-    if (predictionMode === 'sequencia') return predictBySequence();
-    if (predictionMode === 'sha') return predictBySHAAdvanced();
-    if (predictionMode === 'ia') return predictByIA();
-    return combineAllPredictions();
-  }
-
-  document.getElementById('blaze-generate').onclick = async () => {
-    const result = await generatePrediction();
-    if (result?.prediction) setPredictionDisplay(result.prediction);
-  };
-
-  document.getElementById('blaze-mode').onchange = (e) => {
-    predictionMode = e.target.value;
-  };
-
-  emitter.on('rollComplete', showResult);
-
-  document.getElementById('blaze-csv').addEventListener('change', function (e) {
-    const file = e.target.files[0];
-    const reader = new FileReader();
-    reader.onload = function (ev) {
-      const rows = ev.target.result.trim().split('\n').map(r => r.split(','));
-      const colorIndex = 1;
-      rows.forEach((row, i) => {
-        if (i === 0) return;
-        const color = row[colorIndex]?.toLowerCase();
-        if (['white', 'red', 'black'].includes(color)) {
-          history.push({ color });
-        }
-      });
-      localStorage.setItem('history', JSON.stringify(history));
+  // Drag funcional
+  const dragHandle = panel.querySelector(".dg-drag-handle");
+  let offsetX = 0, offsetY = 0;
+  dragHandle.onmousedown = function (e) {
+    e.preventDefault();
+    offsetX = e.clientX - panel.offsetLeft;
+    offsetY = e.clientY - panel.offsetTop;
+    document.onmousemove = function (e) {
+      panel.style.left = e.clientX - offsetX + "px";
+      panel.style.top = e.clientY - offsetY + "px";
     };
-    reader.readAsText(file);
-  });
+    document.onmouseup = () => (document.onmousemove = document.onmouseup = null);
+  };
 
-  function predictBySequence() {
-    const lastSeq = history.slice(-4).map(h => h.color).join(',');
-    const nextColors = {};
-    for (let i = 0; i < history.length - 4; i++) {
-      const seq = history.slice(i, i + 4).map(h => h.color).join(',');
-      if (seq === lastSeq) {
-        const next = history[i + 4]?.color;
-        if (next) nextColors[next] = (nextColors[next] || 0) + 1;
-      }
+  function getColorByHash(hash) {
+    const colorValue = parseInt(hash.substring(0, 8), 16) % 15;
+    if (colorValue === 0) return { name: "Branco", class: "dg-white" };
+    if (colorValue >= 1 && colorValue <= 7) return { name: "Vermelho", class: "dg-red" };
+    return { name: "Preto", class: "dg-black" };
+  }
+
+  async function getLatestHash() {
+    try {
+      const res = await fetch("https://blaze.com/api/roulette_games/recent");
+      const data = await res.json();
+      return data?.[0]?.hash || null;
+    } catch (err) {
+      console.error("Erro ao obter hash:", err);
+      return null;
     }
-    if (!Object.keys(nextColors).length) return { prediction: false };
-    const prediction = Object.entries(nextColors).sort((a, b) => b[1] - a[1])[0][0];
-    return { prediction };
   }
 
-  function predictByIA() {
-    const scores = { white: 0, red: 0, black: 0 };
-    history.forEach((h, i) => {
-      if (i < 4) return;
-      const prev = history[i - 1].color;
-      if (prev === 'red') scores['black']++;
-      if (prev === 'black') scores['red']++;
-      if (prev === 'white') scores['white']++;
-    });
-    const prediction = Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0];
-    return { prediction };
+  async function predictColor() {
+    const predictionEl = document.getElementById("prediction");
+    predictionEl.textContent = "?";
+    predictionEl.className = "dg-result";
+    const hash = await getLatestHash();
+    if (!hash) return (predictionEl.textContent = "Erro");
+
+    const result = getColorByHash(hash);
+    predictionEl.textContent = result.name;
+    predictionEl.classList.add(result.class);
   }
 
-  async function predictBySHAAdvanced() {
-    if (history.length < 11) return { prediction: false };
-    const crypto = window.crypto || window.msCrypto;
-    const recentSequence = history.slice(-10).map(h => h.color).join(',');
-
-    const hashes = await Promise.all(history.slice(0, -10).map(async (_, i) => {
-      const seq = history.slice(i, i + 10).map(h => h.color).join(',');
-      const buffer = new TextEncoder().encode(seq);
-      const digest = await crypto.subtle.digest('SHA-256', buffer);
-      const hex = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
-      return { hash: hex, next: history[i + 10]?.color };
-    }));
-
-    const buffer = new TextEncoder().encode(recentSequence);
-    const recentHashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-    const recentHex = [...new Uint8Array(recentHashBuffer)].map(b => b.toString(16).padStart(2, '0')).join('');
-
-    const similar = hashes.filter(h => h.hash.substring(0, 6) === recentHex.substring(0, 6));
-    if (!similar.length) return { prediction: false };
-
-    const count = {};
-    for (const s of similar) {
-      if (!s.next) continue;
-      count[s.next] = (count[s.next] || 0) + 1;
-    }
-
-    const prediction = Object.entries(count).sort((a, b) => b[1] - a[1])[0][0];
-    return { prediction };
-  }
-
-  async function combineAllPredictions() {
-    const res1 = predictBySequence();
-    const res2 = await predictBySHAAdvanced();
-    const res3 = predictByIA();
-    const votes = [res1.prediction, res2.prediction, res3.prediction];
-    const tally = votes.reduce((acc, v) => {
-      acc[v] = (acc[v] || 0) + 1;
-      return acc;
-    }, {});
-    const prediction = Object.entries(tally).sort((a, b) => b[1] - a[1])[0][0];
-    return { prediction };
-  }
-
-  setInterval(async () => {
-    if (history.length < 10) return;
-    const result = await generatePrediction();
-    if (result?.prediction) setPredictionDisplay(result.prediction);
-  }, 7000);
+  document.getElementById("generate-prediction").onclick = predictColor;
 })();
