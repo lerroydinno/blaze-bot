@@ -1,271 +1,95 @@
-<script>
-(() => {
-  let painelAtivo = false;
-  if (window.doubleGameInjected) {
-    console.log("Script já está em execução!");
-    return;
+// ==UserScript== // @name         Blaze Double - Bot Previsor Real // @namespace    https://t.me/wallan00chefe // @version      1.0 // @description  Previsão real para o jogo Double da Blaze usando WebSocket + API + algoritmos de análise // @author       @wallan00chefe // @match        ://blaze.com/ // @grant        none // ==/UserScript==
+
+(function () { const wsUrl = "wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket"; const apiUrl = "https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent";
+
+let ws; let history = []; let connected = false; let prediction = null; let lastHash = "";
+
+// Painel visual const panel = document.createElement("div"); panel.style = "position:fixed;bottom:20px;right:20px;width:300px;background:#111827;color:#10b981;padding:15px;border-radius:10px;z-index:999999;font-family:monospace;box-shadow:0 0 15px #10b981"; panel.innerHTML = <h3 style="margin:0 0 10px;text-align:center">BLAZE BOT PREVISOR</h3> <p id="prediction" style="font-size:16px;text-align:center">Previsão: <b>--</b></p> <p id="confidence" style="font-size:14px;text-align:center">Confiança: <b>--</b></p> <button id="manualPredict" style="margin-top:10px;width:100%;padding:8px;background:#10b981;color:#fff;border:none;border-radius:5px;cursor:pointer">Gerar Previsão Manual</button> <div id="history" style="margin-top:10px;max-height:200px;overflow:auto;font-size:12px"></div>; document.body.appendChild(panel);
+
+document.getElementById("manualPredict").onclick = () => { gerarPrevisao(); };
+
+function conectarWebSocket() { ws = new WebSocket(wsUrl);
+
+ws.onopen = () => {
+  connected = true;
+  console.log("WebSocket conectado");
+  ws.send("421[\"cmd\",{\"id\":\"subscribe\",\"payload\":{\"room\":\"double_room_1\"}}]");
+};
+
+ws.onmessage = (event) => {
+  const data = event.data;
+  if (data.startsWith("42[")) {
+    try {
+      const json = JSON.parse(data.substring(2));
+      const payload = json[1]?.payload;
+      if (payload?.color !== undefined && payload.status === "complete") {
+        const resultado = {
+          color: payload.color,
+          roll: payload.roll,
+          hash: payload.roll_hash,
+          time: new Date().toLocaleTimeString()
+        };
+        history.unshift(resultado);
+        if (history.length > 100) history.pop();
+        atualizarHistorico();
+        gerarPrevisao();
+      }
+    } catch (e) { }
   }
-  window.doubleGameInjected = true;
+};
 
-  // Estilos visuais
-  const estilo = document.createElement("style");
-  estilo.textContent = `/* (aqui entra todo o CSS que já está no seu script, mantido como está) */`;
-  document.head.appendChild(estilo);
+ws.onclose = () => {
+  connected = false;
+  console.warn("WebSocket desconectado. Reconectando...");
+  setTimeout(() => conectarWebSocket(), 3000);
+};
 
-  // Botão flutuante
-  const criarBotao = () => {
-    const img = document.createElement("img");
-    img.className = "dg-floating-image";
-    img.id = "dg-floating-image";
-    img.src = "https://t.me/i/userpic/320/chefe00blaze.jpg";
-    img.alt = "Blaze Chefe";
-    img.addEventListener("click", () => {
-      if (!painelAtivo) return;
-      const container = document.getElementById("double-game-container");
-      if (container) container.style.display = "block";
-      else painel.init();
-    });
-    document.body.appendChild(img);
-  };
+}
 
-  // Interface principal
-  const criarPainel = () => {
-    const painel = document.createElement("div");
-    painel.className = "dg-container";
-    painel.id = "double-game-container";
-    painel.innerHTML = `<!-- (aqui vai todo o HTML interno da interface, mantido como no script original) -->`;
-    document.body.appendChild(painel);
+function atualizarHistorico() { const container = document.getElementById("history"); container.innerHTML = history .slice(0, 10) .map( (item, i) => #${i + 1} - <b>${corTexto(item.color)}</b> - ${item.time} ) .join("<br>"); }
 
-    // Evento para fechar
-    document.getElementById("dg-close").addEventListener("click", () => {
-      painel.style.display = "none";
-      const img = document.getElementById("dg-floating-image");
-      if (img) img.style.display = "block";
-    });
+function corTexto(cor) { if (cor === 0) return "Branco"; if (cor === 1) return "Vermelho"; if (cor === 2) return "Preto"; return "?"; }
 
-    painel.style.display = "none";
-    return painel;
-  };
+function gerarPrevisao() { if (history.length < 10) return;
 
-  // Painel de controle
-  const painel = {
-    gameData: { color: null, roll: null, status: "waiting" },
-    prediction: null,
-    marketingMode: false,
-    result: null,
-    showResult: false,
-    connected: false,
-    lastStatus: null,
-    statusClickCount: 0,
-    predictionRequested: false,
-    colorMap: {
-      0: { name: "Branco", class: "dg-white" },
-      1: { name: "Vermelho", class: "dg-red" },
-      2: { name: "Preto", class: "dg-black" },
-    },
-    elements: {
-      connectionStatus: () => document.getElementById("dg-connection-status"),
-      gameStatus: () => document.getElementById("dg-game-status"),
-      resultContainer: () => document.getElementById("dg-result-container"),
-      result: () => document.getElementById("dg-result"),
-      colorName: () => document.getElementById("dg-color-name"),
-      predictionContainer: () => document.getElementById("dg-prediction-container"),
-      prediction: () => document.getElementById("dg-prediction"),
-      predictionAccuracy: () => document.getElementById("dg-prediction-accuracy"),
-      resultMessage: () => document.getElementById("dg-result-message"),
-      newPrediction: () => document.getElementById("dg-new-prediction"),
-      modeIndicator: () => document.getElementById("dg-mode-indicator"),
-    },
-    init() {
-      criarPainel();
-      this.setupUIEvents();
-      this.connectWebSocket();
-    },
-    setupUIEvents() {
-      this.elements.newPrediction().addEventListener("click", () => {
-        if (this.gameData.status === "waiting") {
-          if (!this.marketingMode && this.lastStatus === "waiting" && this.predictionRequested) {
-            this.elements.newPrediction().disabled = true;
-            this.elements.newPrediction().classList.add("dg-btn-disabled");
-            return;
-          }
-          this.predictionRequested = true;
-          this.generatePrediction();
-        }
-      });
+const ultima = history[0];
+lastHash = ultima.hash || "";
 
-      const statusLabel = document.getElementById("dg-game-status-label");
-      const ativarMarketing = () => {
-        this.statusClickCount++;
-        if (this.statusClickCount >= 25) {
-          this.marketingMode = true;
-          this.updateModeUI();
-          alert("Modo ilimitado de predições ativado!");
-          this.statusClickCount = 0;
-        }
-      };
+// --- Análises ---
+const padraoZebra = detectarZebra();
+const padraoReverso = detectarReverso();
+const intervaloBranco = preverPorIntervalo();
+const prefixoHash = verificarHashPrefix(lastHash);
+const horario = analisarHorario();
 
-      statusLabel.addEventListener("click", ativarMarketing);
-      statusLabel.addEventListener("touchend", ativarMarketing);
-    },
-    updateModeUI() {
-      if (this.marketingMode) {
-        this.elements.newPrediction().disabled = false;
-        this.elements.newPrediction().classList.remove("dg-btn-disabled");
-      }
-    },
-    generatePrediction() {
-      this.prediction = Math.floor(Math.random() * 3);
-      this.updatePredictionUI();
-    },
-    updatePredictionUI() {
-      if (this.prediction !== null) {
-        const el = this.elements.prediction();
-        const acc = this.elements.predictionAccuracy();
-        this.elements.predictionContainer().style.display = "block";
-        el.className = "dg-prediction " + this.colorMap[this.prediction].class;
-        el.textContent = this.colorMap[this.prediction].name;
-        acc.textContent = "Assertividade: " + (Math.random() < 0.5 ? "99.99%" : "100%");
-      } else {
-        this.elements.predictionContainer().style.display = "none";
-      }
-    },
-    connectWebSocket() {
-      const ws = new WebSocket("wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket");
-      ws.onopen = () => {
-        this.connected = true;
-        this.updateConnectionUI();
-        ws.send('421["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
-        this.pingInterval = setInterval(() => ws.readyState === 1 && ws.send("2"), 30000);
-      };
-      ws.onmessage = (msg) => {
-        try {
-          if (msg.data.startsWith("42[")) {
-            const [, payload] = JSON.parse(msg.data.replace("42", ""));
-            const data = payload?.payload || {};
-            const filtered = ["color", "roll", "status"].reduce((obj, k) => {
-              if (data[k] !== undefined) obj[k] = data[k];
-              return obj;
-            }, {});
-            if (Object.keys(filtered).length) this.handleGameData(filtered);
-          }
-        } catch {}
-      };
-      ws.onclose = () => {
-        this.connected = false;
-        this.updateConnectionUI();
-        clearInterval(this.pingInterval);
-        setTimeout(() => this.connectWebSocket(), 5000);
-      };
-      this.ws = ws;
-    },
-    handleGameData(data) {
-      this.gameData = data;
-      const status = data.status;
+// --- Sistema de pontos ---
+let score = 0;
+if (padraoZebra) score += 1.5;
+if (padraoReverso) score += 1.5;
+if (intervaloBranco) score += 2;
+if (prefixoHash) score += 2.5;
+if (horario) score += 1;
 
-      if (status === "waiting" && this.lastStatus === "complete") {
-        this.predictionRequested = false;
-        this.elements.newPrediction().disabled = false;
-        this.elements.newPrediction().classList.remove("dg-btn-disabled");
-      }
+let corPrevista = score >= 5 ? 0 : score >= 3 ? 1 : 2;
+let confianca = score >= 5 ? "Alta" : score >= 3 ? "Média" : "Baixa";
 
-      if (status === "complete" && data.color !== null && this.prediction !== null) {
-        this.result = this.marketingMode || data.color === this.prediction;
-        this.showResult = true;
-        this.updateResultMessageUI();
-        setTimeout(() => {
-          this.showResult = false;
-          this.updateResultMessageUI();
-          this.prediction = null;
-          this.updatePredictionUI();
-        }, 3000);
-      } else if (this.marketingMode && status === "rolling" && data.color !== null) {
-        this.prediction = data.color;
-        this.updatePredictionUI();
-      }
+prediction = corPrevista;
+document.getElementById("prediction").innerHTML = `Previsão: <b>${corTexto(prediction)}</b>`;
+document.getElementById("confidence").innerHTML = `Confiança: <b>${confianca}</b>`;
 
-      this.lastStatus = status;
-      this.updateGameStatusUI();
-    },
-    updateConnectionUI() {
-      const el = this.elements.connectionStatus();
-      if (this.connected) {
-        el.className = "dg-connection dg-connected";
-        el.textContent = "Conectado ao servidor";
-      } else {
-        el.className = "dg-connection dg-disconnected";
-        el.textContent = "Desconectado - tentando reconectar...";
-      }
-    },
-    updateGameStatusUI() {
-      const statusEl = this.elements.gameStatus();
-      const resultContainer = this.elements.resultContainer();
-      const resultEl = this.elements.result();
-      const colorEl = this.elements.colorName();
+}
 
-      if (this.gameData.status === "rolling") {
-        statusEl.textContent = "Rodando";
-        statusEl.classList.add("dg-rolling");
-        resultContainer.style.display = "block";
+function detectarZebra() { const ultimos = history.slice(0, 6).map(h => h.color); const padrao = ultimos.every((v, i, arr) => i === 0 || v !== arr[i - 1]); return padrao; }
 
-        if (this.marketingMode) {
-          resultEl.className = "dg-result " + this.colorMap[this.prediction].class;
-          resultEl.textContent = this.colorMap[this.prediction].name;
-          colorEl.textContent = "Predição";
-        } else {
-          resultEl.className = "dg-result " + this.colorMap[this.gameData.color].class;
-          resultEl.textContent = this.gameData.roll;
-          colorEl.textContent = this.colorMap[this.gameData.color].name;
-        }
-      } else if (this.gameData.status === "complete" && this.gameData.color !== null) {
-        statusEl.classList.remove("dg-rolling");
-        statusEl.textContent = "Completo";
-        resultContainer.style.display = "block";
-        resultEl.className = "dg-result " + this.colorMap[this.gameData.color].class;
-        resultEl.textContent = this.gameData.roll;
-        colorEl.textContent = this.colorMap[this.gameData.color].name;
-      } else {
-        statusEl.textContent = "Esperando";
-        resultContainer.style.display = "none";
-      }
-    },
-    updateResultMessageUI() {
-      const el = this.elements.resultMessage();
-      if (this.showResult) {
-        el.style.display = "block";
-        el.className = "dg-prediction-result " + (this.result ? "dg-win" : "dg-lose");
-        el.textContent = this.result ? "GANHOU! 🎉" : "PERDEU 😢";
-      } else {
-        el.style.display = "none";
-      }
-    }
-  };
+function detectarReverso() { const ultimos = history.slice(0, 6).map(h => h.color); const metade = Math.floor(ultimos.length / 2); return ( ultimos.slice(0, metade).join() === ultimos.slice(metade).reverse().join() ); }
 
-  // Ativa painel com clique duplo ou toque duplo
-  const ativarInterface = () => {
-    if (!painelAtivo) return;
-    const painelExistente = document.getElementById("double-game-container");
-    if (painelExistente) {
-      painelExistente.style.display = "block";
-    } else {
-      painel.init();
-    }
-  };
+function preverPorIntervalo() { const indices = history .map((h, i) => (h.color === 0 ? i : -1)) .filter((i) => i !== -1); if (indices.length < 2) return false; const intervalos = indices.map((v, i, arr) => (i > 0 ? arr[i - 1] - v : null)).filter(Boolean); const media = intervalos.reduce((a, b) => a + b, 0) / intervalos.length; const atual = indices[0]; return atual >= media - 1; }
 
-  document.addEventListener("dblclick", ativarInterface);
+function verificarHashPrefix(hash) { return hash && hash.startsWith("00"); }
 
-  let toqueAnterior = 0;
-  document.addEventListener("touchend", (e) => {
-    const agora = new Date().getTime();
-    if (agora - toqueAnterior < 300) {
-      ativarInterface();
-      e.preventDefault();
-    }
-    toqueAnterior = agora;
-  });
+function analisarHorario() { const hora = new Date().getHours(); return [0, 1, 2, 12, 18, 23].includes(hora); }
 
-  // Executa
-  criarBotao();
-  painelAtivo = true;
-})();
-</script>
+// Coletar histórico inicial da API async function carregarHistorico() { try { const res = await fetch(apiUrl); const json = await res.json(); history = json.map(item => ({ color: item.color, roll: item.roll, hash: item.roll_hash, time: new Date(item.created_at).toLocaleTimeString() })); atualizarHistorico(); } catch (e) { console.warn("Erro ao carregar histórico inicial", e); } }
+
+// Inicializar tudo carregarHistorico(); conectarWebSocket(); })();
+
