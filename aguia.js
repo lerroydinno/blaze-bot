@@ -1,109 +1,26 @@
-(function () {
-  if (window.blazeBotIA) return;
-  window.blazeBotIA = true;
+// Versão reescrita do script Blaze Bot I.A // Objetivo: Remover login externo, desofuscar código, usar SHA-256 para previsão e melhorar estrutura
 
-  const imgURL = "https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg";
+(function () { if (window.blazeBotCleaned) return; window.blazeBotCleaned = true;
 
-  const createFloatingBtn = () => {
-    const img = document.createElement("img");
-    img.src = imgURL;
-    img.style.cssText = `
-      position:fixed;
-      bottom:20px;
-      right:20px;
-      width:60px;
-      height:60px;
-      border-radius:50%;
-      cursor:pointer;
-      z-index:9999;
-    `;
-    img.id = "botao-flutuante-blaze";
-    img.onclick = () => {
-      const painel = document.getElementById("blaze-bot-panel");
-      if (painel.style.display === "none") {
-        painel.style.display = "block";
-        img.style.display = "none";
-      }
-    };
-    document.body.appendChild(img);
-  };
+// Cores padronizadas const cores = { 0: { nome: "Branco", classe: "dg-white" }, 1: { nome: "Vermelho", classe: "dg-red" }, 2: { nome: "Preto", classe: "dg-black" }, };
 
-  const createPanel = () => {
-    const panel = document.createElement("div");
-    panel.id = "blaze-bot-panel";
-    panel.style.cssText = `
-      position:fixed;
-      top:20px;
-      right:20px;
-      width:300px;
-      background:#111;
-      border:2px solid limegreen;
-      color:#fff;
-      padding:15px;
-      font-family:sans-serif;
-      border-radius:10px;
-      z-index:10000;
-    `;
-    panel.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h2 style="margin:0;font-size:18px;">Blaze Bot I.A</h2>
-        <button id="fecharPainelBlaze" style="background:red;color:white;border:none;border-radius:5px;width:25px;height:25px;cursor:pointer;">×</button>
-      </div>
-      <hr style="border-color:limegreen;margin:10px 0;">
-      <div><strong>Status:</strong> <span id="status-blaze">Conectando...</span></div>
-      <div><strong>Último Resultado:</strong> <span id="resultado-blaze">-</span></div>
-      <div><strong>Previsão:</strong> <span id="previsao-blaze">-</span></div>
-    `;
-    document.body.appendChild(panel);
+const estado = { conectado: false, status: "waiting", corAtual: null, rollAtual: null, ultimaStatus: null, previsao: null, resultado: null, exibindoResultado: false, };
 
-    document.getElementById("fecharPainelBlaze").onclick = () => {
-      panel.style.display = "none";
-      const img = document.getElementById("botao-flutuante-blaze");
-      if (img) img.style.display = "block";
-    };
-  };
+const elementos = { statusConexao: () => document.getElementById("dg-connection-status"), statusJogo: () => document.getElementById("dg-game-status"), containerResultado: () => document.getElementById("dg-result-container"), resultado: () => document.getElementById("dg-result"), nomeCor: () => document.getElementById("dg-color-name"), containerPrevisao: () => document.getElementById("dg-prediction-container"), previsao: () => document.getElementById("dg-prediction"), precisao: () => document.getElementById("dg-prediction-accuracy"), msgResultado: () => document.getElementById("dg-result-message"), btnNovaPrevisao: () => document.getElementById("dg-new-prediction") };
 
-  const calcularCorPorHash = (hash) => {
-    const valor = parseInt(hash.substring(0, 8), 16) % 15;
-    if (valor === 0) return "Branco";
-    if (valor <= 7) return "Vermelho";
-    return "Preto";
-  };
+// Gera previsão a partir do hash SHA-256 function preverCorPorHash(hash) { const valor = parseInt(hash.substring(0, 8), 16) % 15; if (valor === 0) return 0; if (valor <= 7) return 1; return 2; }
 
-  const iniciarWebSocket = () => {
-    const socket = new WebSocket("wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket");
+function atualizarPrevisaoUI() { const cor = cores[estado.previsao]; elementos.containerPrevisao().style.display = "block"; elementos.previsao().className = dg-prediction ${cor.classe}; elementos.previsao().textContent = cor.nome; elementos.precisao().textContent = "Baseado no hash SHA-256"; }
 
-    socket.onopen = () => {
-      document.getElementById("status-blaze").textContent = "Conectado";
-      socket.send('421["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
-      setInterval(() => socket.send("2"), 25000);
-    };
+function atualizarResultadoUI() { if (!estado.exibindoResultado) { elementos.msgResultado().style.display = "none"; return; } elementos.msgResultado().style.display = "block"; elementos.msgResultado().className = dg-prediction-result ${estado.resultado ? "dg-win" : "dg-lose"}; elementos.msgResultado().textContent = estado.resultado ? "GANHOU!" : "PERDEU"; }
 
-    socket.onmessage = ({ data }) => {
-      if (data.startsWith("42[")) {
-        const msg = JSON.parse(data.slice(2));
-        const payload = msg?.[1]?.payload;
-        if (payload?.hash && payload?.color !== undefined && payload?.roll !== undefined) {
-          const cor = ["Branco", "Vermelho", "Preto"][payload.color] || "-";
-          const numero = payload.roll;
-          document.getElementById("resultado-blaze").textContent = `${cor} (${numero})`;
+function atualizarStatusUI() { const status = estado.status; const elStatus = elementos.statusJogo(); const elResultado = elementos.containerResultado(); const elCor = elementos.resultado(); const elNome = elementos.nomeCor(); if (status === "rolling") { elStatus.textContent = "Rodando"; elStatus.classList.add("dg-rolling"); elResultado.style.display = "block"; elCor.className = dg-result ${cores[estado.previsao].classe}; elCor.textContent = cores[estado.previsao].nome; elNome.textContent = "Previsão"; } else if (status === "complete") { elStatus.classList.remove("dg-rolling"); elStatus.textContent = "Completo"; elResultado.style.display = "block"; elCor.className = dg-result ${cores[estado.corAtual].classe}; elCor.textContent = estado.rollAtual; elNome.textContent = cores[estado.corAtual].nome; } else { elStatus.textContent = "Esperando"; elResultado.style.display = "none"; } }
 
-          const previsao = calcularCorPorHash(payload.hash);
-          document.getElementById("previsao-blaze").textContent = previsao;
-        }
-      }
-    };
+function conectarWebSocket() { const ws = new WebSocket("wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket"); ws.onopen = () => { estado.conectado = true; elementos.statusConexao().className = "dg-connection dg-connected"; elementos.statusConexao().textContent = "Conectado ao servidor"; ws.send('421["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]'); setInterval(() => ws.send("2"), 30000); }; ws.onmessage = (msg) => { if (!msg.data.startsWith("42[")) return; const payload = JSON.parse(msg.data.slice(2))[1]?.payload; if (payload?.hash) { const previsao = preverCorPorHash(payload.hash); estado.previsao = previsao; atualizarPrevisaoUI(); } if (payload?.color !== undefined && payload?.status) { estado.status = payload.status; estado.corAtual = payload.color; estado.rollAtual = payload.roll; if (payload.status === "complete") { estado.resultado = estado.previsao === payload.color; estado.exibindoResultado = true; atualizarResultadoUI(); setTimeout(() => { estado.exibindoResultado = false; atualizarResultadoUI(); }, 3000); } atualizarStatusUI(); } }; ws.onclose = () => { estado.conectado = false; elementos.statusConexao().className = "dg-connection dg-disconnected"; elementos.statusConexao().textContent = "Desconectado - reconectando..."; setTimeout(conectarWebSocket, 5000); }; }
 
-    socket.onerror = () => {
-      document.getElementById("status-blaze").textContent = "Erro na conexão";
-    };
+function inicializarInterface() { elementos.btnNovaPrevisao().addEventListener("click", () => { elementos.precisao().textContent = "Aguardando nova rodada..."; }); }
 
-    socket.onclose = () => {
-      document.getElementById("status-blaze").textContent = "Desconectado";
-    };
-  };
+function iniciarScript() { conectarWebSocket(); inicializarInterface(); }
 
-  createFloatingBtn();
-  createPanel();
-  iniciarWebSocket();
-})();
+iniciarScript(); })();
+
