@@ -1,174 +1,326 @@
-(function () {
-  const synapticScript = document.createElement("script");
-  synapticScript.src = "https://cdn.jsdelivr.net/npm/synaptic@1.1.4/dist/synaptic.min.js";
-  document.head.appendChild(synapticScript);
+// ==UserScript==
+// @name         Blaze Previsor Avançado com Estilo
+// @namespace    http://tampermonkey.net/
+// @version      2.1
+// @description  Previsor com IA, SHA-256 aprimorado e visual melhorado
+// @author       Lerroy
+// @match        *://blaze.com/*
+// @grant        none
+// ==/UserScript==
 
-  const style = document.createElement("style");
-  style.innerHTML = `
-    #blazeBotPanel {
-      position: fixed;
-      bottom: 80px;
-      right: 20px;
-      width: 320px;
-      background: black;
-      border: 2px solid lime;
-      border-radius: 15px;
-      padding: 15px;
-      z-index: 9999;
-      font-family: Arial;
-      color: lime;
-    }
-    #blazeBotToggle {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
-      background-image: url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg');
-      background-size: cover;
-      background-position: center;
-      border: 2px solid lime;
-      cursor: pointer;
-      z-index: 9999;
-    }
-    .bot-section { margin: 5px 0; }
-    button, input[type="file"] {
-      width: 100%;
-      margin-top: 5px;
-      padding: 6px;
-      border: none;
-      border-radius: 5px;
-      font-weight: bold;
-    }
-  `;
+(function () {
+  const imageURL = 'https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg';
+
+  const menu = document.createElement('div');
+  menu.id = 'blaze-menu';
+  document.body.appendChild(menu);
+
+  const style = document.createElement('style');
+  style.textContent = `
+#blaze-menu {
+  position: fixed;
+  top: 100px;
+  right: 20px;
+  width: 220px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.7) url('${imageURL}') no-repeat center/cover;
+  border: 2px solid;
+  border-image: linear-gradient(45deg, #00f, #0ff) 1;
+  animation: glow 1s infinite alternate;
+  border-radius: 10px;
+  color: white;
+  font-family: sans-serif;
+  z-index: 9999;
+  cursor: move;
+  box-sizing: border-box;
+}
+@keyframes glow {
+  from { box-shadow: 0 0 5px #00f; }
+  to { box-shadow: 0 0 15px #00f; }
+}
+.blaze-circle {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  margin: 10px auto;
+  font-size: 18px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#blaze-prediction-result {
+  text-align: center;
+  font-size: 14px;
+  margin-top: 5px;
+}
+#blaze-min-btn {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+  color: white;
+  background: none;
+  border: 1px solid white;
+  border-radius: 50%;
+  cursor: pointer;
+}
+#blaze-minimized {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 60px;
+  height: 60px;
+  background: url('${imageURL}') no-repeat center/cover;
+  border-radius: 50%;
+  border: 2px solid #00f;
+  box-shadow: 0 0 10px #00f;
+  z-index: 9999;
+  display: none;
+  cursor: pointer;
+}
+#blaze-csv {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 10px;
+}
+`;
   document.head.appendChild(style);
 
-  const panel = document.createElement("div");
-  panel.id = "blazeBotPanel";
-  panel.innerHTML = `
-    <div><b>Blaze<br>Bot<br>I.A</b></div>
-    <div class="bot-section" id="prediction">🎯 Resultado: --</div>
-    <div class="bot-section" id="hash">Hash: --</div>
-    <div class="bot-section" id="next">🔮 Próxima: --</div>
-    <div class="bot-section" id="confidence">🎯 Confiança: --%</div>
-    <div class="bot-section" id="bet">💰 Apostar: --</div>
-    <input type="file" id="csvImport" />
-    <button onclick="manualPrediction()">⚙️ Gerar previsão manual</button>
-    <button onclick="downloadCSV()">⬇️ Baixar CSV</button>
-    <div class="bot-section" id="historyLog"></div>
+  menu.innerHTML = `
+    <button id="blaze-min-btn">–</button>
+    <div id="blaze-result" class="blaze-circle" style="background: gray;">?</div>
+    <div id="blaze-prediction" class="blaze-circle" style="background: transparent; display: none;"></div>
+    <div id="blaze-prediction-result">Aguardando...</div>
+    <button id="blaze-generate" style="margin: 10px auto; display: block;">Gerar Previsão</button>
+    <input id="blaze-csv" type="file" accept=".csv">
+    <select id="blaze-mode" style="width: 100%; margin-top: 10px;">
+      <option value="sequencia">Sequência</option>
+      <option value="ia">IA</option>
+      <option value="sha">SHA-256</option>
+      <option value="todos" selected>Todos</option>
+    </select>
   `;
-  document.body.appendChild(panel);
 
-  const toggleBtn = document.createElement("div");
-  toggleBtn.id = "blazeBotToggle";
-  toggleBtn.onclick = () => {
-    panel.style.display = panel.style.display === "none" ? "block" : "none";
+  const minimized = document.createElement('div');
+  minimized.id = 'blaze-minimized';
+  document.body.appendChild(minimized);
+
+  document.getElementById('blaze-min-btn').onclick = () => {
+    menu.style.display = 'none';
+    minimized.style.display = 'block';
   };
-  document.body.appendChild(toggleBtn);
+  minimized.onclick = () => {
+    menu.style.display = 'block';
+    minimized.style.display = 'none';
+  };
 
-  let history = [];
-  let brain;
-  const markov = {};
+  let isDragging = false, offsetX, offsetY;
+  menu.onmousedown = (e) => {
+    isDragging = true;
+    offsetX = e.clientX - menu.offsetLeft;
+    offsetY = e.clientY - menu.offsetTop;
+  };
+  document.onmouseup = () => isDragging = false;
+  document.onmousemove = (e) => {
+    if (isDragging) {
+      menu.style.left = e.clientX - offsetX + 'px';
+      menu.style.top = e.clientY - offsetY + 'px';
+      menu.style.right = 'auto';
+    }
+  };
 
-  function trainNeuralNet() {
-    brain = new synaptic.Architect.Perceptron(5, 10, 3);
-    const trainer = new synaptic.Trainer(brain);
-    const trainingSet = history.slice(-200).map((h, i, arr) => {
-      if (i < 5) return null;
-      const input = arr.slice(i - 5, i).map(v => v / 14);
-      const output = [0, 0, 0];
-      output[h === 'red' ? 0 : h === 'black' ? 1 : 2] = 1;
-      return { input, output };
-    }).filter(Boolean);
-    trainer.train(trainingSet, { iterations: 200 });
+  const emitter = new (function () {
+    this.events = {};
+    this.on = (e, l) => (this.events[e] = (this.events[e] || []).concat(l));
+    this.emit = (e, ...a) => (this.events[e] || []).forEach(f => f(...a));
+  })();
+
+  const ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
+  const rounds = [];
+  const history = JSON.parse(localStorage.getItem('history') || '[]');
+  let lastPrediction = null;
+  let predictionMode = 'todos';
+
+  ws.onopen = () => {
+    ws.send('420["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
+  };
+
+  ws.onmessage = (event) => {
+    let data = event.data.toString();
+    try {
+      data = data.replace(/^\d+/, '');
+      if (!data) return;
+      data = JSON.parse(data)[1];
+      if (!data) return;
+      const { id, payload } = data;
+      if (id !== 'double.tick') return;
+
+      const { id: idRound, status, color, roll, seed } = payload;
+      const colors = ['white', 'red', 'black'];
+      const dataParsed = {
+        id: idRound,
+        status,
+        color: colors[color] || color,
+        roll,
+        seed: seed || null,
+        minute: new Date().getMinutes()
+      };
+
+      if (status === 'waiting' && !rounds.includes(idRound)) {
+        emitter.emit('newRoll', dataParsed);
+        rounds.push(idRound);
+      }
+
+      if (status === 'complete' && rounds.includes(idRound)) {
+        rounds.splice(rounds.indexOf(idRound), 1);
+        history.push(dataParsed);
+        localStorage.setItem('history', JSON.stringify(history));
+        emitter.emit('rollComplete', dataParsed);
+        ws.send('2');
+      }
+    } catch (err) {
+      console.log('Erro websocket:', err);
+    }
+  };
+
+  function setPredictionDisplay(prediction) {
+    const predCircle = document.getElementById('blaze-prediction');
+    const resultBox = document.getElementById('blaze-prediction-result');
+    const colorMap = { white: '#fff', red: 'red', black: 'black' };
+    predCircle.style.background = colorMap[prediction] || 'transparent';
+    predCircle.style.display = 'flex';
+    resultBox.innerHTML = `Previsão: ${prediction.toUpperCase()}`;
+    lastPrediction = prediction;
   }
 
-  function predictWithAI() {
-    if (!brain || history.length < 5) return null;
-    const input = history.slice(-5).map(v => v / 14);
-    const output = brain.activate(input);
-    const max = Math.max(...output);
-    const color = ['red', 'black', 'white'][output.indexOf(max)];
-    return { color, confidence: (max * 100).toFixed(1) };
-  }
+  function showResult(data) {
+    const res = document.getElementById('blaze-result');
+    const colorMap = { white: '#fff', red: 'red', black: 'black' };
+    res.style.background = colorMap[data.color];
+    res.textContent = data.roll;
 
-  function updateMarkov(data) {
-    for (let i = 0; i < data.length - 1; i++) {
-      const curr = data[i], next = data[i + 1];
-      if (!markov[curr]) markov[curr] = {};
-      markov[curr][next] = (markov[curr][next] || 0) + 1;
+    if (lastPrediction) {
+      const win = lastPrediction === data.color;
+      const resultBox = document.getElementById('blaze-prediction-result');
+      resultBox.innerHTML += win ? ' 🎉 Ganhou!' : ' 😢 Perdeu!';
+      lastPrediction = null;
     }
   }
 
-  function predict() {
-    if (history.length < 10) return;
-    trainNeuralNet();
-    const ai = predictWithAI();
-    const last = history[history.length - 1];
-    const hash = "hash_placeholder";
-
-    document.getElementById("prediction").innerText = `🎯 Resultado: ${last.toUpperCase()}`;
-    document.getElementById("hash").innerText = `Hash: ${hash}`;
-
-    if (ai && ai.confidence >= 85) {
-      document.getElementById("next").innerText = `🔮 Próxima: ${ai.color.toUpperCase()}`;
-      document.getElementById("confidence").innerText = `🎯 Confiança: ${ai.confidence}%`;
-      document.getElementById("bet").innerText = `💰 Apostar: ${ai.color.toUpperCase()}`;
-    } else {
-      document.getElementById("next").innerText = `🔮 Próxima: --`;
-      document.getElementById("confidence").innerText = `🎯 Confiança: ${ai ? ai.confidence : "--"}%`;
-      document.getElementById("bet").innerText = `💰 Apostar: 0x`;
-    }
+  async function generatePrediction() {
+    if (history.length < 10) return { prediction: false };
+    if (predictionMode === 'sequencia') return predictBySequence();
+    if (predictionMode === 'sha') return predictBySHAAdvanced();
+    if (predictionMode === 'ia') return predictByIA();
+    return combineAllPredictions();
   }
 
-  function fetchResults() {
-    fetch("https://blaze.com/api/roulette_games/recent")
-      .then(res => res.json())
-      .then(data => {
-        const newHistory = data.map(d => d.color === 1 ? 'red' : d.color === 2 ? 'black' : 'white').reverse();
-        if (JSON.stringify(newHistory) !== JSON.stringify(history)) {
-          history = newHistory;
-          updateMarkov(history);
-          predict();
-          updateHistoryLog();
+  document.getElementById('blaze-generate').onclick = async () => {
+    const result = await generatePrediction();
+    if (result?.prediction) setPredictionDisplay(result.prediction);
+  };
+
+  document.getElementById('blaze-mode').onchange = (e) => {
+    predictionMode = e.target.value;
+  };
+
+  emitter.on('rollComplete', showResult);
+
+  document.getElementById('blaze-csv').addEventListener('change', function (e) {
+    const file = e.target.files[0];
+    const reader = new FileReader();
+    reader.onload = function (ev) {
+      const rows = ev.target.result.trim().split('\n').map(r => r.split(','));
+      const colorIndex = 1;
+      rows.forEach((row, i) => {
+        if (i === 0) return;
+        const color = row[colorIndex]?.toLowerCase();
+        if (['white', 'red', 'black'].includes(color)) {
+          history.push({ color });
         }
       });
-  }
-
-  function updateHistoryLog() {
-    const log = history.slice(-10).map((val, idx) => `${val.toUpperCase()} (${idx})`).join("<br>");
-    document.getElementById("historyLog").innerHTML = log;
-  }
-
-  document.getElementById("csvImport").addEventListener("change", function (e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function (event) {
-      const lines = event.target.result.split("\n").map(l => l.trim()).filter(Boolean);
-      const imported = lines.map(line => {
-        const color = line.toLowerCase();
-        return color === 'vermelho' ? 'red' : color === 'preto' ? 'black' : 'white';
-      });
-      history = imported.concat(history).slice(-300);
-      updateMarkov(history);
-      trainNeuralNet();
-      alert("Histórico CSV importado com sucesso!");
+      localStorage.setItem('history', JSON.stringify(history));
     };
     reader.readAsText(file);
   });
 
-  window.manualPrediction = predict;
+  function predictBySequence() {
+    const lastSeq = history.slice(-4).map(h => h.color).join(',');
+    const nextColors = {};
+    for (let i = 0; i < history.length - 4; i++) {
+      const seq = history.slice(i, i + 4).map(h => h.color).join(',');
+      if (seq === lastSeq) {
+        const next = history[i + 4]?.color;
+        if (next) nextColors[next] = (nextColors[next] || 0) + 1;
+      }
+    }
+    if (!Object.keys(nextColors).length) return { prediction: false };
+    const prediction = Object.entries(nextColors).sort((a, b) => b[1] - a[1])[0][0];
+    return { prediction };
+  }
 
-  window.downloadCSV = function () {
-    const csvContent = history.join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "historico.csv";
-    link.click();
-  };
+  function predictByIA() {
+    const scores = { white: 0, red: 0, black: 0 };
+    history.forEach((h, i) => {
+      if (i < 4) return;
+      const prev = history[i - 1].color;
+      if (prev === 'red') scores['black']++;
+      if (prev === 'black') scores['red']++;
+      if (prev === 'white') scores['white']++;
+    });
+    const prediction = Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0];
+    return { prediction };
+  }
 
-  setInterval(fetchResults, 5000);
+  async function predictBySHAAdvanced() {
+    if (history.length < 11) return { prediction: false };
+    const crypto = window.crypto || window.msCrypto;
+    const recentSequence = history.slice(-10).map(h => h.color).join(',');
+
+    const hashes = await Promise.all(history.slice(0, -10).map(async (_, i) => {
+      const seq = history.slice(i, i + 10).map(h => h.color).join(',');
+      const buffer = new TextEncoder().encode(seq);
+      const digest = await crypto.subtle.digest('SHA-256', buffer);
+      const hex = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+      return { hash: hex, next: history[i + 10]?.color };
+    }));
+
+    const buffer = new TextEncoder().encode(recentSequence);
+    const recentHashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const recentHex = [...new Uint8Array(recentHashBuffer)].map(b => b.toString(16).padStart(2, '0')).join('');
+
+    const similar = hashes.filter(h => h.hash.substring(0, 6) === recentHex.substring(0, 6));
+    if (!similar.length) return { prediction: false };
+
+    const count = {};
+    for (const s of similar) {
+      if (!s.next) continue;
+      count[s.next] = (count[s.next] || 0) + 1;
+    }
+
+    const prediction = Object.entries(count).sort((a, b) => b[1] - a[1])[0][0];
+    return { prediction };
+  }
+
+  async function combineAllPredictions() {
+    const res1 = predictBySequence();
+    const res2 = await predictBySHAAdvanced();
+    const res3 = predictByIA();
+    const votes = [res1.prediction, res2.prediction, res3.prediction];
+    const tally = votes.reduce((acc, v) => {
+      acc[v] = (acc[v] || 0) + 1;
+      return acc;
+    }, {});
+    const prediction = Object.entries(tally).sort((a, b) => b[1] - a[1])[0][0];
+    return { prediction };
+  }
+
+  setInterval(async () => {
+    if (history.length < 10) return;
+    const result = await generatePrediction();
+    if (result?.prediction) setPredictionDisplay(result.prediction);
+  }, 7000);
 })();
