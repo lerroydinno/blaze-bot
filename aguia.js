@@ -1,28 +1,20 @@
 (function () {
-  // Estado do painel
   let painelLiberado = false;
-
-  // Evita múltiplas execuções
   if (window.doubleGameInjected) {
     console.log("Script já está em execução!");
     return;
   }
   window.doubleGameInjected = true;
-
-  // Mapeamento das cores
   const cores = {
     0: { nome: "Branco", classe: "dg-white" },
     1: { nome: "Vermelho", classe: "dg-red" },
     2: { nome: "Preto", classe: "dg-black" },
   };
-
   const estadoJogo = {
     cor: null,
     numero: null,
     status: "waiting",
   };
-
-  // Elementos da interface
   const elementos = {
     statusConexao: () => document.getElementById("dg-connection-status"),
     statusJogo: () => document.getElementById("dg-game-status"),
@@ -36,7 +28,6 @@
     botaoPrevisao: () => document.getElementById("dg-new-prediction")
   };
 
-  // Criação do painel flutuante
   function criarPainel() {
     const painel = document.createElement("div");
     painel.className = "dg-container";
@@ -78,7 +69,6 @@
     return painel;
   }
 
-  // WebSocket e previsão de cor com base no hash
   function conectarWebSocket() {
     const socket = new WebSocket("wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket");
     socket.onopen = () => {
@@ -123,26 +113,11 @@
     };
   }
 
-  // CSS injetado dinamicamente
-  const estilo = document.createElement("style");
-  estilo.textContent = `
-    .dg-container { position: fixed; top: 100px; right: 20px; background: #111; border: 1px solid green; color: white; padding: 10px; z-index: 9999; border-radius: 8px; width: 250px; font-family: Arial; }
-    .dg-header { display: flex; justify-content: space-between; align-items: center; font-size: 16px; margin-bottom: 8px; }
-    .dg-close-btn { background: red; border: none; color: white; padding: 5px; cursor: pointer; }
-    .dg-btn { padding: 6px 10px; background: green; border: none; color: white; border-radius: 5px; cursor: pointer; margin-top: 10px; }
-    .dg-prediction { padding: 10px; font-weight: bold; text-align: center; border-radius: 5px; }
-    .dg-red { background: #ff0000; }
-    .dg-black { background: #000000; color: white; }
-    .dg-white { background: #ffffff; color: black; }
-    .dg-floating-image { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; border-radius: 50%; cursor: pointer; z-index: 10000; }
-  `;
-  document.head.appendChild(estilo);
-
-  // Atalho pela imagem
   const imagem = document.createElement("img");
-  imagem.src = "https://t.me/i/userpic/320/chefe00blaze.jpg";
+  imagem.src = "https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg";
   imagem.className = "dg-floating-image";
   imagem.id = "dg-floating-image";
+  imagem.style = "position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;cursor:pointer;z-index:10000;";
   imagem.onclick = () => {
     if (!painelLiberado) return;
     const painel = document.getElementById("double-game-container");
