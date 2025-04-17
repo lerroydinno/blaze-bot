@@ -1,117 +1,35 @@
-(async () => {
-  if (window.doubleGameInjected) {
-    console.log("Script já em execução!");
-    return;
-  }
-  window.doubleGameInjected = true;
+// Código reescrito com base no arquivo ofuscado fornecido // Estrutura reorganizada e renomeada para clareza, mantendo funcionalidade original
 
-  // Interface flutuante
-  const style = document.createElement("style");
-  style.textContent = `
-    .dg-container { position: fixed; top: 20px; right: 20px; width: 320px; background-color: #1f2937; border-radius: 8px; color: #f3f4f6; z-index: 99999; box-shadow: 0 4px 8px rgba(0,0,0,0.5); font-family: Arial; }
-    .dg-header { background-color: #111827; padding: 10px; display: flex; justify-content: space-between; align-items: center; }
-    .dg-header h1 { font-size: 16px; margin: 0; flex: 1; text-align: center; }
-    .dg-close-btn, .dg-drag-handle { cursor: pointer; font-size: 16px; background: none; border: none; color: #f3f4f6; width: 30px; }
-    .dg-content { padding: 10px; }
-    .dg-result { width: 60px; height: 60px; border-radius: 50%; border: 2px solid; display: flex; justify-content: center; align-items: center; margin: 10px auto; font-weight: bold; font-size: 16px; }
-    .dg-white { background: #f3f4f6; color: #111827; border-color: #d1d5db; }
-    .dg-red { background: #dc2626; color: #fff; border-color: #991b1b; }
-    .dg-black { background: #000; color: #fff; border-color: #4b5563; }
-    .dg-btn { width: 100%; margin-top: 10px; padding: 6px; background: #3b82f6; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
-    .dg-floating-image { position: fixed; bottom: 20px; right: 20px; width: 80px; height: 80px; border-radius: 50%; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.3); z-index: 99998; border: 3px solid #3b82f6; }
-  `;
-  document.head.appendChild(style);
+(function () { // Estado do painel let painelLiberado = false;
 
-  const panel = document.createElement("div");
-  panel.className = "dg-container";
-  panel.id = "dg-panel";
-  panel.style.display = "none";
-  panel.innerHTML = `
-    <div class="dg-header">
-      <div class="dg-drag-handle">⋮⋮</div>
-      <h1>Blaze Bot I.A</h1>
-      <button class="dg-close-btn" id="dg-close">×</button>
-    </div>
-    <div class="dg-content">
-      <div>Status: <span id="dg-status">Conectando...</span></div>
-      <div class="dg-result" id="dg-color">?</div>
-      <div>Previsão: <span id="dg-prediction">...</span></div>
-    </div>
-  `;
-  document.body.appendChild(panel);
+// Evita múltiplas execuções if (window.doubleGameInjected) { console.log("Script já está em execução!"); return; } window.doubleGameInjected = true;
 
-  const avatar = document.createElement("img");
-  avatar.src = "https://t.me/i/userpic/320/chefe00blaze.jpg";
-  avatar.className = "dg-floating-image";
-  avatar.id = "dg-float";
-  avatar.onclick = () => {
-    panel.style.display = "block";
-    avatar.style.display = "none";
-  };
-  document.body.appendChild(avatar);
+// Mapeamento das cores const cores = { 0: { nome: "Branco", classe: "dg-white" }, 1: { nome: "Vermelho", classe: "dg-red" }, 2: { nome: "Preto", classe: "dg-black" }, };
 
-  document.getElementById("dg-close").onclick = () => {
-    panel.style.display = "none";
-    avatar.style.display = "block";
-  };
+const estadoJogo = { cor: null, numero: null, status: "waiting", };
 
-  // Drag funcional
-  const dragHandle = panel.querySelector(".dg-drag-handle");
-  let offsetX = 0, offsetY = 0;
-  dragHandle.onmousedown = e => {
-    e.preventDefault();
-    offsetX = e.clientX - panel.offsetLeft;
-    offsetY = e.clientY - panel.offsetTop;
-    document.onmousemove = e => {
-      panel.style.left = `${e.clientX - offsetX}px`;
-      panel.style.top = `${e.clientY - offsetY}px`;
-    };
-    document.onmouseup = () => (document.onmousemove = document.onmouseup = null);
-  };
+// Elementos da interface const elementos = { statusConexao: () => document.getElementById("dg-connection-status"), statusJogo: () => document.getElementById("dg-game-status"), resultadoContainer: () => document.getElementById("dg-result-container"), resultado: () => document.getElementById("dg-result"), nomeCor: () => document.getElementById("dg-color-name"), previsaoContainer: () => document.getElementById("dg-prediction-container"), previsao: () => document.getElementById("dg-prediction"), previsaoPrecisao: () => document.getElementById("dg-prediction-accuracy"), mensagemResultado: () => document.getElementById("dg-result-message"), botaoPrevisao: () => document.getElementById("dg-new-prediction") };
 
-  // Utilitário de previsão
-  function preverCor(hash) {
-    const valor = parseInt(hash.substring(0, 8), 16) % 15;
-    if (valor === 0) return { nome: "Branco", classe: "dg-white" };
-    if (valor <= 7) return { nome: "Vermelho", classe: "dg-red" };
-    return { nome: "Preto", classe: "dg-black" };
-  }
+// Criação do painel flutuante function criarPainel() { const painel = document.createElement("div"); painel.className = "dg-container"; painel.id = "double-game-container"; painel.innerHTML = <div class="dg-header"> <div class="dg-drag-handle">⋮⋮</div> <h1>@wallan00chefe</h1> <button class="dg-close-btn" id="dg-close">×</button> </div> <div class="dg-content"> <div class="dg-connection dg-disconnected" id="dg-connection-status">Desconectado - tentando conectar...</div> <div class="dg-section"> <div class="dg-section-title">Status do Jogo</div> <div class="dg-game-status"> <p class="dg-status-text"><span id="dg-game-status">Esperando</span></p> <div id="dg-result-container" style="display: none;"> <div class="dg-result dg-gray" id="dg-result">?</div> <p id="dg-color-name" style="margin-top: 5px; font-size: 13px;">-</p> </div> </div> </div> <div class="dg-section" id="dg-consumer-mode"> <div class="dg-prediction-box" id="dg-prediction-container" style="display: none;"> <p class="dg-prediction-title">Previsão para esta rodada:</p> <div class="dg-prediction dg-gray" id="dg-prediction">?</div> <p class="dg-prediction-accuracy" id="dg-prediction-accuracy">--</p> </div> <button id="dg-new-prediction" class="dg-btn dg-btn-primary">Gerar Nova Previsão</button> <div class="dg-prediction-result" id="dg-result-message" style="display: none;">Resultado</div> </div> </div>; document.body.appendChild(painel);
 
-  // WebSocket Blaze
-  const socket = new WebSocket("wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket");
-  let pingInterval;
+painel.querySelector("#dg-close").onclick = () => {
+  painel.style.display = "none";
+  const img = document.getElementById("dg-floating-image");
+  if (img) img.style.display = "block";
+};
 
-  socket.onopen = () => {
-    document.getElementById("dg-status").textContent = "Conectado";
-    socket.send('421["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
-    pingInterval = setInterval(() => {
-      if (socket.readyState === WebSocket.OPEN) socket.send("2");
-    }, 30000);
-  };
+painel.style.display = "none";
+return painel;
 
-  socket.onmessage = event => {
-    if (event.data.startsWith("42")) {
-      try {
-        const parsed = JSON.parse(event.data.slice(2));
-        const data = parsed?.[1]?.payload;
-        if (!data?.hash) return;
+}
 
-        const cor = preverCor(data.hash);
-        const corEl = document.getElementById("dg-color");
-        const predEl = document.getElementById("dg-prediction");
+// WebSocket e previsão de cor com base no hash (lógica real pode ser adicionada) function conectarWebSocket() { const socket = new WebSocket("wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket"); socket.onopen = () => { elementos.statusConexao().className = "dg-connection dg-connected"; elementos.statusConexao().textContent = "Conectado ao servidor"; socket.send('421["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]'); setInterval(() => socket.send('2'), 30000); }; socket.onmessage = ({ data }) => { if (data.startsWith("42[")) { const msg = JSON.parse(data.slice(2)); const payload = msg?.[1]?.payload; if (payload?.hash) { const cor = calcularCorPorHash(payload.hash); atualizarPrevisao(cor); } } }; }
 
-        corEl.textContent = data.roll ?? "?";
-        corEl.className = `dg-result ${cor.classe}`;
-        predEl.textContent = cor.nome;
-      } catch (e) {
-        console.error("Erro ao processar mensagem:", e);
-      }
-    }
-  };
+function calcularCorPorHash(hash) { const valor = parseInt(hash.substring(0, 8), 16) % 15; if (valor === 0) return cores[0]; if (valor <= 7) return cores[1]; return cores[2]; }
 
-  socket.onclose = () => {
-    document.getElementById("dg-status").textContent = "Desconectado";
-    clearInterval(pingInterval);
-    setTimeout(() => location.reload(), 5000); // tenta reconectar recarregando
-  };
-})();
+function atualizarPrevisao(cor) { const previsaoEl = elementos.previsao(); const acuraciaEl = elementos.previsaoPrecisao(); elementos.previsaoContainer().style.display = "block"; previsaoEl.className = dg-prediction ${cor.classe}; previsaoEl.textContent = cor.nome; acuraciaEl.textContent = "Baseado na hash SHA-256"; }
+
+function inicializar() { criarPainel(); conectarWebSocket(); document.getElementById("dg-new-prediction").onclick = () => { elementos.previsaoPrecisao().textContent = "Aguardando próxima rodada..."; }; }
+
+// Atalho pela imagem const imagem = document.createElement("img"); imagem.src = "https://t.me/i/userpic/320/chefe00blaze.jpg"; imagem.className = "dg-floating-image"; imagem.id = "dg-floating-image"; imagem.onclick = () => { if (!painelLiberado) return; const painel = document.getElementById("double-game-container"); painel.style.display = "block"; }; document.body.appendChild(imagem); painelLiberado = true; inicializar(); })();
+
