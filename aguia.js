@@ -1,129 +1,109 @@
 (function () {
-  let painelLiberado = false;
-  if (window.doubleGameInjected) {
-    console.log("Script já está em execução!");
-    return;
-  }
-  window.doubleGameInjected = true;
-  const cores = {
-    0: { nome: "Branco", classe: "dg-white" },
-    1: { nome: "Vermelho", classe: "dg-red" },
-    2: { nome: "Preto", classe: "dg-black" },
-  };
-  const estadoJogo = {
-    cor: null,
-    numero: null,
-    status: "waiting",
-  };
-  const elementos = {
-    statusConexao: () => document.getElementById("dg-connection-status"),
-    statusJogo: () => document.getElementById("dg-game-status"),
-    resultadoContainer: () => document.getElementById("dg-result-container"),
-    resultado: () => document.getElementById("dg-result"),
-    nomeCor: () => document.getElementById("dg-color-name"),
-    previsaoContainer: () => document.getElementById("dg-prediction-container"),
-    previsao: () => document.getElementById("dg-prediction"),
-    previsaoPrecisao: () => document.getElementById("dg-prediction-accuracy"),
-    mensagemResultado: () => document.getElementById("dg-result-message"),
-    botaoPrevisao: () => document.getElementById("dg-new-prediction")
+  if (window.blazeBotIA) return;
+  window.blazeBotIA = true;
+
+  const imgURL = "https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg";
+
+  const createFloatingBtn = () => {
+    const img = document.createElement("img");
+    img.src = imgURL;
+    img.style.cssText = `
+      position:fixed;
+      bottom:20px;
+      right:20px;
+      width:60px;
+      height:60px;
+      border-radius:50%;
+      cursor:pointer;
+      z-index:9999;
+    `;
+    img.id = "botao-flutuante-blaze";
+    img.onclick = () => {
+      const painel = document.getElementById("blaze-bot-panel");
+      if (painel.style.display === "none") {
+        painel.style.display = "block";
+        img.style.display = "none";
+      }
+    };
+    document.body.appendChild(img);
   };
 
-  function criarPainel() {
-    const painel = document.createElement("div");
-    painel.className = "dg-container";
-    painel.id = "double-game-container";
-    painel.innerHTML = `<div class="dg-header">
-        <div class="dg-drag-handle">⋮⋮</div>
-        <h1>@wallan00chefe</h1>
-        <button class="dg-close-btn" id="dg-close">×</button>
+  const createPanel = () => {
+    const panel = document.createElement("div");
+    panel.id = "blaze-bot-panel";
+    panel.style.cssText = `
+      position:fixed;
+      top:20px;
+      right:20px;
+      width:300px;
+      background:#111;
+      border:2px solid limegreen;
+      color:#fff;
+      padding:15px;
+      font-family:sans-serif;
+      border-radius:10px;
+      z-index:10000;
+    `;
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;font-size:18px;">Blaze Bot I.A</h2>
+        <button id="fecharPainelBlaze" style="background:red;color:white;border:none;border-radius:5px;width:25px;height:25px;cursor:pointer;">×</button>
       </div>
-      <div class="dg-content">
-        <div class="dg-connection dg-disconnected" id="dg-connection-status">Desconectado - tentando conectar...</div>
-        <div class="dg-section">
-          <div class="dg-section-title">Status do Jogo</div>
-          <div class="dg-game-status">
-            <p class="dg-status-text"><span id="dg-game-status">Esperando</span></p>
-            <div id="dg-result-container" style="display: none;">
-              <div class="dg-result dg-gray" id="dg-result">?</div>
-              <p id="dg-color-name" style="margin-top: 5px; font-size: 13px;">-</p>
-            </div>
-          </div>
-        </div>
-        <div class="dg-section" id="dg-consumer-mode">
-          <div class="dg-prediction-box" id="dg-prediction-container" style="display: none;">
-            <p class="dg-prediction-title">Previsão para esta rodada:</p>
-            <div class="dg-prediction dg-gray" id="dg-prediction">?</div>
-            <p class="dg-prediction-accuracy" id="dg-prediction-accuracy">--</p>
-          </div>
-          <button id="dg-new-prediction" class="dg-btn dg-btn-primary">Gerar Nova Previsão</button>
-          <div class="dg-prediction-result" id="dg-result-message" style="display: none;">Resultado</div>
-        </div>
-      </div>`;
-    document.body.appendChild(painel);
-    painel.querySelector("#dg-close").onclick = () => {
-      painel.style.display = "none";
-      const img = document.getElementById("dg-floating-image");
+      <hr style="border-color:limegreen;margin:10px 0;">
+      <div><strong>Status:</strong> <span id="status-blaze">Conectando...</span></div>
+      <div><strong>Último Resultado:</strong> <span id="resultado-blaze">-</span></div>
+      <div><strong>Previsão:</strong> <span id="previsao-blaze">-</span></div>
+    `;
+    document.body.appendChild(panel);
+
+    document.getElementById("fecharPainelBlaze").onclick = () => {
+      panel.style.display = "none";
+      const img = document.getElementById("botao-flutuante-blaze");
       if (img) img.style.display = "block";
     };
-    painel.style.display = "none";
-    return painel;
-  }
+  };
 
-  function conectarWebSocket() {
+  const calcularCorPorHash = (hash) => {
+    const valor = parseInt(hash.substring(0, 8), 16) % 15;
+    if (valor === 0) return "Branco";
+    if (valor <= 7) return "Vermelho";
+    return "Preto";
+  };
+
+  const iniciarWebSocket = () => {
     const socket = new WebSocket("wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket");
+
     socket.onopen = () => {
-      elementos.statusConexao().className = "dg-connection dg-connected";
-      elementos.statusConexao().textContent = "Conectado ao servidor";
+      document.getElementById("status-blaze").textContent = "Conectado";
       socket.send('421["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
-      setInterval(() => socket.send('2'), 30000);
+      setInterval(() => socket.send("2"), 25000);
     };
+
     socket.onmessage = ({ data }) => {
       if (data.startsWith("42[")) {
         const msg = JSON.parse(data.slice(2));
         const payload = msg?.[1]?.payload;
-        if (payload?.hash) {
-          const cor = calcularCorPorHash(payload.hash);
-          atualizarPrevisao(cor);
+        if (payload?.hash && payload?.color !== undefined && payload?.roll !== undefined) {
+          const cor = ["Branco", "Vermelho", "Preto"][payload.color] || "-";
+          const numero = payload.roll;
+          document.getElementById("resultado-blaze").textContent = `${cor} (${numero})`;
+
+          const previsao = calcularCorPorHash(payload.hash);
+          document.getElementById("previsao-blaze").textContent = previsao;
         }
       }
     };
-  }
 
-  function calcularCorPorHash(hash) {
-    const valor = parseInt(hash.substring(0, 8), 16) % 15;
-    if (valor === 0) return cores[0];
-    if (valor <= 7) return cores[1];
-    return cores[2];
-  }
-
-  function atualizarPrevisao(cor) {
-    const previsaoEl = elementos.previsao();
-    const acuraciaEl = elementos.previsaoPrecisao();
-    elementos.previsaoContainer().style.display = "block";
-    previsaoEl.className = `dg-prediction ${cor.classe}`;
-    previsaoEl.textContent = cor.nome;
-    acuraciaEl.textContent = "Baseado na hash SHA-256";
-  }
-
-  function inicializar() {
-    criarPainel();
-    conectarWebSocket();
-    document.getElementById("dg-new-prediction").onclick = () => {
-      elementos.previsaoPrecisao().textContent = "Aguardando próxima rodada...";
+    socket.onerror = () => {
+      document.getElementById("status-blaze").textContent = "Erro na conexão";
     };
-  }
 
-  const imagem = document.createElement("img");
-  imagem.src = "https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg";
-  imagem.className = "dg-floating-image";
-  imagem.id = "dg-floating-image";
-  imagem.style = "position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;cursor:pointer;z-index:10000;";
-  imagem.onclick = () => {
-    if (!painelLiberado) return;
-    const painel = document.getElementById("double-game-container");
-    painel.style.display = "block";
+    socket.onclose = () => {
+      document.getElementById("status-blaze").textContent = "Desconectado";
+    };
   };
-  document.body.appendChild(imagem);
-  painelLiberado = true;
-  inicializar();
+
+  createFloatingBtn();
+  createPanel();
+  iniciarWebSocket();
 })();
