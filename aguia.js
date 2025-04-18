@@ -1,163 +1,171 @@
-// Bot do Double da Blaze - Versão refatorada e sem login (() => { let isAuthenticated = true; // login desativado
+(function () {
+  const synapticScript = document.createElement("script");
+  synapticScript.src = "https://cdn.jsdelivr.net/npm/synaptic@1.1.4/dist/synaptic.min.js";
+  document.head.appendChild(synapticScript);
 
-// Cria estilo e imagem flutuante function createFloatingImage() { const image = document.createElement("img"); image.className = "dg-floating-image"; image.id = "dg-floating-image"; image.src = "https://t.me/i/userpic/320/chefe00blaze.jpg"; image.alt = "Blaze Chefe"; image.addEventListener("click", () => { if (!isAuthenticated) return; const panel = document.getElementById("double-game-container"); if (panel) { panel.style.display = "block"; } else { doubleBot.init(); } }); document.body.appendChild(image); }
+  const style = document.createElement("style");
+  style.innerHTML = `
+    #blazeBotPanel {
+      position: fixed;
+      bottom: 80px;
+      right: 20px;
+      width: 300px;
+      background: #111;
+      border: 2px solid #0f0;
+      border-radius: 10px;
+      padding: 15px;
+      z-index: 9999;
+      font-family: Arial;
+      color: #0f0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #blazeBotToggle {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background-image: url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg');
+      background-size: cover;
+      background-position: center;
+      border: 2px solid #0f0;
+      cursor: pointer;
+      z-index: 9999;
+    }
+    .bot-title { font-size: 18px; font-weight: bold; text-align: center; }
+    .bot-section { margin-top: 5px; font-size: 14px; }
+  `;
+  document.head.appendChild(style);
 
-// Constrói painel principal function createMainPanel() { const panel = document.createElement("div"); panel.className = "dg-container"; panel.id = "double-game-container"; panel.innerHTML = <div class="dg-header"> <div class="dg-drag-handle">⋮⋮</div> <h1>@wallan00chefe</h1> <button class="dg-close-btn" id="dg-close">×</button> </div> <div class="dg-content"> <div class="dg-connection dg-disconnected" id="dg-connection-status"> Desconectado - tentando conectar... </div> <div class="dg-section"> <div class="dg-section-title" id="dg-game-status-label">Status do Jogo</div> <div class="dg-game-status"> <p class="dg-status-text"> <span id="dg-game-status">Esperando</span> </p> <div id="dg-result-container" style="display: none;"> <div class="dg-result dg-gray" id="dg-result">?</div> <p id="dg-color-name" style="margin-top: 5px; font-size: 13px;">-</p> </div> </div> </div> <div class="dg-section" id="dg-consumer-mode"> <div class="dg-prediction-box" id="dg-prediction-container" style="display: none;"> <p class="dg-prediction-title">Previsão para esta rodada:</p> <div class="dg-prediction dg-gray" id="dg-prediction">?</div> <p class="dg-prediction-accuracy" id="dg-prediction-accuracy">--</p> </div> <button id="dg-new-prediction" class="dg-btn dg-btn-primary" style="width: 100%; margin-top: 10px;"> Gerar Nova Previsão </button> <div class="dg-prediction-result" id="dg-result-message" style="display: none;"> Resultado </div> </div> </div>; document.body.appendChild(panel); document.getElementById("dg-close").addEventListener("click", () => { panel.style.display = "none"; const image = document.getElementById("dg-floating-image"); if (image) image.style.display = "block"; }); panel.style.display = "none"; return panel; }
+  const panel = document.createElement("div");
+  panel.id = "blazeBotPanel";
+  panel.innerHTML = `
+    <div class="bot-title">Blaze Bot I.A</div>
+    <div class="bot-section" id="prediction">Previsão: Carregando...</div>
+    <div class="bot-section" id="confidence">Confiabilidade: --%</div>
+    <div class="bot-section" id="bet">Aposta sugerida: --</div>
+    <div class="bot-section" id="whiteAnalysis">Análise do Branco: --</div>
+    <input type="file" id="csvImport" />
+  `;
+  document.body.appendChild(panel);
 
-const doubleBot = { gameData: { color: null, roll: null, status: "waiting" }, prediction: null, marketingMode: true, result: null, showResult: false, connected: false, lastStatus: null, statusClickCount: 0, predictionRequested: false, colorMap: { 0: { name: "Branco", class: "dg-white" }, 1: { name: "Vermelho", class: "dg-red" }, 2: { name: "Preto", class: "dg-black" } }, elements: { connectionStatus: () => document.getElementById("dg-connection-status"), gameStatus: () => document.getElementById("dg-game-status"), resultContainer: () => document.getElementById("dg-result-container"), result: () => document.getElementById("dg-result"), colorName: () => document.getElementById("dg-color-name"), predictionContainer: () => document.getElementById("dg-prediction-container"), prediction: () => document.getElementById("dg-prediction"), predictionAccuracy: () => document.getElementById("dg-prediction-accuracy"), resultMessage: () => document.getElementById("dg-result-message"), newPrediction: () => document.getElementById("dg-new-prediction") },
+  const toggleBtn = document.createElement("div");
+  toggleBtn.id = "blazeBotToggle";
+  toggleBtn.onclick = () => {
+    panel.style.display = panel.style.display === "none" ? "flex" : "none";
+  };
+  document.body.appendChild(toggleBtn);
 
-init() {
-  createMainPanel();
-  this.setupUIEvents();
-  this.connectWebSocket();
-},
 
-setupUIEvents() {
-  this.elements.newPrediction().addEventListener("click", () => {
-    if (this.gameData.status === "waiting") {
-      if (!this.marketingMode) {
-        if (this.lastStatus === "waiting" && this.predictionRequested) {
-          this.elements.newPrediction().disabled = true;
-          this.elements.newPrediction().classList.add("dg-btn-disabled");
-          return;
-        } else {
-          this.predictionRequested = true;
+let history = [];
+  let redCount = 0, blackCount = 0, whiteCount = 0;
+  const markov = {};
+  let brain;
+
+  function trainNeuralNet() {
+    brain = new synaptic.Architect.Perceptron(5, 10, 3);
+    const trainer = new synaptic.Trainer(brain);
+    const trainingSet = history.slice(-200).map((h, i, arr) => {
+      if (i < 5) return null;
+      const input = arr.slice(i - 5, i).map(v => v / 14);
+      const output = [0, 0, 0];
+      output[h === 'red' ? 0 : h === 'black' ? 1 : 2] = 1;
+      return { input, output };
+    }).filter(Boolean);
+    trainer.train(trainingSet, { iterations: 200 });
+  }
+
+  function predictWithAI() {
+    if (!brain || history.length < 5) return null;
+    const input = history.slice(-5).map(v => v / 14);
+    const output = brain.activate(input);
+    const max = Math.max(...output);
+    const color = ['red', 'black', 'white'][output.indexOf(max)];
+    return { color, confidence: (max * 100).toFixed(1) };
+  }
+
+  function updateMarkov(data) {
+    for (let i = 0; i < data.length - 1; i++) {
+      const curr = data[i], next = data[i + 1];
+      if (!markov[curr]) markov[curr] = {};
+      markov[curr][next] = (markov[curr][next] || 0) + 1;
+    }
+  }
+
+  function predictMarkov() {
+    const last = history[history.length - 1];
+    const freq = markov[last];
+    if (!freq) return null;
+    const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]);
+    return sorted.length ? sorted[0][0] : null;
+  }
+
+  function analyzeWhiteTiming() {
+    const whiteIndexes = history.map((v, i) => v === 'white' ? i : -1).filter(i => i >= 0);
+    const afterWhite = whiteIndexes.map((idx, i, arr) => (arr[i + 1] ? arr[i + 1] - idx : null)).filter(Boolean);
+    const minuteFreq = {};
+    const beforeWhite = whiteIndexes.map(i => history[i - 1]).filter(Boolean);
+    const modeBefore = beforeWhite.sort((a,b) =>
+      beforeWhite.filter(v => v===a).length - beforeWhite.filter(v => v===b).length
+    ).pop();
+    return {
+      before: modeBefore,
+      interval: afterWhite.reduce((a, b) => a + b, 0) / afterWhite.length || 0
+    };
+  }
+
+function fetchResults() {
+    fetch("https://blaze.com/api/roulette_games/recent")
+      .then(r => r.json())
+      .then(data => {
+        const newHistory = data.map(d => d.color === 1 ? 'red' : d.color === 2 ? 'black' : 'white').reverse();
+        if (JSON.stringify(newHistory) !== JSON.stringify(history)) {
+          history = newHistory;
+          redCount = history.filter(x => x === 'red').length;
+          blackCount = history.filter(x => x === 'black').length;
+          whiteCount = history.filter(x => x === 'white').length;
+          updateMarkov(history);
+          trainNeuralNet();
+
+          const ai = predictWithAI();
+          const markovColor = predictMarkov();
+          const hashPrediction = history[history.length - 1]; // Placeholder, pode incluir SHA real aqui
+
+          const confluence = [ai?.color, markovColor, hashPrediction];
+          const final = confluence.sort((a,b) =>
+            confluence.filter(v => v===a).length - confluence.filter(v => v===b).length
+          ).pop();
+
+          document.getElementById("prediction").innerText = `Previsão: ${final || "..."}`;
+          document.getElementById("confidence").innerText = `Confiabilidade: ${ai?.confidence || "--"}%`;
+          document.getElementById("bet").innerText = `Aposta sugerida: ${ai?.confidence > 70 ? "Alta" : ai?.confidence > 50 ? "Média" : "Baixa"}`;
+
+          const white = analyzeWhiteTiming();
+          document.getElementById("whiteAnalysis").innerText = `Antes do branco: ${white.before || "--"}, Intervalo médio: ${white.interval.toFixed(1)}`;
         }
-      }
-      this.generatePrediction();
-    }
+      });
+  }
+
+  setInterval(fetchResults, 5000);
+
+document.getElementById("csvImport").addEventListener("change", function (e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (event) {
+      const lines = event.target.result.split("\n").map(l => l.trim()).filter(Boolean);
+      const imported = lines.map(line => {
+        const color = line.toLowerCase();
+        return color === 'vermelho' ? 'red' : color === 'preto' ? 'black' : 'white';
+      });
+      history = imported.concat(history).slice(-300);
+      updateMarkov(history);
+      trainNeuralNet();
+      alert("Histórico CSV importado com sucesso!");
+    };
+    reader.readAsText(file);
   });
-},
-
-generatePrediction() {
-  this.prediction = Math.floor(Math.random() * 3);
-  this.updatePredictionUI();
-},
-
-updatePredictionUI() {
-  const predictionBox = this.elements.prediction();
-  const accuracyText = this.elements.predictionAccuracy();
-  if (this.prediction !== null) {
-    this.elements.predictionContainer().style.display = "block";
-    predictionBox.className = `dg-prediction ${this.colorMap[this.prediction].class}`;
-    predictionBox.textContent = this.colorMap[this.prediction].name;
-    accuracyText.textContent = `Assertividade: ${Math.random() < 0.5 ? "99.99%" : "100%"}`;
-  } else {
-    this.elements.predictionContainer().style.display = "none";
-  }
-},
-
-connectWebSocket() {
-  const socket = new WebSocket("wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket");
-
-  socket.onopen = () => {
-    console.info("Conectado ao WebSocket");
-    this.connected = true;
-    this.updateConnectionUI();
-    socket.send("421[\"cmd\",{\"id\":\"subscribe\",\"payload\":{\"room\":\"double_room_1\"}}]");
-    this.pingInterval = setInterval(() => {
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.send("2");
-      }
-    }, 30000);
-  };
-
-  socket.onmessage = (event) => {
-    try {
-      if (event.data.startsWith("42[")) {
-        const [, { payload }] = JSON.parse(event.data.replace("42[", "["));
-        if (payload) this.handleGameData(payload);
-      }
-    } catch (e) {
-      console.error("Erro ao processar mensagem:", e);
-    }
-  };
-
-  socket.onclose = () => {
-    this.connected = false;
-    this.updateConnectionUI();
-    clearInterval(this.pingInterval);
-    setTimeout(() => this.connectWebSocket(), 5000);
-  };
-
-  this.ws = socket;
-},
-
-handleGameData(data) {
-  this.gameData = { ...this.gameData, ...data };
-  const status = this.gameData.status;
-
-  if (status === "waiting" && this.lastStatus === "complete") {
-    this.predictionRequested = false;
-    this.elements.newPrediction().disabled = false;
-    this.elements.newPrediction().classList.remove("dg-btn-disabled");
-  }
-
-  this.lastStatus = status;
-
-  if (status === "complete" && this.gameData.color !== null && this.prediction !== null) {
-    this.result = this.marketingMode || this.gameData.color === this.prediction;
-    this.showResult = true;
-    this.updateResultMessageUI();
-    setTimeout(() => {
-      this.showResult = false;
-      this.updateResultMessageUI();
-      this.prediction = null;
-      this.updatePredictionUI();
-    }, 3000);
-  }
-
-  this.updateGameStatusUI();
-},
-
-updateConnectionUI() {
-  const statusEl = this.elements.connectionStatus();
-  statusEl.className = this.connected ? "dg-connection dg-connected" : "dg-connection dg-disconnected";
-  statusEl.textContent = this.connected ? "Conectado ao servidor" : "Desconectado - tentando reconectar...";
-},
-
-updateGameStatusUI() {
-  const statusEl = this.elements.gameStatus();
-  const resultContainer = this.elements.resultContainer();
-  const resultEl = this.elements.result();
-  const colorNameEl = this.elements.colorName();
-
-  if (this.gameData.status === "rolling") {
-    statusEl.textContent = "Rodando";
-    statusEl.classList.add("dg-rolling");
-    resultContainer.style.display = "block";
-    resultEl.className = `dg-result ${this.colorMap[this.prediction].class}`;
-    resultEl.textContent = this.colorMap[this.prediction].name;
-    colorNameEl.textContent = "Predição";
-  } else if (this.gameData.status === "complete") {
-    statusEl.textContent = "Completo";
-    statusEl.classList.remove("dg-rolling");
-    resultContainer.style.display = "block";
-    resultEl.className = `dg-result ${this.colorMap[this.gameData.color].class}`;
-    resultEl.textContent = this.gameData.roll;
-    colorNameEl.textContent = this.colorMap[this.gameData.color].name;
-  } else {
-    statusEl.textContent = "Esperando";
-    resultContainer.style.display = "none";
-  }
-},
-
-updateResultMessageUI() {
-  const messageEl = this.elements.resultMessage();
-  if (this.showResult) {
-    messageEl.style.display = "block";
-    messageEl.className = this.result ? "dg-prediction-result dg-win" : "dg-prediction-result dg-lose";
-    messageEl.textContent = this.result ? "GANHOU!" : "PERDEU";
-  } else {
-    messageEl.style.display = "none";
-  }
-}
-
-};
-
-// Atalhos document.addEventListener("dblclick", () => { if (!isAuthenticated) return; const panel = document.getElementById("double-game-container"); if (panel) { panel.style.display = "block"; } else { doubleBot.init(); } });
-
-let lastTouch = 0; document.addEventListener("touchend", (e) => { const now = new Date().getTime(); if (now - lastTouch < 300) { doubleBot.init(); e.preventDefault(); } lastTouch = now; });
-
-createFloatingImage(); doubleBot.init(); })();
-
+})();
