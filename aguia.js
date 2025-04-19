@@ -1,3 +1,89 @@
+// ==UserScript== // @name         Blaze Double Bot com WebSocket Interceptado // @version      1.0 // @description  Bot com previsão para o jogo Double da Blaze com interceptação WebSocket, Fetch e XMLHttpRequest // @match        ://blaze.bet/ // @grant        none // ==/UserScript==
+
+(function () { 'use strict';
+
+const interceptarRequisicoes = () => { // Intercepta WebSocket const wsOriginal = window.WebSocket; window.WebSocket = function (url, protocols) { const socket = protocols ? new wsOriginal(url, protocols) : new wsOriginal(url);
+
+socket.addEventListener('message', event => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data && data.type === 'roulette' && data.payload && data.payload.color !== undefined) {
+        const corNum = Number(data.payload.color);
+        const cor = corNum === 0 ? 'BRANCO' : corNum <= 7 ? 'VERMELHO' : 'PRETO';
+        const numero = data.payload.roll;
+        const hash = data.payload.server_seed || 'indefinido';
+        window.dispatchEvent(new CustomEvent('blaze_resultado', {
+          detail: { cor, numero, hash }
+        }));
+      }
+    } catch (e) {}
+  });
+
+  return socket;
+};
+window.WebSocket.prototype = wsOriginal.prototype;
+
+// Intercepta Fetch
+const originalFetch = window.fetch;
+window.fetch = async (...args) => {
+  const response = await originalFetch(...args);
+  const url = args[0];
+  if (typeof url === 'string' && url.includes('/roulette_games/recent')) {
+    try {
+      const clone = response.clone();
+      const json = await clone.json();
+      const ultimo = json[0];
+      const corNum = Number(ultimo.color);
+      const cor = corNum === 0 ? 'BRANCO' : corNum <= 7 ? 'VERMELHO' : 'PRETO';
+      const numero = ultimo.roll;
+      const hash = ultimo.hash || ultimo.server_seed || 'indefinido';
+      window.dispatchEvent(new CustomEvent('blaze_resultado', {
+        detail: { cor, numero, hash }
+      }));
+    } catch (e) {}
+  }
+  return response;
+};
+
+// Intercepta XMLHttpRequest
+const originalOpen = XMLHttpRequest.prototype.open;
+XMLHttpRequest.prototype.open = function (...args) {
+  this._url = args[1];
+  return originalOpen.apply(this, args);
+};
+
+const originalSend = XMLHttpRequest.prototype.send;
+XMLHttpRequest.prototype.send = function (...args) {
+  this.addEventListener('load', function () {
+    if (this._url && this._url.includes('/roulette_games/recent')) {
+      try {
+        const json = JSON.parse(this.responseText);
+        const ultimo = json[0];
+        const corNum = Number(ultimo.color);
+        const cor = corNum === 0 ? 'BRANCO' : corNum <= 7 ? 'VERMELHO' : 'PRETO';
+        const numero = ultimo.roll;
+        const hash = ultimo.hash || ultimo.server_seed || 'indefinido';
+        window.dispatchEvent(new CustomEvent('blaze_resultado', {
+          detail: { cor, numero, hash }
+        }));
+      } catch (e) {}
+    }
+  });
+  return originalSend.apply(this, args);
+};
+
+};
+
+interceptarRequisicoes();
+
+// Seu código original começa aqui (restante já existente do bot, mantido como estava)
+
+(async function () { const apiURL = "https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
+
+// ... todo o código original do bot que você enviou vai aqui abaixo, exatamente como você mandou ...
+
+})(); })();
+
 (async function () {
   const apiURL = "https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
 
