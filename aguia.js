@@ -9,18 +9,31 @@
     painel.setAttribute('style', estilo);
     document.body.appendChild(painel);
 
+    const botaoAlternar = document.createElement('button');
+    botaoAlternar.textContent = 'Trocar para Blaze';
+    botaoAlternar.setAttribute('style', 'background-color: #00ff00; color: #0f0f0f; padding: 5px; border-radius: 5px; margin-top: 10px; cursor: pointer;');
+    painel.appendChild(botaoAlternar);
+
+    let siteAtual = "Jonbet"; // Inicia com Jonbet
     let historico = [];
     let ultimoResultado = [];
     let ultimasHashes = [];
-    let siteAtual = window.location.hostname.includes("jonbet") ? "Jonbet" : "Blaze";
 
     function atualizarPainel(msg, alerta = false) {
         painel.innerHTML = `
             <div><b>JonBlaze Hack Pro</b></div>
             <div style="margin-top:8px;">${msg}</div>
+            <button style="background-color: #00ff00; color: #0f0f0f; padding: 5px; border-radius: 5px; cursor: pointer;" onclick="window.location.reload();">Atualizar</button>
         `;
         painel.style.boxShadow = alerta ? "0 0 20px white" : "0 0 10px #00ff00";
     }
+
+    // Alterna entre Jonbet e Blaze
+    botaoAlternar.addEventListener('click', () => {
+        siteAtual = siteAtual === "Jonbet" ? "Blaze" : "Jonbet";
+        botaoAlternar.textContent = siteAtual === "Jonbet" ? "Trocar para Blaze" : "Trocar para Jonbet";
+        console.log(`Site alterado para: ${siteAtual}`);
+    });
 
     function detectarZebra(seq) {
         if (seq.length < 6) return false;
@@ -141,5 +154,4 @@
 
     setInterval(buscarResultados, 3000);
     atualizarPainel("Carregando resultados...");
-
 })();
