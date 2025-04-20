@@ -143,4 +143,18 @@
 
   // Gerar previsão ao clicar no botão
   document.getElementById("generate-prediction").onclick = predictColor;
+
+  // Atualizar cor da rodada
+  async function updateCurrentColor() {
+    const currentColor = await getLatestHash();
+    if (currentColor) {
+      const result = getColorByHash(currentColor);
+      document.getElementById("prediction").textContent = result.name;
+      document.getElementById("prediction").classList.add(result.class);
+    }
+  }
+
+  // Atualizar a cor da rodada periodicamente
+  setInterval(updateCurrentColor, 8000); // Atualizar a cada 8 segundos (ajuste conforme necessário)
+
 })();
