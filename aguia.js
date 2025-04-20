@@ -31,9 +31,15 @@
         return seq.length >= 4 && seq[0] === seq[1] && seq[1] === seq[2] && seq[2] === seq[3];
     }
 
-    function gerarHashPrevisao(input, algoritmo) {
-        const hash = new jsSHA(algoritmo, "TEXT").update(input).getHash("HEX");
-        return hash;
+    // Função para determinar a cor do resultado
+    function determinarCor(resultado) {
+        if (resultado === 0) {
+            return 'Branco';
+        } else if (resultado > 0 && resultado % 2 === 0) {
+            return 'Vermelho';
+        } else {
+            return 'Preto';
+        }
     }
 
     async function buscarResultados() {
@@ -61,7 +67,7 @@
                 const zebra = detectarZebra(resultados);
                 const sequencia = detectarSequencia(resultados);
                 let mensagem = `
-                    Últimos: ${resultados.slice(0, 10).join(" | ")}<br>
+                    Últimos: ${resultados.slice(0, 10).map(d => determinarCor(d)).join(" | ")}<br>
                     Brancos: ${brancos} | Intervalo: ${intervalo}<br>
                 `;
 
@@ -72,13 +78,14 @@
                     atualizarPainel(mensagem);
                 }
 
-                // Captura hashes e mostra no painel
+                // Agora mostra automaticamente a hash da rodada atual no painel
                 if (hashes[0] && !ultimasHashes.includes(hashes[0]) && hashes[0] !== "n/a") {
                     ultimasHashes.push(hashes[0]);
                     console.log("Hash atual:", hashes[0]);
 
-                    // Mostra a hash da rodada atual no painel
-                    mensagem += `<br><b>Hash atual da rodada:</b> ${hashes[0]}`;
+                    // Exibe a hash no painel
+                    mensagem += `<br><b>Hash atual da rodada:</b> ${hashes[0]}<br>
+                                 <b>Cor da rodada:</b> ${determinarCor(resultados[0])}`;
                     atualizarPainel(mensagem);
                 }
             }
