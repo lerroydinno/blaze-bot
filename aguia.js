@@ -37,10 +37,6 @@
     </div>
     <div class="dg-content">
       <div class="dg-section">
-        <div class="dg-section-title">Resultado da Última Cor</div>
-        <div class="dg-result" id="last-result">?</div>
-      </div>
-      <div class="dg-section">
         <div class="dg-section-title">Previsão da Próxima Cor</div>
         <div class="dg-result" id="prediction">?</div>
         <button class="dg-btn" id="generate-prediction">Gerar Previsão</button>
@@ -79,7 +75,9 @@
   };
 
   function getColorByHash(hash) {
+    console.log('Hash recebida:', hash);  // Adicionado para verificação
     const colorValue = parseInt(hash.substring(0, 8), 16) % 15;
+    console.log('Valor da cor:', colorValue);  // Verificando o valor da cor
     if (colorValue === 0) return { name: "Branco", class: "dg-white" };
     if (colorValue >= 1 && colorValue <= 7) return { name: "Vermelho", class: "dg-red" };
     return { name: "Preto", class: "dg-black" };
@@ -89,6 +87,7 @@
     try {
       const res = await fetch("https://blaze.com/api/roulette_games/recent");
       const data = await res.json();
+      console.log('Dados da API:', data);  // Verificando os dados da API
       return data?.[0]?.hash || null;
     } catch (err) {
       console.error("Erro ao obter hash:", err);
@@ -96,22 +95,15 @@
     }
   }
 
-  async function updateLastResult() {
-    const lastResultEl = document.getElementById("last-result");
-    const hash = await getLatestHash();
-    if (!hash) return (lastResultEl.textContent = "Erro");
-
-    const result = getColorByHash(hash);
-    lastResultEl.textContent = result.name;
-    lastResultEl.className = "dg-result " + result.class;
-  }
-
   async function predictColor() {
     const predictionEl = document.getElementById("prediction");
     predictionEl.textContent = "?";
     predictionEl.className = "dg-result";
     const hash = await getLatestHash();
-    if (!hash) return (predictionEl.textContent = "Erro");
+    if (!hash) {
+      predictionEl.textContent = "Erro";
+      return;
+    }
 
     const result = getColorByHash(hash);
     predictionEl.textContent = result.name;
@@ -119,10 +111,4 @@
   }
 
   document.getElementById("generate-prediction").onclick = predictColor;
-
-  // Atualiza o último resultado e previsão
-  setInterval(async () => {
-    await updateLastResult();
-    await predictColor();
-  }, 8000); // Atualiza a cada 8 segundos
 })();
