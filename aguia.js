@@ -72,13 +72,15 @@
                     atualizarPainel(mensagem);
                 }
 
-                // Captura hashes
-                hashes.forEach(h => {
-                    if (h && !ultimasHashes.includes(h) && h !== "n/a") {
-                        ultimasHashes.push(h);
-                        console.log("Possível hash:", h);
-                    }
-                });
+                // Captura hashes e mostra no painel
+                if (hashes[0] && !ultimasHashes.includes(hashes[0]) && hashes[0] !== "n/a") {
+                    ultimasHashes.push(hashes[0]);
+                    console.log("Hash atual:", hashes[0]);
+
+                    // Mostra a hash da rodada atual no painel
+                    mensagem += `<br><b>Hash atual da rodada:</b> ${hashes[0]}`;
+                    atualizarPainel(mensagem);
+                }
             }
         } catch (e) {
             console.error("Erro ao buscar:", e);
@@ -133,28 +135,4 @@
     setInterval(buscarResultados, 3000);
     atualizarPainel("Carregando resultados...");
 
-    // Adiciona botão para colar hash manualmente
-    const inputHash = document.createElement('input');
-    inputHash.setAttribute('type', 'text');
-    inputHash.setAttribute('placeholder', 'Cole o hash manualmente...');
-    inputHash.setAttribute('style', 'margin-top:8px; padding:5px; width:80%;');
-    painel.appendChild(inputHash);
-
-    const botaoPrever = document.createElement('button');
-    botaoPrever.textContent = "Prever Cor";
-    botaoPrever.setAttribute('style', 'width:100%; margin-top:5px; padding:5px; background:#00ff00; border:none; color:#0f0f0f; cursor:pointer;');
-    painel.appendChild(botaoPrever);
-
-    botaoPrever.addEventListener('click', () => {
-        const hashManual = inputHash.value.trim();
-        if (hashManual) {
-            const hashPrevisao = gerarHashPrevisao(hashManual, 'SHA-256');
-            console.log("Hash manual gerado para previsão:", hashPrevisao);
-            // Adicionar lógica de previsão com hash manual
-            atualizarPainel("Previsão gerada com hash manual", true);
-        } else {
-            console.log("Por favor, cole um hash válido.");
-            atualizarPainel("Por favor, cole um hash válido.", true);
-        }
-    });
 })();
