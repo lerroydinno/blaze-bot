@@ -1,157 +1,174 @@
-(function () {
-    const estilo = `
-        position:fixed; bottom:20px; right:20px; background:#0f0f0f;
-        border:2px solid #00ff00; color:#00ff00; font-family:monospace;
-        padding:10px; border-radius:12px; z-index:9999; width:300px;
-        box-shadow:0 0 10px #00ff00;
+// ==UserScript==
+// @name         JonBlaze Predictor
+// @namespace    http://tampermonkey.net/
+// @version      1.0
+// @description  Previsão automática do jogo Double (Blaze e Jonbet) com base em hashes e padrões
+// @author       chatgpt
+// @match        *://blaze.com/*
+// @match        *://jonbet.com/*
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // Config inicial
+    const state = {
+        plataforma: location.hostname.includes("blaze") ? "blaze" : "jonbet",
+        resultados: [],
+        analises: {},
+        historico: [],
+        conexaoWS: null,
+    };
+
+    // Painel estilo hacker
+    const estilo = document.createElement('style');
+    estilo.innerHTML = `
+    #painelPredictor {
+        position: fixed; bottom: 10px; right: 10px; width: 300px; z-index: 9999;
+        background: #000; color: #0f0; border: 2px solid #0f0; border-radius: 20px;
+        font-family: monospace; font-size: 12px; padding: 10px;
+    }
+    #painelPredictor h2 { font-size: 16px; margin: 0 0 10px; }
+    #painelPredictor .previsao { font-size: 14px; font-weight: bold; margin: 10px 0; }
+    #painelPredictor .piscar { animation: piscar 1s infinite alternate; }
+    @keyframes piscar {
+        from { color: #0f0; }
+        to { color: #fff; }
+    }
+    #painelPredictor button {
+        background: #000; color: #0f0; border: 1px solid #0f0;
+        padding: 5px; margin: 2px; border-radius: 5px; cursor: pointer;
+    }
     `;
+    document.head.appendChild(estilo);
+
     const painel = document.createElement('div');
-    painel.setAttribute('style', estilo);
+    painel.id = 'painelPredictor';
+    painel.innerHTML = `
+        <h2>JonBlaze Predictor</h2>
+        <div>Plataforma: <b id="plataformaAtual">${state.plataforma}</b></div>
+        <div>Última cor: <span id="ultimaCor">---</span></div>
+        <div class="previsao" id="previsaoCor">Analisando...</div>
+        <button onclick="trocarPlataforma()">Trocar Blaze/Jonbet</button>
+        <button onclick="exportarCSV()">Exportar CSV</button>
+    `;
     document.body.appendChild(painel);
 
-    const botaoAlternar = document.createElement('button');
-    botaoAlternar.textContent = 'Trocar para Blaze';
-    botaoAlternar.setAttribute('style', 'background-color: #00ff00; color: #0f0f0f; padding: 5px; border-radius: 5px; margin-top: 10px; cursor: pointer;');
-    painel.appendChild(botaoAlternar);
-
-    let siteAtual = "Jonbet"; // Inicia com Jonbet
-    let historico = [];
-    let ultimoResultado = [];
-    let ultimasHashes = [];
-
-    function atualizarPainel(msg, alerta = false) {
-        painel.innerHTML = `
-            <div><b>JonBlaze Hack Pro</b></div>
-            <div style="margin-top:8px;">${msg}</div>
-            <button style="background-color: #00ff00; color: #0f0f0f; padding: 5px; border-radius: 5px; cursor: pointer;" onclick="window.location.reload();">Atualizar</button>
-        `;
-        painel.style.boxShadow = alerta ? "0 0 20px white" : "0 0 10px #00ff00";
-    }
-
-    // Alterna entre Jonbet e Blaze
-    botaoAlternar.addEventListener('click', () => {
-        siteAtual = siteAtual === "Jonbet" ? "Blaze" : "Jonbet";
-        botaoAlternar.textContent = siteAtual === "Jonbet" ? "Trocar para Blaze" : "Trocar para Jonbet";
-        console.log(`Site alterado para: ${siteAtual}`);
-    });
-
-    function detectarZebra(seq) {
-        if (seq.length < 6) return false;
-        return seq.slice(0, 6).every((v, i, a) => i === 0 || v !== a[i - 1]);
-    }
-
-    function detectarSequencia(seq) {
-        return seq.length >= 4 && seq[0] === seq[1] && seq[1] === seq[2] && seq[2] === seq[3];
-    }
-
-    // Função para determinar a cor do resultado
-    function determinarCor(resultado) {
-        if (resultado === 0) {
-            return 'Branco';
-        } else if (resultado > 0 && resultado % 2 === 0) {
-            return 'Vermelho';
-        } else {
-            return 'Preto';
-        }
-    }
-
-    async function buscarResultados() {
-        try {
-            const url = siteAtual === "Jonbet" 
-                ? 'https://jonbet.com/api/roulette_games/recent'
-                : 'https://blaze.com/api/roulette_games/recent';
-            const res = await fetch(url);
-            const data = await res.json();
-            const resultados = data.map(j => j.roll);
-            const hashes = data.map(j => j.hash || j.server_seed || j.result_hash || "n/a");
-
-            if (JSON.stringify(resultados) !== JSON.stringify(ultimoResultado)) {
-                ultimoResultado = resultados;
-                historico.unshift(...resultados);
-                if (historico.length > 1000) historico = historico.slice(0, 1000);
-
-                let intervalo = 0;
-                for (let r of historico) {
-                    if (r === 0) break;
-                    intervalo++;
-                }
-
-                const brancos = historico.filter(r => r === 0).length;
-                const zebra = detectarZebra(resultados);
-                const sequencia = detectarSequencia(resultados);
-                let mensagem = `
-                    Últimos: ${resultados.slice(0, 10).map(d => determinarCor(d)).join(" | ")}<br>
-                    Brancos: ${brancos} | Intervalo: ${intervalo}<br>
-                `;
-
-                if (intervalo >= 14 || zebra || sequencia) {
-                    mensagem += `<b style="color:white;">ALERTA: ALTA CHANCE DE BRANCO</b>`;
-                    atualizarPainel(mensagem, true);
-                } else {
-                    atualizarPainel(mensagem);
-                }
-
-                // Agora mostra automaticamente a hash da rodada atual no painel
-                if (hashes[0] && !ultimasHashes.includes(hashes[0]) && hashes[0] !== "n/a") {
-                    ultimasHashes.push(hashes[0]);
-                    console.log("Hash atual:", hashes[0]);
-
-                    // Exibe a hash no painel
-                    mensagem += `<br><b>Hash atual da rodada:</b> ${hashes[0]}<br>
-                                 <b>Cor da rodada:</b> ${determinarCor(resultados[0])}`;
-                    atualizarPainel(mensagem);
-                }
-            }
-        } catch (e) {
-            console.error("Erro ao buscar:", e);
-        }
-    }
-
-    // WebSocket Interceptor
-    const wsOrig = window.WebSocket;
-    window.WebSocket = function (url, protocols) {
-        const ws = new wsOrig(url, protocols);
-        ws.addEventListener('message', (e) => {
-            try {
-                const data = JSON.parse(e.data);
-                const str = JSON.stringify(data);
-                if (str.includes("hash") || str.includes("server_seed") || str.includes("result_hash")) {
-                    console.log("Interceptado via WebSocket:", data);
-                }
-            } catch {}
-        });
-        return ws;
+    window.trocarPlataforma = () => {
+        state.plataforma = state.plataforma === 'blaze' ? 'jonbet' : 'blaze';
+        document.getElementById("plataformaAtual").textContent = state.plataforma;
     };
 
-    // Fetch Interceptor
-    const origFetch = window.fetch;
-    window.fetch = async (...args) => {
-        const res = await origFetch(...args);
-        try {
+    window.exportarCSV = () => {
+        const linhas = ["hash,cor"];
+        state.historico.forEach(item => linhas.push(`${item.hash},${item.cor}`));
+        const blob = new Blob([linhas.join("\n")], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'historico_double.csv';
+        a.click();
+    };
+
+    // Interceptação por WebSocket
+    const interceptarWebSocket = () => {
+        const WS = window.WebSocket;
+        window.WebSocket = function(...args) {
+            const ws = new WS(...args);
+            ws.addEventListener('message', e => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (Array.isArray(data) && data[0]?.game?.color) {
+                        processarResultado(data[0].game);
+                    }
+                } catch (err) {}
+            });
+            return ws;
+        };
+    };
+
+    // Interceptação por fetch
+    const interceptarFetch = () => {
+        const original = window.fetch;
+        window.fetch = async (...args) => {
+            const res = await original(...args);
             const clone = res.clone();
-            const data = await clone.json();
-            const str = JSON.stringify(data);
-            if (str.includes("hash") || str.includes("server_seed")) {
-                console.log("Interceptado via fetch:", data);
-            }
-        } catch {}
-        return res;
-    };
-
-    // XMLHttpRequest Interceptor
-    const openOrig = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function () {
-        this.addEventListener("load", function () {
             try {
-                const data = this.responseText;
-                if (data.includes("hash") || data.includes("server_seed")) {
-                    console.log("Interceptado via XHR:", data);
+                const url = args[0];
+                if (url.includes("roulette_games/recent")) {
+                    const json = await clone.json();
+                    if (Array.isArray(json)) {
+                        json.forEach(j => processarResultado(j));
+                    }
                 }
-            } catch {}
-        });
-        openOrig.apply(this, arguments);
+            } catch (err) {}
+            return res;
+        }
     };
 
-    setInterval(buscarResultados, 3000);
-    atualizarPainel("Carregando resultados...");
+    // Interceptação por XMLHttpRequest
+    const interceptarXHR = () => {
+        const open = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url) {
+            this._url = url;
+            return open.apply(this, arguments);
+        };
+        const send = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.send = function() {
+            this.addEventListener('load', function() {
+                try {
+                    if (this._url.includes("roulette_games/recent")) {
+                        const json = JSON.parse(this.responseText);
+                        if (Array.isArray(json)) {
+                            json.forEach(j => processarResultado(j));
+                        }
+                    }
+                } catch (err) {}
+            });
+            return send.apply(this, arguments);
+        };
+    };
+
+    function processarResultado(jogo) {
+        if (!jogo.hash || typeof jogo.color === 'undefined') return;
+        const cor = jogo.color == 0 ? 'preto' : jogo.color == 1 ? 'vermelho' : 'branco';
+        const ultima = state.historico[0];
+        if (ultima && ultima.hash === jogo.hash) return;
+
+        document.getElementById("ultimaCor").textContent = cor;
+        state.historico.unshift({ hash: jogo.hash, cor });
+        if (state.historico.length > 100) state.historico.pop();
+
+        analisar();
+    }
+
+    function analisar() {
+        const ultimos = state.historico.slice(0, 20);
+        const brancos = ultimos.filter(r => r.cor === 'branco').length;
+        const intervalo = contarIntervaloBranco(ultimos);
+
+        const confianca = brancos < 2 && intervalo >= 12;
+        const corPrevista = confianca ? 'BRANCO' : 'Sem previsão';
+
+        const el = document.getElementById("previsaoCor");
+        el.textContent = corPrevista;
+        el.className = confianca ? 'previsao piscar' : 'previsao';
+    }
+
+    function contarIntervaloBranco(lista) {
+        let count = 0;
+        for (const r of lista) {
+            if (r.cor === 'branco') break;
+            count++;
+        }
+        return count;
+    }
+
+    // Ativar interceptações
+    interceptarWebSocket();
+    interceptarFetch();
+    interceptarXHR();
+
+    console.log("[JonBlaze Predictor] Bot ativado com sucesso!");
+
 })();
