@@ -5,7 +5,6 @@
   }
   window.doubleGameInjected = true;
 
-  // Criar estilo para o painel
   const style = document.createElement("style");
   style.textContent = `
     .dg-container { position: fixed; top: 20px; right: 20px; width: 320px; background-color: #1f2937; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.5); font-family: Arial,sans-serif; z-index: 999999; max-height: 90vh; overflow-y: auto; color: #f3f4f6; }
@@ -26,7 +25,6 @@
   `;
   document.head.appendChild(style);
 
-  // Criar painel flutuante
   const panel = document.createElement("div");
   panel.className = "dg-container";
   panel.id = "double-game-panel";
@@ -39,26 +37,23 @@
     </div>
     <div class="dg-content">
       <div class="dg-section">
+        <div class="dg-section-title">Resultado da Última Cor</div>
+        <div class="dg-result" id="last-result">?</div>
+      </div>
+      <div class="dg-section">
         <div class="dg-section-title">Previsão da Próxima Cor</div>
         <div class="dg-result" id="prediction">?</div>
         <button class="dg-btn" id="generate-prediction">Gerar Previsão</button>
-      </div>
-      <div class="dg-section">
-        <div class="dg-section-title">Histórico de Previsões</div>
-        <ul id="history-list" style="list-style: none; padding-left: 0;"></ul>
-        <button class="dg-btn" id="export-csv">Exportar Histórico</button>
       </div>
     </div>
   `;
   document.body.appendChild(panel);
 
-  // Fechar painel
   document.getElementById("dg-close").onclick = () => {
     panel.style.display = "none";
     document.getElementById("dg-float-img").style.display = "block";
   };
 
-  // Ícone flutuante para abrir painel
   const img = document.createElement("img");
   img.src = "https://t.me/i/userpic/320/chefe00blaze.jpg";
   img.className = "dg-floating-image";
@@ -69,7 +64,7 @@
   };
   document.body.appendChild(img);
 
-  // Função de arrasto do painel
+  // Drag funcional
   const dragHandle = panel.querySelector(".dg-drag-handle");
   let offsetX = 0, offsetY = 0;
   dragHandle.onmousedown = function (e) {
@@ -83,7 +78,6 @@
     document.onmouseup = () => (document.onmousemove = document.onmouseup = null);
   };
 
-  // Função para determinar a cor com base no hash
   function getColorByHash(hash) {
     const colorValue = parseInt(hash.substring(0, 8), 16) % 15;
     if (colorValue === 0) return { name: "Branco", class: "dg-white" };
@@ -91,7 +85,6 @@
     return { name: "Preto", class: "dg-black" };
   }
 
-  // Função para obter o último hash
   async function getLatestHash() {
     try {
       const res = await fetch("https://blaze.com/api/roulette_games/recent");
@@ -103,7 +96,16 @@
     }
   }
 
-  // Função para prever a cor
+  async function updateLastResult() {
+    const lastResultEl = document.getElementById("last-result");
+    const hash = await getLatestHash();
+    if (!hash) return (lastResultEl.textContent = "Erro");
+
+    const result = getColorByHash(hash);
+    lastResultEl.textContent = result.name;
+    lastResultEl.className = "dg-result " + result.class;
+  }
+
   async function predictColor() {
     const predictionEl = document.getElementById("prediction");
     predictionEl.textContent = "?";
@@ -114,47 +116,13 @@
     const result = getColorByHash(hash);
     predictionEl.textContent = result.name;
     predictionEl.classList.add(result.class);
-
-    // Adicionar ao histórico
-    const historyList = document.getElementById("history-list");
-    const listItem = document.createElement("li");
-    listItem.textContent = `${new Date().toLocaleTimeString()} - ${result.name}`;
-    historyList.appendChild(listItem);
   }
 
-  // Função para exportar o histórico para CSV
-  function exportHistoryToCSV() {
-    const historyList = document.getElementById("history-list");
-    let csvContent = "Hora,Cor\n";
-    historyList.querySelectorAll("li").forEach((item) => {
-      const [time, color] = item.textContent.split(" - ");
-      csvContent += `${time},${color}\n`;
-    });
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "historico_previsoes.csv";
-    link.click();
-  }
-
-  // Exportar histórico ao clicar no botão
-  document.getElementById("export-csv").onclick = exportHistoryToCSV;
-
-  // Gerar previsão ao clicar no botão
   document.getElementById("generate-prediction").onclick = predictColor;
 
-  // Atualizar cor da rodada
-  async function updateCurrentColor() {
-    const currentColor = await getLatestHash();
-    if (currentColor) {
-      const result = getColorByHash(currentColor);
-      document.getElementById("prediction").textContent = result.name;
-      document.getElementById("prediction").classList.add(result.class);
-    }
-  }
-
-  // Atualizar a cor da rodada periodicamente
-  setInterval(updateCurrentColor, 8000); // Atualizar a cada 8 segundos (ajuste conforme necessário)
-
+  // Atualiza o último resultado e previsão
+  setInterval(async () => {
+    await updateLastResult();
+    await predictColor();
+  }, 8000); // Atualiza a cada 8 segundos
 })();
