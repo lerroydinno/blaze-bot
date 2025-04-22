@@ -1,223 +1,38 @@
-(function() {
-  // ============ ESTILO DO MENU ORIGINAL PRESERVADO ============
-  const menuCSS = `
-    #meuPainel {
-      position: fixed;
-      top: 80px;
-      right: 20px;
-      width: 300px;
-      background-color: #111;
-      color: white;
-      border: 2px solid #444;
-      border-radius: 10px;
-      padding: 10px;
-      z-index: 9999;
-      font-family: Arial, sans-serif;
-      display: none;
-    }
-    #meuBotao {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      z-index: 9999;
-      background: none;
-      border: none;
-      cursor: pointer;
-    }
-    #meuBotao img {
-      width: 50px;
-      height: 50px;
-    }
-    #minimizarPainel {
-      position: absolute;
-      top: 5px;
-      right: 10px;
-      background: #444;
-      color: white;
-      border: none;
-      cursor: pointer;
-      font-size: 14px;
-      border-radius: 5px;
-      padding: 2px 5px;
-    }
-    #output {
-      margin-top: 10px;
-      white-space: pre-wrap;
-    }
-  `;
-  const style = document.createElement('style');
-  style.textContent = menuCSS;
-  document.head.appendChild(style);
+(async function () { const apiURL = "https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
 
-  const botao = document.createElement('button');
-  botao.id = 'meuBotao';
-  botao.innerHTML = '<img src="https://cdn-icons-png.flaticon.com/512/25/25694.png">';
-  document.body.appendChild(botao);
+// ==== IMPORTAÇÃO SYNAPTIC.JS ==== const scriptSyn = document.createElement('script'); scriptSyn.src = 'https://cdn.jsdelivr.net/npm/synaptic@1.1.4/dist/synaptic.min.js'; document.head.appendChild(scriptSyn); await new Promise(r => scriptSyn.onload = r); const { Layer, Network, Trainer } = window.synaptic;
 
-  const painel = document.createElement('div');
-  painel.id = 'meuPainel';
-  painel.innerHTML = `
-    <button id="minimizarPainel">X</button>
-    <h3>Blaze Predictor</h3>
-    <button id="prever">Gerar previsão manual</button>
-    <div id="output"></div>
-    <hr>
-    <input type="file" id="csvInput" accept=".csv">
-    <button id="treinarRede">Treinar Rede Neural</button>
-    <button id="usarRede">Prever com Rede Neural</button>
-    <button id="usarSHA">Prever com SHA-256</button>
-    <button id="usarMarkov">Prever com Markov</button>
-    <button id="usarReforco">Previsão Cruzada</button>
-  `;
-  document.body.appendChild(painel);
+// ==== HISTÓRICO E MODELOS ==== let historicoCSV = "Data;Cor;Número;Hash;Previsão;Confiança\n"; let lastHash = ""; let coresAnteriores = []; // Rede Neural let nn; // Markov const markov = { BRANCO: { BRANCO:1, VERMELHO:1, PRETO:1 }, VERMELHO: { BRANCO:1, VERMELHO:1, PRETO:1 }, PRETO: { BRANCO:1, VERMELHO:1, PRETO:1 } };
 
-  document.getElementById('meuBotao').onclick = () => {
-    painel.style.display = 'block';
-  };
-  document.getElementById('minimizarPainel').onclick = () => {
-    painel.style.display = 'none';
-  };
+// === FUNÇÕES AUXILIARES === async function sha256(message) { const msgBuffer = new TextEncoder().encode(message); const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer); return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2,'0')).join(''); }
 
-  const output = document.getElementById('output');
+function getRollColor(hash) { const number = parseInt(hash.slice(0, 8), 16) % 15; if (number === 0) return { cor: "BRANCO", numero: 0 }; if (number <= 7) return { cor: "VERMELHO", numero }; return { cor: "PRETO", numero }; }
 
-  // ============ FUNÇÕES DE PREVISÃO ============
-  const historico = [];
-  let redeTreinada = false;
-  let redeNeural;
+function atualizarLookup(hash, cor) { const p = hash.slice(0,2); lookupPrefix[p] = lookupPrefix[p] || { BRANCO:0, VERMELHO:0, PRETO:0 }; lookupPrefix[p][cor]++; }
 
-  // ===== SHA-256 =====
-  async function sha256(text) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(text);
-    const hash = await crypto.subtle.digest('SHA-256', data);
-    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-  }
+function analisarSequencias(hist) { if (hist.length < 4) return null; const ult = hist.slice(-4); if (ult.every(c=>c==="PRETO")) return "VERMELHO"; if (ult.every(c=>c==="VERMELHO")) return "PRETO"; if (ult[ult.length-1]==="BRANCO") return "PRETO"; return null; }
 
-  async function preverComSHA() {
-    const timestamp = Date.now().toString();
-    const hash = await sha256(timestamp);
-    const prefixo = hash.slice(0, 2);
-    const cor = parseInt(prefixo, 16) % 3;
-    output.textContent = 'SHA-256: ' + ['Vermelho', 'Preto', 'Branco'][cor];
-  }
+function calcularIntervaloBranco(hist) { let last=-1, ints=[]; hist.forEach((c,i)=>{ if(c==="BRANCO"){ if(last>=0) ints.push(i-last); last=i; } }); const media = ints.length ? ints.reduce((a,b)=>a+b)/ints.length : 0; const ultima = hist.lastIndexOf("BRANCO"); const desde = historia.length - (ultima!==-1?ultima:historia.length); return { media, desdeUltimo: desde }; }
 
-  // ===== MARKOV =====
-  const transicoes = {};
+function calcularAposta(conf) { const b=1; if(conf<60) return 0; if(conf<70) return b; if(conf<80) return b2; if(conf<90) return b4; return b*8; }
 
-  function aprenderMarkov(hist) {
-    for (let i = 0; i < hist.length - 1; i++) {
-      const atual = hist[i];
-      const prox = hist[i + 1];
-      if (!transicoes[atual]) transicoes[atual] = {};
-      if (!transicoes[atual][prox]) transicoes[atual][prox] = 0;
-      transicoes[atual][prox]++;
-    }
-  }
+// === REDE NEURAL: configuração === function criarNN() { const input = new Layer(4), hidden = new Layer(6), output = new Layer(3); input.project(hidden); hidden.project(output); nn = new Network({ input, hidden:[hidden], output }); const trainer = new Trainer(nn); const treino = coresAnteriores.map((cor,i)=>({ input: normalizeHash(coresAnteriores[i-1]||coresAnteriores[i]), output: oneHot(cor) })); trainer.train(treino,{rate:0.1,iterations:200}); } function normalizeHash(hash) { return [...hash.slice(0,4)].map(c=>parseInt(c,16)/15); } function oneHot(cor) { return { BRANCO:[0,0,1], VERMELHO:[1,0,0], PRETO:[0,1,0] }[cor]; }
 
-  function preverMarkov() {
-    const ult = historico[historico.length - 1];
-    const probs = transicoes[ult] || {};
-    const cor = Object.entries(probs).sort((a, b) => b[1] - a[1])[0]?.[0] || '0';
-    output.textContent = 'Markov: ' + ['Vermelho', 'Preto', 'Branco'][cor];
-  }
+// === PREDIÇÃO AVANÇADA === async function gerarPrevisaoAv(hash, hist=[]) { // SHA-base const nova = await sha256(hash); const base = getRollColor(nova); // neural if(!nn) criarNN(); const out = nn.activate(normalizeHash(nova)); const idx = out.indexOf(Math.max(...out)); const pNN = { cor: ["VERMELHO","PRETO","BRANCO"][idx], confNN: out[idx]*100 }; // Markov const ult = hist.slice(-1)[0] || base.cor; const tr = markov[ult]; const tot = tr.BRANCO+tr.VERMELHO+tr.PRETO; const pMk = { cor: Object.keys(tr).reduce((a,b)=> tr[a]>tr[b]?a:b), confMk: (tr[Object.keys(tr).reduce((a,b)=> tr[a]>tr[b]?a:b)]/tot)*100 }; // Seq const seq = analisarSequencias(hist); // Intervalo branco const brancoInt = base.cor==="BRANCO"?calcularIntervaloBranco(hist):{}; // Reforço prefixo const rp = reforcoPrefixo(nova); // Combinação const score = { BRANCO:0,VERMELHO:0,PRETO:0 }; score[base.cor]+=50; score[pNN.cor]+=30; score[pMk.cor]+=20; const cor = Object.keys(score).reduce((a,b)=>score[a]>score[b]?a:b); let conf = score[cor]/100; const aposta = calcularAposta(conf); return { cor, confianca: conf.toFixed(2), aposta, detalhes:{ base, pNN, pMk, seq, brancoInt, rp } }; }
 
-  // ===== REDE NEURAL (Synaptic.js) =====
-  const script = document.createElement('script');
-  script.src = 'https://cdn.jsdelivr.net/npm/synaptic@1.1.4/dist/synaptic.min.js';
-  script.onload = () => {
-    const { Layer, Network, Trainer } = window.synaptic;
+// ==== lookupPrefix original ==== let lookupPrefix = {}; function reforcoPrefixo(hash) { const prefix = hash.slice(0,2); const d = lookupPrefix[prefix]; if(!d) return {}; const tot = d.BRANCO+d.VERMELHO+d.PRETO; return { BRANCO:(d.BRANCO/tot)*100, VERMELHO:(d.VERMELHO/tot)*100, PRETO:(d.PRETO/tot)*100 }; }
 
-    const inputLayer = new Layer(3);
-    const hiddenLayer = new Layer(5);
-    const outputLayer = new Layer(3);
+// === FUNÇÕES ORIGINAIS DE PAINEL, CSV, INTERCEPT === function updatePainel(cor, numero, hash, previsao) { document.getElementById('resultado_cor').innerText = 🎯 Resultado: ${cor} (${numero}); document.getElementById('resultado_hash').innerText = Hash: ${hash}; document.getElementById('previsao_texto').innerText = 🔮 Próxima: ${previsao.cor} (${previsao.aposta})\n🎯 Confiança: ${previsao.confianca}%; document.getElementById('previsao_texto').style.color = previsao.confianca>=90?"yellow":"limegreen"; document.getElementById('historico_resultados').innerHTML += <div>${cor} (${numero}) - <span style="font-size:10px">${hash.slice(0,16)}...</span></div>; } function downloadCSV(){ const blob=new Blob([historicoCSV],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=double_historico_${Date.now()}.csv; a.click(); URL.revokeObjectURL(url); } function salvarHistoricoLocal(){ localStorage.setItem('historico_double',historicoCSV);}  function carregarHistoricoLocal(){ const s=localStorage.getItem('historico_double'); if(s) historicoCSV=s; } function processarCSV(text){ text.trim().split('\n').slice(1).forEach(l=>{ const p=l.split(';'); if(p.length>=4){ coresAnteriores.push(p[1]); atualizarLookup(p[3],p[1]); }}); }
 
-    inputLayer.project(hiddenLayer);
-    hiddenLayer.project(outputLayer);
+carregarHistoricoLocal();
 
-    redeNeural = new Network({
-      input: inputLayer,
-      hidden: [hiddenLayer],
-      output: outputLayer
-    });
-  };
-  document.head.appendChild(script);
+// === CRIA PAINEL E ICONE === const painel = document.createElement("div"); painel.id = "painel_previsao"; painel.style = position: fixed; top: 60px; left: 50%; transform: translateX(-50%); z-index: 99999; background: #000000cc; border: 2px solid limegreen; border-radius: 20px; color: limegreen; padding: 20px; font-family: monospace; text-align: center; width: 360px;; painel.innerHTML =  <div style="display:flex;justify-content:space-between;align-items:center;"> <h3 style="margin:0;">Blaze<br>Bot I.A</h3> <button id="btn_minimizar" style="background:none;border:none;color:limegreen;font-weight:bold;font-size:20px;">−</button> </div> <div id="resultado_cor">🎯 Resultado: aguardando...</div> <div id="resultado_hash" style="font-size: 10px; word-break: break-all;">Hash: --</div> <div id="previsao_texto" style="margin-top: 10px;">🔮 Previsão: aguardando...</div> <input type="file" id="import_csv" accept=".csv" style="margin:10px;" /> <button id="btn_prever" style="margin-top:5px;">🔁 Gerar previsão manual</button> <button id="btn_baixar" style="margin-top:5px;">⬇️ Baixar CSV</button> <div id="historico_resultados" style="margin-top:10px;max-height:100px;overflow:auto;text-align:left;font-size:12px;"></div>; document.body.appendChild(painel); const icone = document.createElement("div"); icone.id = "icone_flutuante"; icone.style = display:none;position:fixed;bottom:20px;right:20px;z-index:99999;width:60px;height:60px;border-radius:50%; background-image:url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg'); background-size:cover;background-repeat:no-repeat;background-position:center; border:2px solid limegreen;box-shadow:0 0 10px limegreen,0 0 20px limegreen inset;cursor:pointer;animation:neonPulse 1s infinite;; document.body.appendChild(icone); const estilo = document.createElement('style'); estilo.innerHTML = @keyframes neonPulse{0%{box-shadow:0 0 5px limegreen,0 0 10px limegreen inset;}50%{box-shadow:0 0 20px limegreen,0 0 40px limegreen inset;}100%{box-   shadow:0 0 5px limegreen,0 0 10px limegreen inset;}}; document.head.appendChild(estilo);
 
-  document.getElementById('treinarRede').onclick = () => {
-    const input = document.getElementById('csvInput');
-    if (!input.files.length) return alert('Selecione um CSV.');
-    const file = input.files[0];
-    const reader = new FileReader();
-    reader.onload = () => {
-      const linhas = reader.result.split('\n');
-      const dados = linhas.map(l => l.split(',')).filter(l => l.length >= 2);
-      const trainer = new window.synaptic.Trainer(redeNeural);
-      const trainingSet = dados.map(([h1, saida]) => ({
-        input: normalizarEntrada(h1),
-        output: codificarSaida(saida)
-      }));
-      trainer.train(trainingSet, { iterations: 2000, log: false });
-      redeTreinada = true;
-      output.textContent = 'Rede neural treinada com sucesso.';
-    };
-    reader.readAsText(file);
-  };
+document.getElementById('btn_minimizar').onclick = () => { painel.style.display = 'none'; icone.style.display = 'block'; }; icone.onclick = () => { painel.style.display = 'block'; icone.style.display = 'none'; }; document.getElementById('btn_baixar').onclick = downloadCSV; document.getElementById('btn_prever').onclick = async () => { if(lastHash!="indefinido"&&lastHash){ const pv = await gerarPrevisaoAv(lastHash, coresAnteriores); updatePainel(pv.cor, '-', lastHash, pv); historicoCSV += ${new Date().toLocaleString()};${pv.cor};-;${lastHash};${pv.confianca}%\n; salvarHistoricoLocal(); } }; document.getElementById('import_csv').addEventListener('change', e=>{ const f=e.target.files[0]; if(!f)return; new FileReader().
+onload=e=>processarCSV(e.target.result); reader.readAsText(f); });
 
-  function normalizarEntrada(hash) {
-    return [
-      parseInt(hash.slice(0, 2), 16) / 255,
-      parseInt(hash.slice(2, 4), 16) / 255,
-      parseInt(hash.slice(4, 6), 16) / 255
-    ];
-  }
+setInterval(async () => { try { const res = await fetch(apiURL); const data = await res.json(); const u = data[0]; const corNum = Number(u.color); const cor = corNum===0?"BRANCO":corNum<=7?"VERMELHO":"PRETO"; const numero = u.roll; const hash = u.hash||u.server_seed||"indefinido"; if(hash!==lastHash && hash!=="indefinido"){ atualizarLookup(hash,cor); markov[coresAnteriores.slice(-1)[0]||cor][cor]++; coresAnteriores.push(cor); if(coresAnteriores.length>200) coresAnteriores.shift(); lastHash=hash; const pv = await gerarPrevisaoAv(hash, coresAnteriores); updatePainel(cor, numero, hash, pv); historicoCSV += ${new Date().toLocaleString()};${cor};${numero};${hash};${pv.cor};${pv.confianca}%\n; salvarHistoricoLocal(); document.getElementById('historico_resultados').innerHTML += <div id="log_${hash}">${cor} (${numero})</div>; } } catch(e) { console.error(e); } }, 8000);
 
-  function codificarSaida(cor) {
-    const map = { 'vermelho': [1, 0, 0], 'preto': [0, 1, 0], 'branco': [0, 0, 1] };
-    return map[cor.toLowerCase()] || [0, 0, 0];
-  }
+// === INTERCEPTAÇÃO AVANÇADA === const wsO=window.WebSocket; window.WebSocket=function(...a){ const w=new wsO(...a); const ad=w.addEventListener; w.addEventListener=(t,l,..r)=> t==='message'? ad.call(w,t,e=>{console.log(e.data);l(e);},...r):ad.call
+(w,t,l,...r); return w; }; const fO=window.fetch; window.fetch= async(...a)=>{ const r=await fO(...a); const c=r.clone(); c.text().then(t=>console.log(t)); return r; }; const xO=XMLHttpRequest.prototype.open, sO=XMLHttpRequest.prototype.send; XMLHttpRequest.prototype.open = function(m,u,...) { this._url=u; return xO.call(this,m,u,...); }; XMLHttpRequest.prototype.send = function(...a){ this.addEventListener('load',function(){ console.log(this._url,this.responseText);}); return sO.apply(this,a); }; })();
 
-  document.getElementById('usarRede').onclick = async () => {
-    if (!redeTreinada) return alert('Rede neural não treinada.');
-    const hash = await sha256(Date.now().toString());
-    const entrada = normalizarEntrada(hash);
-    const resultado = redeNeural.activate(entrada);
-    const index = resultado.indexOf(Math.max(...resultado));
-    output.textContent = 'Rede Neural: ' + ['Vermelho', 'Preto', 'Branco'][index];
-  };
-
-  // ===== REFORÇO CRUZADO =====
-  async function previsaoCruzada() {
-    const sha = await sha256(Date.now().toString());
-    const entrada = normalizarEntrada(sha);
-    let votos = [0, 0, 0];
-
-    // Rede Neural
-    if (redeTreinada) {
-      const r = redeNeural.activate(entrada);
-      votos[r.indexOf(Math.max(...r))]++;
-    }
-
-    // SHA-256
-    const corSHA = parseInt(sha.slice(0, 2), 16) % 3;
-    votos[corSHA]++;
-
-    // Markov
-    const ult = historico[historico.length - 1];
-    const probs = transicoes[ult] || {};
-    const corMarkov = parseInt(Object.entries(probs).sort((a, b) => b[1] - a[1])[0]?.[0] || '0');
-    votos[corMarkov]++;
-
-    const final = votos.indexOf(Math.max(...votos));
-    output.textContent = 'Reforço Cruzado: ' + ['Vermelho', 'Preto', 'Branco'][final];
-  }
-
-  document.getElementById('usarSHA').onclick = preverComSHA;
-  document.getElementById('usarMarkov').onclick = preverMarkov;
-  document.getElementById('usarReforco').onclick = previsaoCruzada;
-
-  document.getElementById('prever').onclick = () => {
-    const cor = Math.floor(Math.random() * 3);
-    historico.push(cor.toString());
-    aprenderMarkov(historico);
-    output.textContent = 'Cor aleatória simulada: ' + ['Vermelho', 'Preto', 'Branco'][cor];
-  };
-})();
