@@ -1,275 +1,200 @@
-<script src="https://cdn.jsdelivr.net/npm/synaptic@1.1.4/dist/synaptic.min.js"></script>
-<script>
-(async function () {
-  const apiURL = "https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
-
-  async function sha256(message) {
-    const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  }
-
-  function getRollColor(hash) {
-    const number = parseInt(hash.slice(0, 8), 16) % 15;
-    if (number === 0) return { cor: "BRANCO", numero: 0 };
-    if (number <= 7) return { cor: "VERMELHO", numero: number };
-    return { cor: "PRETO", numero: number };
-  }
-
-  // Aprendizado com Synaptic.js
-  const { Architect, Trainer } = synaptic;
-  const redeNeural = new Architect.Perceptron(4, 6, 3);
-  const treinador = new Trainer(redeNeural);
-
-  function normalizarEntrada(hash, hora) {
-    const h = parseInt(hash.slice(0, 8), 16) / 0xffffffff;
-    const m = hora.getHours() / 23;
-    const s = hora.getMinutes() / 59;
-    const d = hora.getSeconds() / 59;
-    return [h, m, s, d];
-  }
-
-  const historicoTreinamento = [];
-
-  function treinarRede(cor, entrada) {
-    const saidaEsperada = {
-      BRANCO: [1, 0, 0],
-      VERMELHO: [0, 1, 0],
-      PRETO: [0, 0, 1]
-    }[cor];
-    historicoTreinamento.push({ input: entrada, output: saidaEsperada });
-    if (historicoTreinamento.length >= 10) {
-      treinador.train(historicoTreinamento.slice(-50), {
-        iterations: 50,
-        error: 0.01,
-        shuffle: true,
-        rate: 0.1
-      });
+javascript:(function(){
+  const estiloMenu = `
+    #meuMenuFlutuante {
+      position: fixed;
+      top: 50px;
+      right: 20px;
+      background-color: rgba(0,0,0,0.9);
+      color: white;
+      padding: 10px;
+      border-radius: 10px;
+      z-index: 9999;
+      font-family: sans-serif;
+      font-size: 14px;
+      width: 240px;
     }
-  }
+    #botaoFlutuante {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 60px;
+      height: 60px;
+      background: url('https://i.imgur.com/lP5K5nY.png') no-repeat center/cover;
+      border: none;
+      border-radius: 50%;
+      z-index: 9999;
+    }
+    #minimizarBtn {
+      position: absolute;
+      top: 2px;
+      right: 5px;
+      background: none;
+      color: white;
+      border: none;
+      font-size: 16px;
+    }
+    #meuMenuFlutuante button {
+      margin-top: 10px;
+    }
+  `;
 
-  function preverComRede(entrada) {
-    const saida = redeNeural.activate(entrada);
-    const index = saida.indexOf(Math.max(...saida));
-    return ["BRANCO", "VERMELHO", "PRETO"][index];
-  }
+  const style = document.createElement('style');
+  style.innerHTML = estiloMenu;
+  document.head.appendChild(style);
 
-  function analisarSequencias(hist) {
-    if (hist.length < 4) return null;
-    const ultimas = hist.slice(-4);
-    if (ultimas.every(c => c === "PRETO")) return "VERMELHO";
-    if (ultimas.every(c => c === "VERMELHO")) return "PRETO";
-    if (ultimas[ultimas.length - 1] === "BRANCO") return "PRETO";
-    return null;
-  }
+  let menu, botao, historico = [], redeNeuralGlobal = null;
 
-  function calcularIntervaloBranco(hist) {
-    let ultPos = -1, intervalos = [];
-    hist.forEach((cor, i) => {
-      if (cor === "BRANCO") {
-        if (ultPos !== -1) intervalos.push(i - ultPos);
-        ultPos = i;
-      }
-    });
-    const media = intervalos.length ? intervalos.reduce((a, b) => a + b) / intervalos.length : 0;
-    const ultimaBranco = hist.lastIndexOf("BRANCO");
-    const desdeUltimo = ultimaBranco !== -1 ? hist.length - ultimaBranco : hist.length;
-    return { media, desdeUltimo };
-  }
-
-  let lookupPrefix = {};
-  function atualizarLookup(hash, cor) {
-    const prefix = hash.slice(0, 2);
-    if (!lookupPrefix[prefix]) lookupPrefix[prefix] = { BRANCO: 0, VERMELHO: 0, PRETO: 0 };
-    lookupPrefix[prefix][cor]++;
-  }
-
-  function reforcoPrefixo(hash) {
-    const prefix = hash.slice(0, 2);
-    const dados = lookupPrefix[prefix];
-    if (!dados) return {};
-    const total = dados.BRANCO + dados.VERMELHO + dados.PRETO;
-    return {
-      BRANCO: ((dados.BRANCO / total) * 100).toFixed(2),
-      VERMELHO: ((dados.VERMELHO / total) * 100).toFixed(2),
-      PRETO: ((dados.PRETO / total) * 100).toFixed(2)
-    };
-  }
-
-  function calcularAposta(confianca) {
-    const base = 1;
-    if (confianca < 60) return 0;
-    if (confianca < 70) return base;
-    if (confianca < 80) return base * 2;
-    if (confianca < 90) return base * 4;
-    return base * 8;
-  }
-
-  async function gerarPrevisao(hash, historico) {
-    const hora = new Date();
-    const entrada = normalizarEntrada(hash, hora);
-    const ia = preverComRede(entrada);
-
-    let confianca = 60;
-    const reforco = reforcoPrefixo(hash);
-    if (reforco[ia]) confianca += parseFloat(reforco[ia]) / 10;
-
-    const sugestaoSequencia = analisarSequencias(historico);
-    if (sugestaoSequencia === ia) confianca += 5;
-
-    if (ia === "BRANCO") {
-      const { media, desdeUltimo } = calcularIntervaloBranco(historico);
-      if (desdeUltimo >= media * 0.8) confianca += 10;
+  function mostrarMenu() {
+    if (menu) {
+      menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+      return;
     }
 
-    const numero = getRollColor(hash).numero;
-    const aposta = calcularAposta(confianca);
-    return { cor: ia, numero, confianca: Math.min(100, confianca.toFixed(2)), aposta };
+    menu = document.createElement('div');
+    menu.id = 'meuMenuFlutuante';
+    menu.innerHTML = `
+      <button id="minimizarBtn">×</button>
+      <p><strong>Prever próxima cor:</strong></p>
+      <button onclick="preverCorComIA().then(r => alert('Cor: ' + ['BRANCO','VERMELHO','PRETO'][r.cor] + ' ('+r.confianca+'%)'))">Prever</button>
+    `;
+    document.body.appendChild(menu);
+    document.getElementById('minimizarBtn').onclick = () => menu.style.display = 'none';
   }
 
-  function updatePainel(cor, numero, hash, previsao) {
-    document.getElementById('resultado_cor').innerText = `🎯 Resultado: ${cor} (${numero})`;
-    document.getElementById('resultado_hash').innerText = `Hash: ${hash}`;
-    document.getElementById('previsao_texto').innerText = `🔮 Próxima: ${previsao.cor} (${previsao.numero})\n🎯 Confiança: ${previsao.confianca}%\n💰 Apostar: ${previsao.aposta}x`;
-    document.getElementById('previsao_texto').style.color = previsao.confianca >= 90 ? "yellow" : "limegreen";
-    document.getElementById('historico_resultados').innerHTML += `<div>${cor} (${numero}) - <span style="font-size:10px">${hash.slice(0, 16)}...</span></div>`;
-  }
+  botao = document.createElement('button');
+  botao.id = 'botaoFlutuante';
+  botao.onclick = mostrarMenu;
+  document.body.appendChild(botao);
 
-  let historicoCSV = "Data;Cor;Número;Hash;Previsão;Confiança\n";
-  let lastHash = "";
-  let coresAnteriores = [];
+  // Synaptic
+  const script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/synaptic@1.1.4/dist/synaptic.min.js';
+  document.head.appendChild(script);
 
-  function salvarHistoricoLocal() {
-    localStorage.setItem("historico_double", historicoCSV);
-  }
-
-  function carregarHistoricoLocal() {
-    const salvo = localStorage.getItem("historico_double");
-    if (salvo) historicoCSV = salvo;
-  }
-
-  function processarCSV(text) {
-    const linhas = text.trim().split("\n").slice(1);
-    linhas.forEach(l => {
-      const partes = l.split(";");
-      if (partes.length >= 4) {
-        const cor = partes[1];
-        const hash = partes[3];
-        const data = new Date(partes[0]);
-        const entrada = normalizarEntrada(hash, data);
-        coresAnteriores.push(cor);
-        atualizarLookup(hash, cor);
-        treinarRede(cor, entrada);
-      }
+  // CSV incremental
+  function carregarCSV(url) {
+    return fetch(url).then(res => res.text()).then(text => {
+      return text.trim().split('\n').map(l => l.split(',').map(Number));
     });
   }
 
-  function downloadCSV() {
-    const blob = new Blob([historicoCSV], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `double_historico_${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  async function treinarRedeNeural() {
+    const { Layer, Network, Trainer } = synaptic;
+    const rede = new Network({
+      input: new Layer(4),
+      hidden: [new Layer(6)],
+      output: new Layer(3)
+    });
+
+    const dados = await carregarCSV('https://raw.githubusercontent.com/lerroydinno/blaze-bot/main/dados.csv');
+    const trainer = new Trainer(rede);
+    trainer.train(dados.map(l => ({
+      input: l.slice(0, 4).map(v => v / 14),
+      output: [
+        l[4] === 0 ? 1 : 0,
+        l[4] === 1 ? 1 : 0,
+        l[4] === 2 ? 1 : 0,
+      ]
+    })), {
+      iterations: 3000,
+      log: false
+    });
+
+    return rede;
   }
 
-  carregarHistoricoLocal();
-
-  const painel = document.createElement("div");
-  painel.id = "painel_previsao";
-  painel.style = `
-    position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
-    z-index: 99999; background: #000000cc; border: 2px solid limegreen; border-radius: 20px;
-    color: limegreen; padding: 20px; font-family: monospace; text-align: center; width: 360px;
-  `;
-  painel.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;">
-      <h3 style="margin:0;">Blaze<br>Bot I.A</h3>
-      <button id="btn_minimizar" style="background:none;border:none;color:limegreen;font-weight:bold;font-size:20px;">−</button>
-    </div>
-    <div id="resultado_cor">🎯 Resultado: aguardando...</div>
-    <div id="resultado_hash" style="font-size: 10px; word-break: break-all;">Hash: --</div>
-    <div id="previsao_texto" style="margin-top: 10px;">🔮 Previsão: aguardando...</div>
-    <input type="file" id="import_csv" accept=".csv" style="margin:10px;" />
-    <button id="btn_prever" style="margin-top:5px;">🔁 Gerar previsão manual</button>
-    <button id="btn_baixar" style="margin-top:5px;">⬇️ Baixar CSV</button>
-    <div id="historico_resultados" style="margin-top:10px;max-height:100px;overflow:auto;text-align:left;font-size:12px;"></div>
-  `;
-  document.body.appendChild(painel);
-
-  const icone = document.createElement("div");
-  icone.id = "icone_flutuante";
-  icone.style = `
-    display: none; position: fixed; bottom: 20px; right: 20px; z-index: 99999;
-    width: 60px; height: 60px; border-radius: 50%;
-    background-image: url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg');
-    background-size: cover; background-repeat: no-repeat; background-position: center;
-    border: 2px solid limegreen; box-shadow: 0 0 10px limegreen, 0 0 20px limegreen inset;
-    cursor: pointer; animation: neonPulse 1s infinite;
-  `;
-  document.body.appendChild(icone);
-
-  const estilo = document.createElement("style");
-  estilo.innerHTML = `
-    @keyframes neonPulse {
-      0% { box-shadow: 0 0 5px limegreen, 0 0 10px limegreen inset; }
-      50% { box-shadow: 0 0 20px limegreen, 0 0 40px limegreen inset; }
-      100% { box-shadow: 0 0 5px limegreen, 0 0 10px limegreen inset; }
+  function obterUltimoHash() {
+    const scripts = Array.from(document.scripts);
+    for (let s of scripts) {
+      const txt = s.textContent;
+      if (txt.includes('hash') && txt.includes('round')) {
+        const m = txt.match(/"hash":"([a-f0-9]+)"/i);
+        if (m) return m[1];
+      }
     }
-  `;
-  document.head.appendChild(estilo);
+    return '';
+  }
 
-  document.getElementById('btn_minimizar').onclick = () => {
-    painel.style.display = "none";
-    icone.style.display = "block";
-  };
-  icone.onclick = () => {
-    painel.style.display = "block";
-    icone.style.display = "none";
-  };
+  async function preverPorHash(hash) {
+    if (!hash) return null;
+    const sha = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(hash));
+    const hex = Array.from(new Uint8Array(sha)).map(b => b.toString(16).padStart(2, '0')).join('');
+    const mod = parseInt(hex.slice(0, 8), 16) % 15;
+    if (mod === 0) return 0;
+    if (mod <= 7) return 1;
+    return 2;
+  }
 
-  document.getElementById('btn_baixar').onclick = downloadCSV;
-  document.getElementById('btn_prever').onclick = async () => {
-    if (lastHash) {
-      const previsao = await gerarPrevisao(lastHash, coresAnteriores);
-      updatePainel("-", "-", lastHash, previsao);
+  function preverPorHorario() {
+    const h = new Date().getHours();
+    if (h >= 0 && h < 4) return 1;
+    if (h >= 4 && h < 8) return 2;
+    if (h >= 8 && h < 16) return 1;
+    return 2;
+  }
+
+  // Markov
+  let matrizTrans = {};
+  function atualizarMarkov(hist) {
+    matrizTrans = {};
+    for (let i = 0; i < hist.length - 1; i++) {
+      const atual = hist[i], prox = hist[i+1];
+      if (!matrizTrans[atual]) matrizTrans[atual] = [0,0,0];
+      matrizTrans[atual][prox]++;
     }
+  }
+  function preverMarkov(hist) {
+    if (!hist.length) return null;
+    const ult = hist[hist.length - 1];
+    const freq = matrizTrans[ult];
+    if (!freq) return null;
+    const max = Math.max(...freq);
+    return freq.indexOf(max);
+  }
+
+  async function preverCorComIA(hash, ultimos, rede) {
+    const markov = preverMarkov(ultimos);
+    const hashPred = await preverPorHash(hash);
+    const horarioPred = preverPorHorario();
+    let redePred = null;
+
+    if (rede && ultimos.length >= 4) {
+      const entrada = ultimos.slice(-4).map(v => v / 14);
+      const saida = rede.activate(entrada);
+      const idx = saida.indexOf(Math.max(...saida));
+      redePred = idx;
+    }
+
+    const votos = [hashPred, horarioPred, markov, redePred].filter(v => v !== null);
+    const contagem = [0, 0, 0];
+    votos.forEach(v => contagem[v]++);
+    const melhor = contagem.indexOf(Math.max(...contagem));
+    const conf = (contagem[melhor] / votos.length * 100).toFixed(1);
+
+    return { cor: melhor, confianca: conf };
+  }
+
+  window.preverCorComIA = async function() {
+    if (!redeNeuralGlobal) {
+      redeNeuralGlobal = await treinarRedeNeural();
+    }
+    const hash = obterUltimoHash();
+    const ultimos = historico.map(h => h.cor);
+    const { cor, confianca } = await preverCorComIA(hash, ultimos, redeNeuralGlobal);
+    return { cor, confianca };
   };
-  document.getElementById('import_csv').addEventListener('change', e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = e => processarCSV(e.target.result);
-    reader.readAsText(file);
+
+  const observer = new MutationObserver(() => {
+    const cores = Array.from(document.querySelectorAll('.entry')).map(div => {
+      if (div.classList.contains('white')) return 0;
+      if (div.classList.contains('red')) return 1;
+      return 2;
+    }).reverse();
+    if (cores.length && historico.length !== cores.length) {
+      historico = cores.map(c => ({ cor: c }));
+      atualizarMarkov(historico.map(h => h.cor));
+    }
   });
 
-  setInterval(async () => {
-    try {
-      const res = await fetch(apiURL);
-      const data = await res.json();
-      const ultimo = data[0];
-      const corNum = Number(ultimo.color);
-      const cor = corNum === 0 ? "BRANCO" : corNum <= 7 ? "VERMELHO" : "PRETO";
-      const numero = ultimo.roll;
-      const hash = ultimo.hash || ultimo.server_seed || "indefinido";
-      if (!document.getElementById(`log_${hash}`) && hash !== "indefinido") {
-        const entrada = normalizarEntrada(hash, new Date());
-        treinarRede(cor, entrada);
-        atualizarLookup(hash, cor);
-        const previsao = await gerarPrevisao(hash, coresAnteriores);
-        updatePainel(cor, numero, hash, previsao);
-        historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash};${previsao.cor};${previsao.confianca}%\n`;
-        salvarHistoricoLocal();
-        coresAnteriores.push(cor);
-        if (coresAnteriores.length > 200) coresAnteriores.shift();
-        lastHash = hash;
-        document.getElementById('historico_resultados').innerHTML += `<div id="log_${hash}">${cor} (${numero})</div>`;
-      }
-    } catch (e) {
-      console.error("Erro ao buscar API:", e);
-    }
-  }, 8000);
+  observer.observe(document.body, { childList: true, subtree: true });
 })();
-</script>
