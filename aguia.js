@@ -1,200 +1,134 @@
-javascript:(function(){
-  const estiloMenu = `
-    #meuMenuFlutuante {
-      position: fixed;
-      top: 50px;
-      right: 20px;
-      background-color: rgba(0,0,0,0.9);
-      color: white;
-      padding: 10px;
-      border-radius: 10px;
-      z-index: 9999;
-      font-family: sans-serif;
-      font-size: 14px;
-      width: 240px;
-    }
-    #botaoFlutuante {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      width: 60px;
-      height: 60px;
-      background: url('https://i.imgur.com/lP5K5nY.png') no-repeat center/cover;
-      border: none;
-      border-radius: 50%;
-      z-index: 9999;
-    }
-    #minimizarBtn {
-      position: absolute;
-      top: 2px;
-      right: 5px;
-      background: none;
-      color: white;
-      border: none;
-      font-size: 16px;
-    }
-    #meuMenuFlutuante button {
-      margin-top: 10px;
-    }
-  `;
+(function () {
+  // === [1] IMPORTAR SYNAPTIC.JS ===
+  const script = document.createElement("script");
+  script.src = "https://cdn.jsdelivr.net/npm/synaptic@1.1.4/dist/synaptic.min.js";
+  script.onload = () => {
+    const { Layer, Network, Trainer } = window.synaptic;
 
-  const style = document.createElement('style');
-  style.innerHTML = estiloMenu;
-  document.head.appendChild(style);
+    // === [2] VARIÁVEIS ===
+    let historico = JSON.parse(localStorage.getItem("historicoBlazeNN") || "[]");
+    let redeNeural;
+    let matrizMarkov = { vermelho: { vermelho: 1, preto: 1, branco: 1 }, preto: { vermelho: 1, preto: 1, branco: 1 }, branco: { vermelho: 1, preto: 1, branco: 1 } };
 
-  let menu, botao, historico = [], redeNeuralGlobal = null;
+    // === [3] UTILS ===
+    const corParaNumero = cor => (cor === "vermelho" ? 0 : cor === "preto" ? 1 : 2);
+    const numeroParaCor = n => ["vermelho", "preto", "branco"][n];
+    const normalizarHash = hash => [...hash.slice(0, 4)].map(c => parseInt(c, 16) / 15 || 0);
 
-  function mostrarMenu() {
-    if (menu) {
-      menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-      return;
+    // === [4] REDE NEURAL ===
+    function treinarRede() {
+      const inputLayer = new Layer(4);
+      const hiddenLayer = new Layer(6);
+      const outputLayer = new Layer(3);
+      inputLayer.project(hiddenLayer);
+      hiddenLayer.project(outputLayer);
+      redeNeural = new Network({ input: inputLayer, hidden: [hiddenLayer], output: outputLayer });
+
+      const trainer = new Trainer(redeNeural);
+      const dadosTreino = historico.map(h => ({
+        input: normalizarHash(h.hash),
+        output: [0, 0, 0].map((_, i) => (i === corParaNumero(h.cor) ? 1 : 0))
+      }));
+      trainer.train(dadosTreino, { rate: 0.1, iterations: 200 });
     }
 
-    menu = document.createElement('div');
-    menu.id = 'meuMenuFlutuante';
-    menu.innerHTML = `
-      <button id="minimizarBtn">×</button>
-      <p><strong>Prever próxima cor:</strong></p>
-      <button onclick="preverCorComIA().then(r => alert('Cor: ' + ['BRANCO','VERMELHO','PRETO'][r.cor] + ' ('+r.confianca+'%)'))">Prever</button>
-    `;
-    document.body.appendChild(menu);
-    document.getElementById('minimizarBtn').onclick = () => menu.style.display = 'none';
-  }
-
-  botao = document.createElement('button');
-  botao.id = 'botaoFlutuante';
-  botao.onclick = mostrarMenu;
-  document.body.appendChild(botao);
-
-  // Synaptic
-  const script = document.createElement('script');
-  script.src = 'https://cdn.jsdelivr.net/npm/synaptic@1.1.4/dist/synaptic.min.js';
-  document.head.appendChild(script);
-
-  // CSV incremental
-  function carregarCSV(url) {
-    return fetch(url).then(res => res.text()).then(text => {
-      return text.trim().split('\n').map(l => l.split(',').map(Number));
-    });
-  }
-
-  async function treinarRedeNeural() {
-    const { Layer, Network, Trainer } = synaptic;
-    const rede = new Network({
-      input: new Layer(4),
-      hidden: [new Layer(6)],
-      output: new Layer(3)
-    });
-
-    const dados = await carregarCSV('https://raw.githubusercontent.com/lerroydinno/blaze-bot/main/dados.csv');
-    const trainer = new Trainer(rede);
-    trainer.train(dados.map(l => ({
-      input: l.slice(0, 4).map(v => v / 14),
-      output: [
-        l[4] === 0 ? 1 : 0,
-        l[4] === 1 ? 1 : 0,
-        l[4] === 2 ? 1 : 0,
-      ]
-    })), {
-      iterations: 3000,
-      log: false
-    });
-
-    return rede;
-  }
-
-  function obterUltimoHash() {
-    const scripts = Array.from(document.scripts);
-    for (let s of scripts) {
-      const txt = s.textContent;
-      if (txt.includes('hash') && txt.includes('round')) {
-        const m = txt.match(/"hash":"([a-f0-9]+)"/i);
-        if (m) return m[1];
+    // === [5] MARKOV ===
+    function atualizarMarkov() {
+      for (let i = 1; i < historico.length; i++) {
+        const anterior = historico[i - 1].cor;
+        const atual = historico[i].cor;
+        matrizMarkov[anterior][atual]++;
       }
     }
-    return '';
-  }
 
-  async function preverPorHash(hash) {
-    if (!hash) return null;
-    const sha = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(hash));
-    const hex = Array.from(new Uint8Array(sha)).map(b => b.toString(16).padStart(2, '0')).join('');
-    const mod = parseInt(hex.slice(0, 8), 16) % 15;
-    if (mod === 0) return 0;
-    if (mod <= 7) return 1;
-    return 2;
-  }
-
-  function preverPorHorario() {
-    const h = new Date().getHours();
-    if (h >= 0 && h < 4) return 1;
-    if (h >= 4 && h < 8) return 2;
-    if (h >= 8 && h < 16) return 1;
-    return 2;
-  }
-
-  // Markov
-  let matrizTrans = {};
-  function atualizarMarkov(hist) {
-    matrizTrans = {};
-    for (let i = 0; i < hist.length - 1; i++) {
-      const atual = hist[i], prox = hist[i+1];
-      if (!matrizTrans[atual]) matrizTrans[atual] = [0,0,0];
-      matrizTrans[atual][prox]++;
-    }
-  }
-  function preverMarkov(hist) {
-    if (!hist.length) return null;
-    const ult = hist[hist.length - 1];
-    const freq = matrizTrans[ult];
-    if (!freq) return null;
-    const max = Math.max(...freq);
-    return freq.indexOf(max);
-  }
-
-  async function preverCorComIA(hash, ultimos, rede) {
-    const markov = preverMarkov(ultimos);
-    const hashPred = await preverPorHash(hash);
-    const horarioPred = preverPorHorario();
-    let redePred = null;
-
-    if (rede && ultimos.length >= 4) {
-      const entrada = ultimos.slice(-4).map(v => v / 14);
-      const saida = rede.activate(entrada);
-      const idx = saida.indexOf(Math.max(...saida));
-      redePred = idx;
+    // === [6] MÉTODOS DE PREVISÃO ===
+    function preverComRede(hash) {
+      const entrada = normalizarHash(hash);
+      const resultado = redeNeural.activate(entrada);
+      const indice = resultado.indexOf(Math.max(...resultado));
+      return { cor: numeroParaCor(indice), confianca: resultado[indice] };
     }
 
-    const votos = [hashPred, horarioPred, markov, redePred].filter(v => v !== null);
-    const contagem = [0, 0, 0];
-    votos.forEach(v => contagem[v]++);
-    const melhor = contagem.indexOf(Math.max(...contagem));
-    const conf = (contagem[melhor] / votos.length * 100).toFixed(1);
-
-    return { cor: melhor, confianca: conf };
-  }
-
-  window.preverCorComIA = async function() {
-    if (!redeNeuralGlobal) {
-      redeNeuralGlobal = await treinarRedeNeural();
+    function preverComMarkov() {
+      const ultima = historico[historico.length - 1]?.cor;
+      const transicoes = matrizMarkov[ultima];
+      const soma = Object.values(transicoes).reduce((a, b) => a + b, 0);
+      const probabilidades = Object.fromEntries(Object.entries(transicoes).map(([cor, val]) => [cor, val / soma]));
+      const cor = Object.keys(probabilidades).reduce((a, b) => (probabilidades[a] > probabilidades[b] ? a : b));
+      return { cor, confianca: probabilidades[cor] };
     }
-    const hash = obterUltimoHash();
-    const ultimos = historico.map(h => h.cor);
-    const { cor, confianca } = await preverCorComIA(hash, ultimos, redeNeuralGlobal);
-    return { cor, confianca };
+
+    function preverPorPadrao() {
+      if (historico.length < 3) return { cor: "preto", confianca: 0.33 };
+      const [a, b, c] = historico.slice(-3).map(h => h.cor);
+      if (a === b && b === c) return { cor: "branco", confianca: 0.7 };
+      return { cor: "preto", confianca: 0.33 };
+    }
+
+    function previsaoFinal(hash) {
+      const r1 = preverComRede(hash);
+      const r2 = preverComMarkov();
+      const r3 = preverPorPadrao();
+      const pesos = { rede: 0.5, markov: 0.3, padrao: 0.2 };
+      const score = { vermelho: 0, preto: 0, branco: 0 };
+      [r1, r2, r3].forEach((r, i) => {
+        const peso = i === 0 ? pesos.rede : i === 1 ? pesos.markov : pesos.padrao;
+        score[r.cor] += r.confianca * peso;
+      });
+      const cor = Object.keys(score).reduce((a, b) => (score[a] > score[b] ? a : b));
+      return { cor, score };
+    }
+
+    // === [7] MENU FLUTUANTE ORIGINAL COM BOTÃO DE MINIMIZAR ===
+    const botao = document.createElement("div");
+    botao.style = "position:fixed;bottom:20px;right:20px;width:60px;height:60px;background-color:#000000cc;border-radius:50%;display:flex;align-items:center;justify-content:center;z-index:9999;cursor:pointer;";
+    botao.innerHTML = '<img src="https://cdn-icons-png.flaticon.com/512/25/25231.png" style="width:30px;height:30px;">';
+
+    const painel = document.createElement("div");
+    painel.style = "position:fixed;bottom:90px;right:20px;width:300px;background:#111;color:#fff;padding:10px;border-radius:10px;font-family:sans-serif;z-index:9999;display:none;";
+    painel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+        <strong>Previsão Blaze</strong>
+        <button id="minimizar" style="background:#333;color:white;border:none;border-radius:3px;padding:2px 6px;cursor:pointer;">-</button>
+      </div>
+      <div id="saidaPrevisao">Aguardando dados...</div>
+    `;
+
+    document.body.appendChild(botao);
+    document.body.appendChild(painel);
+
+    botao.onclick = () => painel.style.display = painel.style.display === "none" ? "block" : "none";
+    painel.querySelector("#minimizar").onclick = () => painel.style.display = "none";
+
+    // === [8] MONITORAR RODADAS ===
+    let ultimoHash = null;
+    setInterval(() => {
+      const hashEl = document.querySelector(".sm\\:text-xxs.text-gray-400");
+      const corEl = document.querySelector(".sm\\:text-xxs.font-bold.uppercase");
+      const numeroEl = document.querySelector(".text-white.text-2xl");
+
+      if (!hashEl || !corEl || !numeroEl) return;
+      const hash = hashEl.innerText.trim();
+      const cor = corEl.innerText.trim().toLowerCase();
+      const numero = numeroEl.innerText.trim();
+
+      if (hash === ultimoHash || !["vermelho", "preto", "branco"].includes(cor)) return;
+      ultimoHash = hash;
+      historico.push({ hash, cor, numero, horario: new Date().toLocaleTimeString() });
+      if (historico.length > 500) historico.shift();
+      localStorage.setItem("historicoBlazeNN", JSON.stringify(historico));
+      treinarRede();
+      atualizarMarkov();
+
+      const previsao = previsaoFinal(hash);
+      painel.querySelector("#saidaPrevisao").innerHTML = `
+        <div><b>Última:</b> ${cor} (${numero})</div>
+        <div><b>Próxima previsão:</b> <span style="color:${previsao.cor};font-weight:bold">${previsao.cor}</span></div>
+        <div><b>Score:</b><br/> 
+          ${Object.entries(previsao.score).map(([k, v]) => `<span style="color:${k};">${k}: ${(v * 100).toFixed(1)}%</span>`).join("<br/>")}
+        </div>
+      `;
+    }, 3000);
   };
-
-  const observer = new MutationObserver(() => {
-    const cores = Array.from(document.querySelectorAll('.entry')).map(div => {
-      if (div.classList.contains('white')) return 0;
-      if (div.classList.contains('red')) return 1;
-      return 2;
-    }).reverse();
-    if (cores.length && historico.length !== cores.length) {
-      historico = cores.map(c => ({ cor: c }));
-      atualizarMarkov(historico.map(h => h.cor));
-    }
-  });
-
-  observer.observe(document.body, { childList: true, subtree: true });
+  document.head.appendChild(script);
 })();
