@@ -1,38 +1,193 @@
-(async function () { const apiURL = "https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
+(function() {
+  // === INÍCIO: Dependências ===
+  const synapticScript = document.createElement('script');
+  synapticScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/synaptic/1.1.4/synaptic.min.js';
+  document.head.appendChild(synapticScript);
 
-// ==== IMPORTAÇÃO SYNAPTIC.JS ==== const scriptSyn = document.createElement('script'); scriptSyn.src = 'https://cdn.jsdelivr.net/npm/synaptic@1.1.4/dist/synaptic.min.js'; document.head.appendChild(scriptSyn); await new Promise(r => scriptSyn.onload = r); const { Layer, Network, Trainer } = window.synaptic;
+  const csvData = [];
+  const learnedHashPatterns = {};
+  const markovChain = { red: {}, black: {}, white: {} };
+  const history = [];
 
-// ==== HISTÓRICO E MODELOS ==== let historicoCSV = "Data;Cor;Número;Hash;Previsão;Confiança\n"; let lastHash = ""; let coresAnteriores = []; // Rede Neural let nn; // Markov const markov = { BRANCO: { BRANCO:1, VERMELHO:1, PRETO:1 }, VERMELHO: { BRANCO:1, VERMELHO:1, PRETO:1 }, PRETO: { BRANCO:1, VERMELHO:1, PRETO:1 } };
+  const network = new synaptic.Architect.Perceptron(5, 8, 3);
+  const trainer = new synaptic.Trainer(network);
 
-// === FUNÇÕES AUXILIARES === async function sha256(message) { const msgBuffer = new TextEncoder().encode(message); const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer); return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2,'0')).join(''); }
+  function normalizeColor(color) {
+    return color === 'red' ? [1, 0, 0] : color === 'black' ? [0, 1, 0] : [0, 0, 1];
+  }
 
-function getRollColor(hash) { const number = parseInt(hash.slice(0, 8), 16) % 15; if (number === 0) return { cor: "BRANCO", numero: 0 }; if (number <= 7) return { cor: "VERMELHO", numero }; return { cor: "PRETO", numero }; }
+  function denormalizeColor(output) {
+    const max = Math.max(...output);
+    if (output[0] === max) return 'red';
+    if (output[1] === max) return 'black';
+    return 'white';
+  }
 
-function atualizarLookup(hash, cor) { const p = hash.slice(0,2); lookupPrefix[p] = lookupPrefix[p] || { BRANCO:0, VERMELHO:0, PRETO:0 }; lookupPrefix[p][cor]++; }
+  function trainFromCSV() {
+    if (!csvData.length) return;
+    const trainingSet = csvData.map(row => {
+      return {
+        input: row.input,
+        output: normalizeColor(row.output)
+      };
+    });
+    trainer.train(trainingSet, {
+      iterations: 100,
+      error: 0.01,
+      rate: 0.1
+    });
+  }
 
-function analisarSequencias(hist) { if (hist.length < 4) return null; const ult = hist.slice(-4); if (ult.every(c=>c==="PRETO")) return "VERMELHO"; if (ult.every(c=>c==="VERMELHO")) return "PRETO"; if (ult[ult.length-1]==="BRANCO") return "PRETO"; return null; }
+  function analyzeHashPrefix(hash) {
+    const prefix = hash.substring(0, 4);
+    if (learnedHashPatterns[prefix]) return learnedHashPatterns[prefix];
+    const predefined = {
+      '0000': 'white',
+      'ffff': 'black',
+      'aaaa': 'red',
+      'dead': 'red',
+      'beef': 'black'
+    };
+    return predefined[prefix] || null;
+  }
 
-function calcularIntervaloBranco(hist) { let last=-1, ints=[]; hist.forEach((c,i)=>{ if(c==="BRANCO"){ if(last>=0) ints.push(i-last); last=i; } }); const media = ints.length ? ints.reduce((a,b)=>a+b)/ints.length : 0; const ultima = hist.lastIndexOf("BRANCO"); const desde = historia.length - (ultima!==-1?ultima:historia.length); return { media, desdeUltimo: desde }; }
+  function updateLearnedHashPatterns(hash, color) {
+    const prefix = hash.substring(0, 4);
+    if (!learnedHashPatterns[prefix]) learnedHashPatterns[prefix] = color;
+  }
 
-function calcularAposta(conf) { const b=1; if(conf<60) return 0; if(conf<70) return b; if(conf<80) return b2; if(conf<90) return b4; return b*8; }
+  function predictMarkov(lastColor) {
+    const transitions = markovChain[lastColor] || {};
+    const sorted = Object.entries(transitions).sort((a, b) => b[1] - a[1]);
+    return sorted.length ? sorted[0][0] : null;
+  }
 
-// === REDE NEURAL: configuração === function criarNN() { const input = new Layer(4), hidden = new Layer(6), output = new Layer(3); input.project(hidden); hidden.project(output); nn = new Network({ input, hidden:[hidden], output }); const trainer = new Trainer(nn); const treino = coresAnteriores.map((cor,i)=>({ input: normalizeHash(coresAnteriores[i-1]||coresAnteriores[i]), output: oneHot(cor) })); trainer.train(treino,{rate:0.1,iterations:200}); } function normalizeHash(hash) { return [...hash.slice(0,4)].map(c=>parseInt(c,16)/15); } function oneHot(cor) { return { BRANCO:[0,0,1], VERMELHO:[1,0,0], PRETO:[0,1,0] }[cor]; }
+  function updateMarkov(prev, current) {
+    if (!markovChain[prev]) markovChain[prev] = {};
+    if (!markovChain[prev][current]) markovChain[prev][current] = 0;
+    markovChain[prev][current]++;
+  }
 
-// === PREDIÇÃO AVANÇADA === async function gerarPrevisaoAv(hash, hist=[]) { // SHA-base const nova = await sha256(hash); const base = getRollColor(nova); // neural if(!nn) criarNN(); const out = nn.activate(normalizeHash(nova)); const idx = out.indexOf(Math.max(...out)); const pNN = { cor: ["VERMELHO","PRETO","BRANCO"][idx], confNN: out[idx]*100 }; // Markov const ult = hist.slice(-1)[0] || base.cor; const tr = markov[ult]; const tot = tr.BRANCO+tr.VERMELHO+tr.PRETO; const pMk = { cor: Object.keys(tr).reduce((a,b)=> tr[a]>tr[b]?a:b), confMk: (tr[Object.keys(tr).reduce((a,b)=> tr[a]>tr[b]?a:b)]/tot)*100 }; // Seq const seq = analisarSequencias(hist); // Intervalo branco const brancoInt = base.cor==="BRANCO"?calcularIntervaloBranco(hist):{}; // Reforço prefixo const rp = reforcoPrefixo(nova); // Combinação const score = { BRANCO:0,VERMELHO:0,PRETO:0 }; score[base.cor]+=50; score[pNN.cor]+=30; score[pMk.cor]+=20; const cor = Object.keys(score).reduce((a,b)=>score[a]>score[b]?a:b); let conf = score[cor]/100; const aposta = calcularAposta(conf); return { cor, confianca: conf.toFixed(2), aposta, detalhes:{ base, pNN, pMk, seq, brancoInt, rp } }; }
+  function predictTimeBased() {
+    const now = new Date();
+    const hour = now.getHours();
+    if (hour >= 0 && hour < 6) return 'black';
+    if (hour >= 6 && hour < 12) return 'red';
+    if (hour >= 12 && hour < 18) return 'black';
+    return 'red';
+  }
 
-// ==== lookupPrefix original ==== let lookupPrefix = {}; function reforcoPrefixo(hash) { const prefix = hash.slice(0,2); const d = lookupPrefix[prefix]; if(!d) return {}; const tot = d.BRANCO+d.VERMELHO+d.PRETO; return { BRANCO:(d.BRANCO/tot)*100, VERMELHO:(d.VERMELHO/tot)*100, PRETO:(d.PRETO/tot)*100 }; }
+  function predictWithNeuralNetwork(inputArray) {
+    const output = network.activate(inputArray);
+    return denormalizeColor(output);
+  }
 
-// === FUNÇÕES ORIGINAIS DE PAINEL, CSV, INTERCEPT === function updatePainel(cor, numero, hash, previsao) { document.getElementById('resultado_cor').innerText = 🎯 Resultado: ${cor} (${numero}); document.getElementById('resultado_hash').innerText = Hash: ${hash}; document.getElementById('previsao_texto').innerText = 🔮 Próxima: ${previsao.cor} (${previsao.aposta})\n🎯 Confiança: ${previsao.confianca}%; document.getElementById('previsao_texto').style.color = previsao.confianca>=90?"yellow":"limegreen"; document.getElementById('historico_resultados').innerHTML += <div>${cor} (${numero}) - <span style="font-size:10px">${hash.slice(0,16)}...</span></div>; } function downloadCSV(){ const blob=new Blob([historicoCSV],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=double_historico_${Date.now()}.csv; a.click(); URL.revokeObjectURL(url); } function salvarHistoricoLocal(){ localStorage.setItem('historico_double',historicoCSV);}  function carregarHistoricoLocal(){ const s=localStorage.getItem('historico_double'); if(s) historicoCSV=s; } function processarCSV(text){ text.trim().split('\n').slice(1).forEach(l=>{ const p=l.split(';'); if(p.length>=4){ coresAnteriores.push(p[1]); atualizarLookup(p[3],p[1]); }}); }
+  function unifiedPrediction(hash, lastColor) {
+    const hashColor = analyzeHashPrefix(hash);
+    const markovColor = predictMarkov(lastColor);
+    const timeColor = predictTimeBased();
+    const input = [
+      ...Array.from(hash.substring(0, 4)).map(c => c.charCodeAt(0) / 255).slice(0, 2),
+      lastColor === 'red' ? 1 : 0,
+      lastColor === 'black' ? 1 : 0,
+      lastColor === 'white' ? 1 : 0
+    ];
+    const neuralColor = predictWithNeuralNetwork(input);
 
-carregarHistoricoLocal();
+    const votes = [hashColor, markovColor, timeColor, neuralColor].filter(Boolean);
+    const count = votes.reduce((acc, color) => {
+      acc[color] = (acc[color] || 0) + 1;
+      return acc;
+    }, {});
+    const best = Object.entries(count).sort((a, b) => b[1] - a[1])[0];
+    return best ? best[0] : 'red';
+  }
 
-// === CRIA PAINEL E ICONE === const painel = document.createElement("div"); painel.id = "painel_previsao"; painel.style = position: fixed; top: 60px; left: 50%; transform: translateX(-50%); z-index: 99999; background: #000000cc; border: 2px solid limegreen; border-radius: 20px; color: limegreen; padding: 20px; font-family: monospace; text-align: center; width: 360px;; painel.innerHTML =  <div style="display:flex;justify-content:space-between;align-items:center;"> <h3 style="margin:0;">Blaze<br>Bot I.A</h3> <button id="btn_minimizar" style="background:none;border:none;color:limegreen;font-weight:bold;font-size:20px;">−</button> </div> <div id="resultado_cor">🎯 Resultado: aguardando...</div> <div id="resultado_hash" style="font-size: 10px; word-break: break-all;">Hash: --</div> <div id="previsao_texto" style="margin-top: 10px;">🔮 Previsão: aguardando...</div> <input type="file" id="import_csv" accept=".csv" style="margin:10px;" /> <button id="btn_prever" style="margin-top:5px;">🔁 Gerar previsão manual</button> <button id="btn_baixar" style="margin-top:5px;">⬇️ Baixar CSV</button> <div id="historico_resultados" style="margin-top:10px;max-height:100px;overflow:auto;text-align:left;font-size:12px;"></div>; document.body.appendChild(painel); const icone = document.createElement("div"); icone.id = "icone_flutuante"; icone.style = display:none;position:fixed;bottom:20px;right:20px;z-index:99999;width:60px;height:60px;border-radius:50%; background-image:url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg'); background-size:cover;background-repeat:no-repeat;background-position:center; border:2px solid limegreen;box-shadow:0 0 10px limegreen,0 0 20px limegreen inset;cursor:pointer;animation:neonPulse 1s infinite;; document.body.appendChild(icone); const estilo = document.createElement('style'); estilo.innerHTML = @keyframes neonPulse{0%{box-shadow:0 0 5px limegreen,0 0 10px limegreen inset;}50%{box-shadow:0 0 20px limegreen,0 0 40px limegreen inset;}100%{box-   shadow:0 0 5px limegreen,0 0 10px limegreen inset;}}; document.head.appendChild(estilo);
+  function processNewResult(color, hash) {
+    const lastColor = history.length ? history[history.length - 1].color : 'red';
+    updateMarkov(lastColor, color);
+    updateLearnedHashPatterns(hash, color);
+    history.push({ color, hash });
+    if (history.length > 1) {
+      csvData.push({
+        input: [
+          ...Array.from(hash.substring(0, 4)).map(c => c.charCodeAt(0) / 255).slice(0, 2),
+          lastColor === 'red' ? 1 : 0,
+          lastColor === 'black' ? 1 : 0,
+          lastColor === 'white' ? 1 : 0
+        ],
+        output: color
+      });
+    }
+  }
 
-document.getElementById('btn_minimizar').onclick = () => { painel.style.display = 'none'; icone.style.display = 'block'; }; icone.onclick = () => { painel.style.display = 'block'; icone.style.display = 'none'; }; document.getElementById('btn_baixar').onclick = downloadCSV; document.getElementById('btn_prever').onclick = async () => { if(lastHash!="indefinido"&&lastHash){ const pv = await gerarPrevisaoAv(lastHash, coresAnteriores); updatePainel(pv.cor, '-', lastHash, pv); historicoCSV += ${new Date().toLocaleString()};${pv.cor};-;${lastHash};${pv.confianca}%\n; salvarHistoricoLocal(); } }; document.getElementById('import_csv').addEventListener('change', e=>{ const f=e.target.files[0]; if(!f)return; new FileReader().
-onload=e=>processarCSV(e.target.result); reader.readAsText(f); });
+  // === INÍCIO: Menu flutuante original ===
+  const button = document.createElement('img');
+  button.src = 'https://i.imgur.com/jNNT4LE.png';
+  button.style.position = 'fixed';
+  button.style.bottom = '20px';
+  button.style.right = '20px';
+  button.style.width = '60px';
+  button.style.height = '60px';
+  button.style.zIndex = '9999';
+  button.style.cursor = 'pointer';
+  button.style.borderRadius = '50%';
+  button.style.boxShadow = '0 0 10px rgba(0,0,0,0.5)';
+  document.body.appendChild(button);
 
-setInterval(async () => { try { const res = await fetch(apiURL); const data = await res.json(); const u = data[0]; const corNum = Number(u.color); const cor = corNum===0?"BRANCO":corNum<=7?"VERMELHO":"PRETO"; const numero = u.roll; const hash = u.hash||u.server_seed||"indefinido"; if(hash!==lastHash && hash!=="indefinido"){ atualizarLookup(hash,cor); markov[coresAnteriores.slice(-1)[0]||cor][cor]++; coresAnteriores.push(cor); if(coresAnteriores.length>200) coresAnteriores.shift(); lastHash=hash; const pv = await gerarPrevisaoAv(hash, coresAnteriores); updatePainel(cor, numero, hash, pv); historicoCSV += ${new Date().toLocaleString()};${cor};${numero};${hash};${pv.cor};${pv.confianca}%\n; salvarHistoricoLocal(); document.getElementById('historico_resultados').innerHTML += <div id="log_${hash}">${cor} (${numero})</div>; } } catch(e) { console.error(e); } }, 8000);
+  const panel = document.createElement('div');
+  panel.style.position = 'fixed';
+  panel.style.bottom = '90px';
+  panel.style.right = '20px';
+  panel.style.width = '300px';
+  panel.style.backgroundColor = '#111';
+  panel.style.color = '#fff';
+  panel.style.padding = '10px';
+  panel.style.borderRadius = '10px';
+  panel.style.boxShadow = '0 0 10px rgba(0,0,0,0.5)';
+  panel.style.zIndex = '9999';
+  panel.style.display = 'none';
+  panel.style.maxHeight = '400px';
+  panel.style.overflowY = 'auto';
+  document.body.appendChild(panel);
 
-// === INTERCEPTAÇÃO AVANÇADA === const wsO=window.WebSocket; window.WebSocket=function(...a){ const w=new wsO(...a); const ad=w.addEventListener; w.addEventListener=(t,l,..r)=> t==='message'? ad.call(w,t,e=>{console.log(e.data);l(e);},...r):ad.call
-(w,t,l,...r); return w; }; const fO=window.fetch; window.fetch= async(...a)=>{ const r=await fO(...a); const c=r.clone(); c.text().then(t=>console.log(t)); return r; }; const xO=XMLHttpRequest.prototype.open, sO=XMLHttpRequest.prototype.send; XMLHttpRequest.prototype.open = function(m,u,...) { this._url=u; return xO.call(this,m,u,...); }; XMLHttpRequest.prototype.send = function(...a){ this.addEventListener('load',function(){ console.log(this._url,this.responseText);}); return sO.apply(this,a); }; })();
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Minimizar';
+  closeBtn.style.marginTop = '10px';
+  closeBtn.style.background = '#333';
+  closeBtn.style.color = '#fff';
+  closeBtn.style.border = 'none';
+  closeBtn.style.padding = '5px 10px';
+  closeBtn.style.borderRadius = '5px';
+  closeBtn.onclick = () => panel.style.display = 'none';
+  panel.appendChild(closeBtn);
 
+  const logDiv = document.createElement('div');
+  logDiv.style.marginTop = '10px';
+  panel.appendChild(logDiv);
+
+  button.onclick = () => {
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  };
+
+  function log(msg) {
+    const p = document.createElement('p');
+    p.textContent = `[BOT] ${msg}`;
+    p.style.margin = '5px 0';
+    logDiv.prepend(p);
+  }
+
+  // === INÍCIO: Simulador de uso ===
+  const simulate = () => {
+    const colors = ['red', 'black', 'white'];
+    const hash = crypto.randomUUID().replace(/-/g, '').slice(0, 64);
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    processNewResult(color, hash);
+    trainFromCSV();
+    const lastColor = history.length ? history[history.length - 1].color : 'red';
+    const prediction = unifiedPrediction(hash, lastColor);
+    log(`Hash: ${hash} | Real: ${color} | Previsto: ${prediction}`);
+  };
+
+  setInterval(simulate, 8000); // Simula nova rodada a cada 8 segundos
+})();
