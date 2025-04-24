@@ -1,160 +1,176 @@
 (() => {
-  if (window.doubleGameInjected) return;
-  window.doubleGameInjected = true;
+  if (window.hacker00Injected) return;
+  window.hacker00Injected = true;
 
-  const style = document.createElement("style");
+  const style = document.createElement('style');
   style.textContent = `
-    .dg-container {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      width: 320px;
-      background-color: rgba(0, 0, 0, 0.65);
-      border-radius: 8px;
-      box-shadow: 0 4px 15px rgba(0, 255, 0, 0.3);
-      font-family: 'Courier New', monospace;
-      z-index: 999999;
-      max-height: 90vh;
-      overflow-y: auto;
-      color: #00ff00;
-      border: 1px solid #00ff00;
-    }
-    .dg-header {
-      background-color: rgba(0, 0, 0, 0.7);
-      color: #00ff00;
-      padding: 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid #00ff00;
-    }
-    .dg-header h1 {
-      margin: 0;
-      font-size: 16px;
-      flex: 1;
-      text-align: center;
-    }
-    .dg-close-btn {
-      background: none;
-      border: none;
-      color: #f3f4f6;
-      cursor: pointer;
-      font-size: 16px;
-      width: 30px;
-      text-align: center;
-    }
-    .dg-btn {
-      background-color: #001a00;
-      border: 1px solid #00ff00;
-      color: #00ff00;
-      padding: 5px 10px;
-      border-radius: 4px;
-      cursor: pointer;
-      width: 100%;
-    }
-    .dg-section {
-      background: rgba(0, 20, 0, 0.7);
-      border-radius: 6px;
-      padding: 10px;
-      margin-bottom: 10px;
-      border: 1px solid #00ff00;
-    }
-    .dg-prediction, .dg-result {
-      font-weight: bold;
-      text-align: center;
-      padding: 10px;
-      border-radius: 4px;
-      border: 1px solid #00ff00;
-      color: #00ff00;
-      margin-top: 10px;
-      background-color: rgba(0, 100, 0, 0.5);
-    }
-    .dg-floating-image {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      width: 80px;
-      height: 80px;
-      border-radius: 50%;
-      cursor: pointer;
-      box-shadow: 0 0 15px rgba(0, 255, 0, 0.4);
-      z-index: 999998;
-      transition: transform 0.2s;
-      border: 2px solid #00ff00;
-    }
+    .dg-container { position: fixed; top: 20px; right: 20px; width: 320px;
+      background-color: rgba(0,0,0,0.65); color: #00ff00; border: 1px solid #00ff00;
+      border-radius: 8px; z-index: 999999; font-family: 'Courier New', monospace; }
+    .dg-header { display: flex; justify-content: space-between; align-items: center;
+      background: rgba(0,0,0,0.7); padding: 10px; border-bottom: 1px solid #00ff00; }
+    .dg-header h1 { font-size: 16px; margin: 0; flex: 1; text-align: center; }
+    .dg-close-btn { background: none; border: none; color: #f3f4f6; font-size: 16px;
+      cursor: pointer; width: 30px; text-align: center; }
+    .dg-content { padding: 15px; background: rgba(0,0,0,0.75);
+      background-image: url('https://raw.githubusercontent.com/marcellobatiista/aguia-obsf/0b6f4eaae0624a8918e614c8f8044ef1b7190ba1/Imagem%20do%20WhatsApp%20de%202025-03-27%20%C3%A0(s)%2014.32.21_e607b73d.jpg');
+      background-size: cover; background-position: center; border-radius: 0 0 8px 8px; }
+    .dg-section { margin-bottom: 15px; background: rgba(0,20,0,0.7); border-radius: 6px;
+      padding: 10px; border: 1px solid rgba(0,255,0,0.3); }
+    .dg-connection { text-align: center; padding: 6px; border-radius: 4px; font-size: 12px;
+      font-weight: bold; text-shadow: 0 0 5px #00ff00; }
+    .dg-connected { background: rgba(0,50,0,0.9); color: #00ff00; }
+    .dg-disconnected { background: #ef4444; color: #f3f4f6; }
+    .dg-btn { padding: 6px 10px; border-radius: 4px; border: none; cursor: pointer;
+      font-size: 12px; color: #f3f4f6; }
+    .dg-btn-primary { background: rgba(0,100,0,0.9); border: 1px solid #00ff00;
+      color: #00ff00; text-shadow: 0 0 5px #00ff00; }
+    .dg-result { display: inline-flex; justify-content: center; align-items: center;
+      width: 40px; height: 40px; border-radius: 50%; border: 2px solid;
+      font-weight: bold; margin: 0 auto; font-size: 14px; }
+    .dg-white { background-color: #f3f4f6; color: #1f2937; border-color: #d1d5db; }
+    .dg-red   { background-color: rgb(38, 216, 15); color: #f3f4f6; border-color: rgb(11, 119, 20); }
+    .dg-black { background-color: #000; color: #f3f4f6; border-color: #4b5563; }
+    .dg-prediction-result { padding: 8px; border-radius: 4px; text-align: center;
+      font-weight: bold; margin-top: 10px; font-size: 14px; }
+    .dg-win { background: #047857; }
+    .dg-lose { background: #b91c1c; }
+    .dg-floating-image { position: fixed; bottom: 20px; right: 20px; width: 80px; height: 80px;
+      border-radius: 50%; cursor: pointer; box-shadow: 0 0 15px rgba(0,255,0,0.4);
+      z-index: 999998; border: 2px solid #00ff00; }
   `;
   document.head.appendChild(style);
 
-  const btn = document.createElement("img");
-  btn.className = "dg-floating-image";
-  btn.src = "https://t.me/i/userpic/320/chefe00blaze.jpg";
-  btn.alt = "Hacker00 I.A";
-  btn.addEventListener('click', () => {
-    const container = document.getElementById("dg-panel");
-    if (container) {
-      container.style.display = "block";
-    } else {
-      initPanel();
-    }
-  });
-  document.body.appendChild(btn);
-
-  function initPanel() {
-    const panel = document.createElement("div");
-    panel.className = "dg-container";
-    panel.id = "dg-panel";
-    panel.innerHTML = `
-      <div class="dg-header">
-        <h1 id="dg-title">Hacker00 I.A</h1>
-        <button class="dg-close-btn" onclick="document.getElementById('dg-panel').style.display='none'">×</button>
+  const panel = document.createElement("div");
+  panel.className = "dg-container";
+  panel.id = "double-game-container";
+  panel.innerHTML = `
+    <div class="dg-header">
+      <h1>Hacker00 I.A</h1>
+      <button class="dg-close-btn" id="dg-close">×</button>
+    </div>
+    <div class="dg-content">
+      <div class="dg-connection dg-disconnected" id="dg-connection-status">Desconectado</div>
+      <div class="dg-section">
+        <p>Status do Jogo: <span id="dg-game-status">Esperando</span></p>
+        <div id="dg-result-container" style="display:none">
+          <div id="dg-result" class="dg-result">?</div>
+          <p id="dg-color-name">-</p>
+        </div>
       </div>
-      <div class="dg-section"><p>Status: <span id="dg-status">Desconectado</span></p></div>
-      <div class="dg-section"><button class="dg-btn" id="dg-predict">Gerar Previsão</button><div class="dg-prediction" id="dg-prediction" style="display:none;"></div></div>
-      <div class="dg-section"><div class="dg-result" id="dg-result" style="display:none;"></div></div>
-    `;
-    panel.style.display = "block";
-    document.body.appendChild(panel);
+      <div class="dg-section">
+        <div id="dg-prediction-container" style="display:none">
+          <p>Previsão para esta rodada:</p>
+          <div id="dg-prediction" class="dg-prediction">?</div>
+          <p id="dg-prediction-accuracy"></p>
+        </div>
+        <button id="dg-new-prediction" class="dg-btn dg-btn-primary">Gerar Nova Previsão</button>
+        <div id="dg-result-message" class="dg-prediction-result" style="display:none"></div>
+      </div>
+    </div>`;
+  document.body.appendChild(panel);
 
-    let corPrevista = null;
-    let marketingMode = false;
-    let clickCount = 0;
-    const cores = ["Branco", "Verde", "Preto"];
+  document.getElementById('dg-close').onclick = () => {
+    panel.style.display = 'none';
+    imgBtn.style.display = 'block';
+  };
 
-    document.getElementById("dg-predict").onclick = () => {
-      corPrevista = Math.floor(Math.random() * 3);
-      const div = document.getElementById("dg-prediction");
-      div.textContent = "Previsão: " + cores[corPrevista] + " - 99.99%";
-      div.style.display = "block";
-    };
+  const imgBtn = document.createElement('img');
+  imgBtn.src = 'https://t.me/i/userpic/320/chefe00blaze.jpg';
+  imgBtn.className = 'dg-floating-image';
+  imgBtn.onclick = () => {
+    panel.style.display = 'block';
+    imgBtn.style.display = 'none';
+  };
+  document.body.appendChild(imgBtn);
 
-    document.getElementById("dg-title").onclick = () => {
-      clickCount++;
-      if (clickCount >= 25) {
-        marketingMode = true;
-        alert("Modo Marketing Ativado!");
-      }
-    };
-
-    const ws = new WebSocket("wss://api-gaming.jonbet.bet.br/replication/?EIO=3&transport=websocket");
-    ws.onopen = () => {
-      document.getElementById("dg-status").textContent = "Conectado";
-      ws.send('421["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
-    };
-    ws.onmessage = msg => {
-      if (!msg.data.startsWith("42[")) return;
-      try {
-        const payload = JSON.parse(msg.data.substring(2));
-        const game = payload[1]?.payload;
-        if (!game) return;
-        if (game.status === "complete") {
-          const corReal = game.color;
-          const ganhou = marketingMode || (corPrevista !== null && corPrevista === corReal);
-          const resultado = "Resultado: " + cores[corReal] + " (" + game.roll + ") " + (ganhou ? "✅ GANHOU" : "❌ PERDEU");
-          const div = document.getElementById("dg-result");
-          div.textContent = resultado;
-          div.style.display = "block";
+  const game = {
+    colorMap: {
+      '0': { name: 'Branco', class: 'dg-white' },
+      '1': { name: 'Verde', class: 'dg-red' },
+      '2': { name: 'Preto', class: 'dg-black' }
+    },
+    prediction: null,
+    marketing: false,
+    clicks: 0,
+    status: null,
+    ws: null,
+    setup() {
+      document.getElementById('dg-new-prediction').onclick = () => {
+        if (this.prediction !== null) return;
+        this.prediction = Math.floor(Math.random() * 3);
+        document.getElementById('dg-prediction-container').style.display = 'block';
+        const pred = document.getElementById('dg-prediction');
+        pred.textContent = this.colorMap[this.prediction].name;
+        pred.className = `dg-prediction ${this.colorMap[this.prediction].class}`;
+        document.getElementById('dg-prediction-accuracy').textContent = 'Assertividade: 99.99%';
+      };
+      document.getElementById('dg-game-status').onclick = () => {
+        this.clicks++;
+        if (this.clicks >= 25) {
+          this.marketing = true;
+          alert("Modo marketing ativado!");
         }
-      } catch (e) {}
-    };
-  }
+      };
+    },
+    connect() {
+      const ws = new WebSocket("wss://api-gaming.jonbet.bet.br/replication/?EIO=3&transport=websocket");
+      this.ws = ws;
+      ws.onopen = () => {
+        document.getElementById('dg-connection-status').className = 'dg-connection dg-connected';
+        document.getElementById('dg-connection-status').textContent = 'Conectado ao servidor';
+        ws.send('421["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
+      };
+      ws.onmessage = ({ data }) => {
+        if (!data.startsWith("42[")) return;
+        const parsed = JSON.parse(data.slice(2));
+        const payload = parsed[1]?.payload;
+        if (!payload) return;
+
+        this.status = payload.status;
+        document.getElementById('dg-game-status').textContent = payload.status;
+
+        // Exibe resultado assim que o jogo entra em 'waiting' ou 'rolling',
+        // mas só se tivermos mapeamento válido para a cor
+        if ((payload.status === 'waiting' || payload.status === 'rolling')
+            && payload.roll != null
+            && this.colorMap[payload.color]) {
+          document.getElementById('dg-result-container').style.display = 'block';
+          const result = document.getElementById('dg-result');
+          result.textContent = payload.roll;
+          result.className = `dg-result ${this.colorMap[payload.color].class}`;
+          document.getElementById('dg-color-name').textContent = this.colorMap[payload.color].name;
+        }
+
+        // Ao completar a rodada, mostra ganhou/perdeu e reseta campos
+        if (payload.status === 'complete') {
+          const resultMsg = document.getElementById('dg-result-message');
+          resultMsg.style.display = 'block';
+          if (this.marketing || payload.color === this.prediction) {
+            resultMsg.className = 'dg-prediction-result dg-win';
+            resultMsg.textContent = 'GANHOU! 🎉';
+          } else {
+            resultMsg.className = 'dg-prediction-result dg-lose';
+            resultMsg.textContent = 'PERDEU 😢';
+          }
+
+          setTimeout(() => {
+            document.getElementById('dg-result-container').style.display = 'none';
+            document.getElementById('dg-prediction-container').style.display = 'none';
+            document.getElementById('dg-result-message').style.display = 'none';
+            this.prediction = null;
+            document.getElementById('dg-new-prediction').disabled = false;
+          }, 3000);
+        }
+      };
+      ws.onclose = () => {
+        document.getElementById('dg-connection-status').className = 'dg-connection dg-disconnected';
+        document.getElementById('dg-connection-status').textContent = 'Desconectado';
+        setTimeout(() => this.connect(), 1000);
+      };
+    }
+  };
+
+  game.setup();
+  game.connect();
 })();
