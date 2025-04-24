@@ -87,7 +87,6 @@
 
   const btn = document.createElement("img");
   btn.className = "dg-floating-image";
-  btn.id = "dg-floating-image";
   btn.src = "https://t.me/i/userpic/320/chefe00blaze.jpg";
   btn.alt = "Hacker00 I.A";
   btn.addEventListener('click', () => {
