@@ -60,7 +60,6 @@
   };
   document.body.appendChild(img);
 
-  // Drag funcional
   const dragHandle = panel.querySelector(".dg-drag-handle");
   let offsetX = 0, offsetY = 0;
   dragHandle.onmousedown = function (e) {
@@ -81,6 +80,8 @@
     return { name: "Preto", class: "dg-black" };
   }
 
+  let lastHash = "";
+
   async function getLatestHash() {
     try {
       const res = await fetch("https://blaze.com/api/roulette_games/recent");
@@ -92,17 +93,19 @@
     }
   }
 
-  async function predictColor() {
-    const predictionEl = document.getElementById("prediction");
-    predictionEl.textContent = "?";
-    predictionEl.className = "dg-result";
+  async function predictColor(force = false) {
     const hash = await getLatestHash();
-    if (!hash) return (predictionEl.textContent = "Erro");
+    if (!hash || (!force && hash === lastHash)) return;
+    lastHash = hash;
 
+    const predictionEl = document.getElementById("prediction");
     const result = getColorByHash(hash);
     predictionEl.textContent = result.name;
-    predictionEl.classList.add(result.class);
+    predictionEl.className = "dg-result " + result.class;
   }
 
-  document.getElementById("generate-prediction").onclick = predictColor;
+  document.getElementById("generate-prediction").onclick = () => predictColor(true);
+
+  // Atualização automática a cada 6 segundos
+  setInterval(() => predictColor(false), 6000);
 })();
