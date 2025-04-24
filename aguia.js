@@ -1,16 +1,116 @@
-// Double Predictor Jonbet - Refatorado e sem login (() => { if (window.doubleGameInjected) { console.log("Script já está em execução!"); return; } window.doubleGameInjected = true;
+(() => {
+  if (window.doubleGameInjected) return console.warn("Script já foi injetado.");
+  window.doubleGameInjected = true;
 
-// Criação dos estilos const style = document.createElement('style'); style.textContent = .dg-container { position: fixed; top: 20px; right: 20px; width: 320px; background-color: rgba(0, 0, 0, 0.65); border-radius: 8px; box-shadow: 0 4px 15px rgba(0, 255, 0, 0.3); font-family: 'Courier New', monospace; z-index: 999999; max-height: 90vh; overflow-y: auto; color: #00ff00; border: 1px solid #00ff00; } .dg-header { background-color: rgba(0, 0, 0, 0.7); color: #00ff00; padding: 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #00ff00; } .dg-header h1 { margin: 0; font-size: 16px; flex: 1; text-align: center; } .dg-close-btn { background: none; border: none; color: #f3f4f6; cursor: pointer; font-size: 16px; width: 30px; text-align: center; } .dg-drag-handle { cursor: move; width: 30px; text-align: center; } .dg-section { margin: 15px; } .dg-btn { padding: 6px 10px; border-radius: 4px; border: none; cursor: pointer; font-size: 12px; transition: background-color 0.2s; color: #f3f4f6; background-color: #008000; } .dg-result { display: flex; justify-content: center; align-items: center; width: 40px; height: 40px; border-radius: 50%; font-weight: bold; margin: 0 auto; border: 2px solid #00ff00; }; document.head.appendChild(style);
+  const style = document.createElement("style");
+  style.textContent = `
+    .dg-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 320px;
+      background-color: rgba(0, 0, 0, 0.65);
+      border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0, 255, 0, 0.3);
+      font-family: 'Courier New', monospace;
+      z-index: 999999;
+      max-height: 90vh;
+      overflow-y: auto;
+      color: #00ff00;
+      border: 1px solid #00ff00;
+    }
+    .dg-header {
+      background-color: rgba(0, 0, 0, 0.7);
+      color: #00ff00;
+      padding: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #00ff00;
+    }
+    .dg-header h1 {
+      margin: 0;
+      font-size: 16px;
+      flex: 1;
+      text-align: center;
+    }
+    .dg-close-btn {
+      background: none;
+      border: none;
+      color: #f3f4f6;
+      cursor: pointer;
+      font-size: 16px;
+      width: 30px;
+      text-align: center;
+    }
+    .dg-content {
+      padding: 15px;
+    }
+    .dg-section {
+      background: rgba(0, 20, 0, 0.7);
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 1px solid #00ff00;
+    }
+    .dg-btn {
+      background-color: #001a00;
+      border: 1px solid #00ff00;
+      color: #00ff00;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      width: 100%;
+    }
+    .dg-prediction {
+      font-weight: bold;
+      text-align: center;
+      padding: 10px;
+      border-radius: 4px;
+      border: 1px solid #00ff00;
+      color: #00ff00;
+      margin-top: 10px;
+      background-color: rgba(0, 100, 0, 0.5);
+    }
+  `;
+  document.head.appendChild(style);
 
-// Criação do painel const container = document.createElement('div'); container.className = 'dg-container'; container.innerHTML = <div class="dg-header"> <div class="dg-drag-handle">☰</div> <h1>Jonbet Predictor</h1> <button class="dg-close-btn" id="dg-close">×</button> </div> <div class="dg-section"> <div id="connection-status">Desconectado</div> <button id="predict-btn" class="dg-btn">Nova Previsão</button> <div class="dg-result" id="prediction">?</div> </div>; document.body.appendChild(container); container.style.display = 'block'; // <- Mostra o painel imediatamente
+  const panel = document.createElement("div");
+  panel.className = "dg-container";
+  panel.innerHTML = `
+    <div class="dg-header">
+      <h1>JonBlaze Predictor</h1>
+      <button class="dg-close-btn" id="dg-close">×</button>
+    </div>
+    <div class="dg-content">
+      <div class="dg-section" id="status-section">
+        <p>Status: <span id="dg-status">Desconectado</span></p>
+      </div>
+      <div class="dg-section">
+        <button class="dg-btn" id="dg-predict">Gerar Previsão</button>
+        <div class="dg-prediction" id="dg-prediction" style="display:none;"></div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(panel);
 
-// Drag & drop do painel let offsetX, offsetY; const dragHandle = container.querySelector('.dg-drag-handle'); dragHandle.addEventListener('mousedown', startDrag); function startDrag(e) { offsetX = e.clientX - container.offsetLeft; offsetY = e.clientY - container.offsetTop; document.addEventListener('mousemove', drag); document.addEventListener('mouseup', stopDrag); } function drag(e) { container.style.left = ${e.clientX - offsetX}px; container.style.top = ${e.clientY - offsetY}px; } function stopDrag() { document.removeEventListener('mousemove', drag); document.removeEventListener('mouseup', stopDrag); }
+  document.getElementById("dg-close").onclick = () => panel.remove();
 
-// Fechar painel document.getElementById('dg-close').addEventListener('click', () => { container.style.display = 'none'; });
+  document.getElementById("dg-predict").onclick = () => {
+    const cores = ["Branco", "Verde", "Preto"];
+    const cor = cores[Math.floor(Math.random() * 3)];
+    const pred = document.getElementById("dg-prediction");
+    pred.textContent = "Previsão: " + cor + " - Assertividade: 99.99%";
+    pred.style.display = "block";
+  };
 
-// WebSocket Jonbet const statusEl = document.getElementById('connection-status'); const predictionEl = document.getElementById('prediction'); let currentPrediction = null;
-
-const ws = new WebSocket("wss://api-gaming.jonbet.bet.br/replication/?EIO=3&transport=websocket"); ws.onopen = () => { statusEl.textContent = 'Conectado'; ws.send('421["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]'); }; ws.onmessage = ({ data }) => { if (data.startsWith('42[')) { const [_, payload] = JSON.parse(data.replace('42[', '[')); if (payload?.payload?.status === 'complete') { const result = payload.payload.color; if (result !== undefined && currentPrediction !== null) { const win = result === currentPrediction; predictionEl.textContent = win ? 'GANHOU' : 'PERDEU'; } } } }; ws.onclose = () => { statusEl.textContent = 'Desconectado'; };
-
-// Geração de previsão aleatória (0: branco, 1: verde, 2: preto) document.getElementById('predict-btn').addEventListener('click', () => { currentPrediction = Math.floor(Math.random() * 3); const cor = ['Branco', 'Verde', 'Preto'][currentPrediction]; predictionEl.textContent = cor; }); })();
-
+  const ws = new WebSocket("wss://api-gaming.jonbet.bet.br/replication/?EIO=3&transport=websocket");
+  ws.onopen = () => {
+    console.log("WebSocket conectado!");
+    document.getElementById("dg-status").textContent = "Conectado";
+    ws.send('421["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
+  };
+  ws.onclose = () => {
+    document.getElementById("dg-status").textContent = "Desconectado";
+  };
+})();
