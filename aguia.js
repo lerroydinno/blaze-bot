@@ -1,5 +1,5 @@
 (() => {
-  if (window.doubleGameInjected) return console.warn("Script já foi injetado.");
+  if (window.doubleGameInjected) return;
   window.doubleGameInjected = true;
 
   const style = document.createElement("style");
@@ -43,16 +43,6 @@
       width: 30px;
       text-align: center;
     }
-    .dg-content {
-      padding: 15px;
-    }
-    .dg-section {
-      background: rgba(0, 20, 0, 0.7);
-      border-radius: 6px;
-      padding: 10px;
-      margin-bottom: 10px;
-      border: 1px solid #00ff00;
-    }
     .dg-btn {
       background-color: #001a00;
       border: 1px solid #00ff00;
@@ -62,7 +52,14 @@
       cursor: pointer;
       width: 100%;
     }
-    .dg-prediction {
+    .dg-section {
+      background: rgba(0, 20, 0, 0.7);
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 1px solid #00ff00;
+    }
+    .dg-prediction, .dg-result {
       font-weight: bold;
       text-align: center;
       padding: 10px;
@@ -72,45 +69,93 @@
       margin-top: 10px;
       background-color: rgba(0, 100, 0, 0.5);
     }
+    .dg-floating-image {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 15px rgba(0, 255, 0, 0.4);
+      z-index: 999998;
+      transition: transform 0.2s;
+      border: 2px solid #00ff00;
+    }
   `;
   document.head.appendChild(style);
 
-  const panel = document.createElement("div");
-  panel.className = "dg-container";
-  panel.innerHTML = `
-    <div class="dg-header">
-      <h1>JonBlaze Predictor</h1>
-      <button class="dg-close-btn" id="dg-close">×</button>
-    </div>
-    <div class="dg-content">
-      <div class="dg-section" id="status-section">
-        <p>Status: <span id="dg-status">Desconectado</span></p>
-      </div>
-      <div class="dg-section">
-        <button class="dg-btn" id="dg-predict">Gerar Previsão</button>
-        <div class="dg-prediction" id="dg-prediction" style="display:none;"></div>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(panel);
+  const btn = document.createElement("img");
+  btn.className = "dg-floating-image";
+  btn.id = "dg-floating-image";
+  btn.src = "https://t.me/i/userpic/320/chefe00blaze.jpg";
+  btn.alt = "Hacker00 I.A";
+  btn.addEventListener('click', () => {
+    const container = document.getElementById("dg-panel");
+    if (container) {
+      container.style.display = "block";
+    } else {
+      initPanel();
+    }
+  });
+  document.body.appendChild(btn);
 
-  document.getElementById("dg-close").onclick = () => panel.remove();
+  function initPanel() {
+    const panel = document.createElement("div");
+    panel.className = "dg-container";
+    panel.id = "dg-panel";
+    panel.innerHTML = `
+      <div class="dg-header">
+        <h1 id="dg-title">Hacker00 I.A</h1>
+        <button class="dg-close-btn" onclick="document.getElementById('dg-panel').style.display='none'">×</button>
+      </div>
+      <div class="dg-section"><p>Status: <span id="dg-status">Desconectado</span></p></div>
+      <div class="dg-section"><button class="dg-btn" id="dg-predict">Gerar Previsão</button><div class="dg-prediction" id="dg-prediction" style="display:none;"></div></div>
+      <div class="dg-section"><div class="dg-result" id="dg-result" style="display:none;"></div></div>
+    `;
+    panel.style.display = "block";
+    document.body.appendChild(panel);
 
-  document.getElementById("dg-predict").onclick = () => {
+    let corPrevista = null;
+    let marketingMode = false;
+    let clickCount = 0;
     const cores = ["Branco", "Verde", "Preto"];
-    const cor = cores[Math.floor(Math.random() * 3)];
-    const pred = document.getElementById("dg-prediction");
-    pred.textContent = "Previsão: " + cor + " - Assertividade: 99.99%";
-    pred.style.display = "block";
-  };
 
-  const ws = new WebSocket("wss://api-gaming.jonbet.bet.br/replication/?EIO=3&transport=websocket");
-  ws.onopen = () => {
-    console.log("WebSocket conectado!");
-    document.getElementById("dg-status").textContent = "Conectado";
-    ws.send('421["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
-  };
-  ws.onclose = () => {
-    document.getElementById("dg-status").textContent = "Desconectado";
-  };
+    document.getElementById("dg-predict").onclick = () => {
+      corPrevista = Math.floor(Math.random() * 3);
+      const div = document.getElementById("dg-prediction");
+      div.textContent = "Previsão: " + cores[corPrevista] + " - 99.99%";
+      div.style.display = "block";
+    };
+
+    document.getElementById("dg-title").onclick = () => {
+      clickCount++;
+      if (clickCount >= 25) {
+        marketingMode = true;
+        alert("Modo Marketing Ativado!");
+      }
+    };
+
+    const ws = new WebSocket("wss://api-gaming.jonbet.bet.br/replication/?EIO=3&transport=websocket");
+    ws.onopen = () => {
+      document.getElementById("dg-status").textContent = "Conectado";
+      ws.send('421["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
+    };
+    ws.onmessage = msg => {
+      if (!msg.data.startsWith("42[")) return;
+      try {
+        const payload = JSON.parse(msg.data.substring(2));
+        const game = payload[1]?.payload;
+        if (!game) return;
+        if (game.status === "complete") {
+          const corReal = game.color;
+          const ganhou = marketingMode || (corPrevista !== null && corPrevista === corReal);
+          const resultado = "Resultado: " + cores[corReal] + " (" + game.roll + ") " + (ganhou ? "✅ GANHOU" : "❌ PERDEU");
+          const div = document.getElementById("dg-result");
+          div.textContent = resultado;
+          div.style.display = "block";
+        }
+      } catch (e) {}
+    };
+  }
 })();
