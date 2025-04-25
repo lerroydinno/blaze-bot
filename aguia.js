@@ -1,111 +1,75 @@
-(async () => {
-  if (window.doubleGameInjected) {
-    console.log("Script já em execução!");
-    return;
-  }
-  window.doubleGameInjected = true;
+// ==UserScript== // @name         Dólar Game Previsor // @namespace    http://tampermonkey.net/ // @version      1.0 // @description  Script para prever cor (Preto ou Vermelho) no Dólar Game com base nos últimos resultados // @author       hacker00 style // @match        https://dolargame.bet/* // @grant        none // ==/UserScript==
 
-  const style = document.createElement("style");
-  style.textContent = `
-    .dg-container { position: fixed; top: 20px; right: 20px; width: 320px; background-color: #1f2937; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.5); font-family: Arial,sans-serif; z-index: 999999; max-height: 90vh; overflow-y: auto; color: #f3f4f6; }
-    .dg-header { background-color: #111827; color: #f3f4f6; padding: 10px; display: flex; justify-content: space-between; align-items: center; }
-    .dg-header h1 { margin: 0; font-size: 16px; flex: 1; text-align: center; }
-    .dg-close-btn, .dg-drag-handle { background: none; border: none; color: #f3f4f6; cursor: pointer; font-size: 16px; width: 30px; text-align: center; }
-    .dg-content { padding: 15px; background-image: url('https://t.me/i/userpic/320/chefe00blaze.jpg'); background-size: cover; background-position: center; background-repeat: no-repeat; position: relative; }
-    .dg-content::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(31, 41, 55, 0.85); z-index: -1; }
-    .dg-section { margin-bottom: 15px; background-color: #111827c9; border-radius: 6px; padding: 10px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); position: relative; z-index: 1; }
-    .dg-section-title { font-weight: bold; margin-bottom: 10px; font-size: 14px; }
-    .dg-btn { padding: 6px 10px; border-radius: 4px; border: none; cursor: pointer; font-size: 12px; color: #f3f4f6; background-color: #3b82f6; width: 100%; margin-top: 10px; }
-    .dg-result { width: 40px; height: 40px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; margin: 0 auto; border: 2px solid; }
-    .dg-white { background-color: #f3f4f6; color: #1f2937; border-color: #d1d5db; }
-    .dg-red { background-color: #dc2626; color: #f3f4f6; border-color: #b91c1c; }
-    .dg-black { background-color: #000; color: #f3f4f6; border-color: #4b5563; }
-    .dg-floating-image { position: fixed; bottom: 20px; right: 20px; width: 80px; height: 80px; border-radius: 50%; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.3); z-index: 999998; transition: transform 0.2s; border: 3px solid #3b82f6; }
-    .dg-floating-image:hover { transform: scale(1.05); }
-  `;
-  document.head.appendChild(style);
+(function() { 'use strict';
 
-  const panel = document.createElement("div");
-  panel.className = "dg-container";
-  panel.id = "double-game-panel";
-  panel.style.display = "none";
-  panel.innerHTML = `
-    <div class="dg-header">
-      <div class="dg-drag-handle">⋮⋮</div>
-      <h1>Blaze Bot I.A</h1>
-      <button class="dg-close-btn" id="dg-close">×</button>
-    </div>
-    <div class="dg-content">
-      <div class="dg-section">
-        <div class="dg-section-title">Previsão da Próxima Cor</div>
-        <div class="dg-result" id="prediction">?</div>
-        <button class="dg-btn" id="generate-prediction">Gerar Previsão</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(panel);
+// Elemento do painel flutuante
+const painel = document.createElement("div");
+painel.style.position = "fixed";
+painel.style.bottom = "20px";
+painel.style.right = "20px";
+painel.style.zIndex = "9999";
+painel.style.background = "#111";
+painel.style.color = "#0f0";
+painel.style.padding = "15px";
+painel.style.border = "2px solid #0f0";
+painel.style.borderRadius = "12px";
+painel.style.fontFamily = "monospace";
+painel.style.boxShadow = "0 0 10px #0f0";
 
-  document.getElementById("dg-close").onclick = () => {
-    panel.style.display = "none";
-    document.getElementById("dg-float-img").style.display = "block";
-  };
+painel.innerHTML = `
+    <div style="font-size: 18px; margin-bottom: 10px;">Previsor Dólar Game</div>
+    <div id="previsao" style="font-size: 16px;">Carregando previsão...</div>
+    <button id="btnPrever" style="margin-top:10px;padding:5px 10px;background:#0f0;border:none;border-radius:5px;color:#000;font-weight:bold;cursor:pointer;">Gerar previsão</button>
+    <div id="historico" style="margin-top:10px;font-size:12px;"></div>
+`;
 
-  const img = document.createElement("img");
-  img.src = "https://t.me/i/userpic/320/chefe00blaze.jpg";
-  img.className = "dg-floating-image";
-  img.id = "dg-float-img";
-  img.onclick = () => {
-    panel.style.display = "block";
-    img.style.display = "none";
-  };
-  document.body.appendChild(img);
+document.body.appendChild(painel);
 
-  const dragHandle = panel.querySelector(".dg-drag-handle");
-  let offsetX = 0, offsetY = 0;
-  dragHandle.onmousedown = function (e) {
-    e.preventDefault();
-    offsetX = e.clientX - panel.offsetLeft;
-    offsetY = e.clientY - panel.offsetTop;
-    document.onmousemove = function (e) {
-      panel.style.left = e.clientX - offsetX + "px";
-      panel.style.top = e.clientY - offsetY + "px";
-    };
-    document.onmouseup = () => (document.onmousemove = document.onmouseup = null);
-  };
+const btn = document.getElementById("btnPrever");
+btn.addEventListener("click", gerarPrevisao);
 
-  function getColorByHash(hash) {
-    const colorValue = parseInt(hash.substring(0, 8), 16) % 15;
-    if (colorValue === 0) return { name: "Branco", class: "dg-white" };
-    if (colorValue >= 1 && colorValue <= 7) return { name: "Vermelho", class: "dg-red" };
-    return { name: "Preto", class: "dg-black" };
-  }
-
-  let lastHash = "";
-
-  async function getLatestHash() {
+async function obterResultados() {
     try {
-      const res = await fetch("https://blaze.com/api/roulette_games/recent");
-      const data = await res.json();
-      return data?.[0]?.hash || null;
-    } catch (err) {
-      console.error("Erro ao obter hash:", err);
-      return null;
+        const res = await fetch("https://dolargame.bet/api/roulette_games/recent");
+        const dados = await res.json();
+        return dados.map(r => parseInt(r.color));
+    } catch (e) {
+        console.error("Erro ao obter dados:", e);
+        return [];
     }
-  }
+}
 
-  async function predictColor(force = false) {
-    const hash = await getLatestHash();
-    if (!hash || (!force && hash === lastHash)) return;
-    lastHash = hash;
+function analisarPadrao(resultados) {
+    const ultimos = resultados.slice(0, 10);
+    const count = { vermelho: 0, preto: 0 };
+    ultimos.forEach(cor => {
+        if (cor === 0) count.preto++;
+        else if (cor === 1) count.vermelho++;
+    });
 
-    const predictionEl = document.getElementById("prediction");
-    const result = getColorByHash(hash);
-    predictionEl.textContent = result.name;
-    predictionEl.className = "dg-result " + result.class;
-  }
+    if (count.preto > count.vermelho) return "vermelho";
+    if (count.vermelho > count.preto) return "preto";
 
-  document.getElementById("generate-prediction").onclick = () => predictColor(true);
+    // Se estiver empatado, prever o oposto da última
+    return ultimos[0] === 0 ? "vermelho" : "preto";
+}
 
-  // Atualização automática a cada 6 segundos
-  setInterval(() => predictColor(false), 6000);
+async function gerarPrevisao() {
+    const resultados = await obterResultados();
+    if (!resultados.length) return;
+
+    const previsao = analisarPadrao(resultados);
+    document.getElementById("previsao").innerText = `Previsão: ${previsao.toUpperCase()}`;
+
+    const historico = document.getElementById("historico");
+    const novaLinha = document.createElement("div");
+    novaLinha.innerText = `${new Date().toLocaleTimeString()} → ${previsao}`;
+    historico.prepend(novaLinha);
+}
+
+// Gera previsão automática a cada 15s
+setInterval(gerarPrevisao, 15000);
+gerarPrevisao();
+
 })();
+
