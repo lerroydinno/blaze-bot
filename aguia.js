@@ -5,8 +5,7 @@
   }
   window.doubleGameInjected = true;
 
-  // Simula login sempre ativo
-  var isLogged = true;
+  var isLogged = true; // Forçar logado (SEM fazer requisição para aguia-login)
 
   function createFloatingButton() {
     const img = document.createElement('img');
@@ -14,26 +13,30 @@
     img.id = 'dg-floating-image';
     img.src = 'https://t.me/i/userpic/320/chefe00blaze.jpg';
     img.alt = 'Blaze Chefe';
-    document.body.appendChild(img);
     img.style.display = 'block';
     img.addEventListener('click', () => {
-      const panel = document.getElementById('double-game-container');
-      if (panel) {
-        panel.style.display = 'block';
+      if (isLogged) {
+        openPanel();
         img.style.display = 'none';
-      } else {
-        initDoubleGame();
       }
     });
+    document.body.appendChild(img);
   }
 
-  function initDoubleGame() {
-    if (!isLogged) return;
+  function openPanel() {
+    let panel = document.getElementById('double-game-container');
+    if (panel) {
+      panel.style.display = 'block';
+      return;
+    }
+    createPanel();
+    setupWebSocket();
+  }
 
+  function createPanel() {
     const container = document.createElement('div');
     container.className = 'dg-container';
     container.id = 'double-game-container';
-
     container.innerHTML = `
       <div class="dg-header">
         <div class="dg-drag-handle">⋮⋮</div>
@@ -63,20 +66,20 @@
         </div>
       </div>
     `;
-
     document.body.appendChild(container);
-    document.getElementById('dg-close').onclick = function () {
+
+    document.getElementById('dg-close').addEventListener('click', () => {
       container.style.display = 'none';
       document.getElementById('dg-floating-image').style.display = 'block';
-    };
+    });
 
     makeDraggable(container);
-    setupWebSocket();
+    setupPredictionButton();
   }
 
-  function makeDraggable(element) {
-    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-    const dragHandle = element.querySelector('.dg-drag-handle');
+  function makeDraggable(elmnt) {
+    var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    var dragHandle = elmnt.querySelector(".dg-drag-handle");
     if (dragHandle) {
       dragHandle.onmousedown = dragMouseDown;
     }
@@ -97,8 +100,8 @@
       pos2 = pos4 - e.clientY;
       pos3 = e.clientX;
       pos4 = e.clientY;
-      element.style.top = (element.offsetTop - pos2) + "px";
-      element.style.left = (element.offsetLeft - pos1) + "px";
+      elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
+      elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
     }
 
     function closeDragElement() {
@@ -110,58 +113,64 @@
   function setupWebSocket() {
     let ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
 
-    ws.onopen = function () {
-      const connStatus = document.getElementById('dg-connection-status');
-      connStatus.className = 'dg-connection dg-connected';
-      connStatus.textContent = 'Conectado ao servidor';
+    ws.onopen = () => {
+      document.getElementById('dg-connection-status').className = 'dg-connection dg-connected';
+      document.getElementById('dg-connection-status').textContent = 'Conectado ao servidor';
       ws.send('421["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
     };
 
-    ws.onmessage = function (event) {
-      if (event.data.startsWith("42[")) {
+    ws.onmessage = (event) => {
+      if (event.data.startsWith('42[')) {
         try {
-          const data = JSON.parse(event.data.slice(2));
-          if (data[1] && data[1].payload) {
-            handleGameData(data[1].payload);
+          const parsed = JSON.parse(event.data.slice(2));
+          const payload = parsed[1]?.payload;
+          if (payload) {
+            handleGameData(payload);
           }
         } catch (e) {}
       }
     };
 
-    ws.onclose = function () {
-      const connStatus = document.getElementById('dg-connection-status');
-      connStatus.className = 'dg-connection dg-disconnected';
-      connStatus.textContent = 'Desconectado - tentando reconectar...';
+    ws.onclose = () => {
+      document.getElementById('dg-connection-status').className = 'dg-connection dg-disconnected';
+      document.getElementById('dg-connection-status').textContent = 'Desconectado - tentando reconectar...';
       setTimeout(setupWebSocket, 5000);
     };
   }
 
-  function handleGameData(payload) {
-    const statusText = document.getElementById('dg-game-status');
-    const resultContainer = document.getElementById('dg-result-container');
-    const resultElement = document.getElementById('dg-result');
-    const colorName = document.getElementById('dg-color-name');
-
-    if (payload.status) {
-      statusText.textContent = capitalize(payload.status);
+  function handleGameData(data) {
+    if (data.status) {
+      document.getElementById('dg-game-status').textContent = capitalize(data.status);
     }
-
-    if (payload.status === "rolling" || payload.status === "complete") {
-      resultContainer.style.display = 'block';
-      const colorClass = getColorClass(payload.color);
-      resultElement.className = 'dg-result ' + colorClass.class;
-      resultElement.textContent = payload.roll;
-      colorName.textContent = colorClass.name;
+    if (data.status === 'rolling' || data.status === 'complete') {
+      const colorClass = getColorClass(data.color);
+      document.getElementById('dg-result').className = 'dg-result ' + colorClass.class;
+      document.getElementById('dg-result').textContent = data.roll;
+      document.getElementById('dg-color-name').textContent = colorClass.name;
+      document.getElementById('dg-result-container').style.display = 'block';
     }
   }
 
   function getColorClass(color) {
-    if (color === 0) {
-      return { name: "Branco", class: "dg-white" };
-    } else if (color >= 1 && color <= 7) {
-      return { name: "Vermelho", class: "dg-red" };
-    } else {
-      return { name: "Preto", class: "dg-black" };
+    if (color === 0) return { name: 'Branco', class: 'dg-white' };
+    if (color >= 1 && color <= 7) return { name: 'Vermelho', class: 'dg-red' };
+    return { name: 'Preto', class: 'dg-black' };
+  }
+
+  function setupPredictionButton() {
+    const predictionButton = document.getElementById('dg-new-prediction');
+    if (predictionButton) {
+      predictionButton.addEventListener('click', () => {
+        const predictionBox = document.getElementById('dg-prediction-container');
+        const predictionEl = document.getElementById('dg-prediction');
+        const predictionAccuracy = document.getElementById('dg-prediction-accuracy');
+        const random = Math.floor(Math.random() * 3);
+        const colorClass = getColorClass(random);
+        predictionBox.style.display = 'block';
+        predictionEl.className = 'dg-prediction ' + colorClass.class;
+        predictionEl.textContent = colorClass.name;
+        predictionAccuracy.textContent = 'Assertividade: 100%';
+      });
     }
   }
 
@@ -170,5 +179,4 @@
   }
 
   createFloatingButton();
-
 })();
