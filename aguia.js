@@ -1,119 +1,172 @@
-
 (() => {
-  if (window.doubleGameInjected) {
-    console.log("Script jÃ¡ estÃ¡ em execuÃ§Ã£o!");
+  if (window.doublePredictorInjected) {
+    console.log("Script já está rodando.");
     return;
   }
-  window.doubleGameInjected = true;
+  window.doublePredictorInjected = true;
 
-  const styleElement = document.createElement("style");
-  styleElement.textContent = `
-    /* Aqui viria todo o CSS que estava no style */
-    /* Para economizar espaÃ§o, serÃ¡ inserido mais abaixo na finalizaÃ§Ã£o */
+  // Estilos do painel e botão
+  const style = document.createElement("style");
+  style.textContent = `
+    .dp-container { position: fixed; top: 20px; right: 20px; width: 320px; background-color: #1f2937; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.5); font-family: Arial, sans-serif; z-index: 999999; color: #f3f4f6; max-height: 90vh; overflow-y: auto; }
+    .dp-header { background-color: #111827; padding: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .dp-header h1 { margin: 0; font-size: 16px; flex: 1; text-align: center; }
+    .dp-close-btn { background: none; border: none; color: #f3f4f6; cursor: pointer; font-size: 16px; width: 30px; }
+    .dp-content { padding: 15px; position: relative; }
+    .dp-section { margin-bottom: 15px; background-color: #111827c9; border-radius: 6px; padding: 10px; }
+    .dp-connection { padding: 6px; border-radius: 4px; text-align: center; font-size: 12px; font-weight: bold; margin-bottom: 10px; }
+    .dp-connected { background-color: #111827c9; color: #10b981; }
+    .dp-disconnected { background-color: #ef4444; color: #f3f4f6; }
+    .dp-status-text { text-align: center; margin-bottom: 10px; font-size: 14px; }
+    .dp-result { display: flex; justify-content: center; align-items: center; width: 40px; height: 40px; border-radius: 50%; border: 2px solid; font-weight: bold; margin: 0 auto; }
+    .dp-white { background-color: #f3f4f6; color: #1f2937; border-color: #d1d5db; }
+    .dp-red { background-color: #dc2626; color: #f3f4f6; border-color: #b91c1c; }
+    .dp-black { background-color: #000; color: #f3f4f6; border-color: #4b5563; }
+    .dp-floating-btn { position: fixed; bottom: 20px; right: 20px; width: 80px; height: 80px; border-radius: 50%; cursor: pointer; background: url('https://t.me/i/userpic/320/chefe00blaze.jpg') center/cover; border: 3px solid #3b82f6; z-index: 999998; }
+    .dp-prediction { margin-top: 10px; font-weight: bold; text-align: center; }
   `;
-  document.head.appendChild(styleElement);
+  document.head.appendChild(style);
 
-  const createFloatingButton = () => {
-    const img = document.createElement("img");
-    img.className = "dg-floating-image";
-    img.id = "dg-floating-image";
-    img.src = "https://t.me/i/userpic/320/chefe00blaze.jpg";
-    img.alt = "Blaze Chefe";
-    img.addEventListener("click", () => {
-      const panel = document.getElementById("double-game-container");
-      if (panel) {
-        panel.style.display = "block";
-      } else {
-        doubleGame.init();
+  // Cria botão flutuante
+  const floatingButton = document.createElement("div");
+  floatingButton.className = "dp-floating-btn";
+  floatingButton.title = "Abrir Painel";
+  floatingButton.style.display = "none";
+  document.body.appendChild(floatingButton);
+
+  // Cria painel
+  const panel = document.createElement("div");
+  panel.className = "dp-container";
+  panel.innerHTML = `
+    <div class="dp-header">
+      <button class="dp-close-btn" id="dp-close-btn">×</button>
+      <h1>@wallan00chefe</h1>
+      <div style="width:30px;"></div>
+    </div>
+    <div class="dp-content">
+      <div id="dp-connection-status" class="dp-connection dp-disconnected">Desconectado</div>
+      <div class="dp-section">
+        <div id="dp-game-status" class="dp-status-text">Status: Esperando</div>
+        <div id="dp-result" class="dp-result dp-black">?</div>
+        <div id="dp-color-name" class="dp-status-text">-</div>
+      </div>
+      <div class="dp-section dp-prediction" id="dp-prediction">Previsão: --</div>
+    </div>
+  `;
+  document.body.appendChild(panel);
+
+  // Elementos
+  const connectionStatus = document.getElementById("dp-connection-status");
+  const gameStatus = document.getElementById("dp-game-status");
+  const resultBall = document.getElementById("dp-result");
+  const colorName = document.getElementById("dp-color-name");
+  const predictionDisplay = document.getElementById("dp-prediction");
+
+  document.getElementById("dp-close-btn").onclick = () => {
+    panel.style.display = "none";
+    floatingButton.style.display = "block";
+  };
+  floatingButton.onclick = () => {
+    panel.style.display = "block";
+    floatingButton.style.display = "none";
+  };
+
+  // Variáveis
+  let ws = null;
+  let predictedColor = null;
+  let reconnectTimeout = null;
+
+  const colorMap = {
+    0: { name: "Branco", className: "dp-white" },
+    1: { name: "Vermelho", className: "dp-red" },
+    2: { name: "Preto", className: "dp-black" }
+  };
+
+  function connectWebSocket() {
+    ws = new WebSocket("wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket");
+
+    ws.onopen = () => {
+      console.log("WebSocket conectado.");
+      connectionStatus.className = "dp-connection dp-connected";
+      connectionStatus.textContent = "Conectado";
+      ws.send('421["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
+      startPing();
+    };
+
+    ws.onmessage = event => {
+      if (event.data.startsWith("42[")) {
+        const message = JSON.parse(event.data.slice(2));
+        const payload = message[1]?.payload;
+        if (payload) {
+          handleGameData(payload);
+        }
       }
-    });
-    document.body.appendChild(img);
-    return img;
-  };
+    };
 
-  const createMainPanel = () => {
-    const container = document.createElement("div");
-    container.className = "dg-container";
-    container.id = "double-game-container";
-    container.innerHTML = `
-      <!-- ConteÃºdo do painel principal (jÃ¡ existente) -->
-    `;
-    document.body.appendChild(container);
-    makeDraggable(container);
-    document.getElementById("dg-close").addEventListener("click", () => {
-      container.style.display = "none";
-      const btn = document.getElementById("dg-floating-image");
-      if (btn) btn.style.display = "block";
-    });
-    container.style.display = "none";
-    return container;
-  };
+    ws.onclose = () => {
+      console.warn("WebSocket desconectado. Reconectando...");
+      connectionStatus.className = "dp-connection dp-disconnected";
+      connectionStatus.textContent = "Reconectando...";
+      stopPing();
+      reconnectTimeout = setTimeout(connectWebSocket, 5000);
+    };
+  }
 
-  function makeDraggable(panel) {
-    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
-    const handle = panel.querySelector(".dg-drag-handle");
-    if (handle) {
-      handle.addEventListener("mousedown", dragMouseDown);
-      handle.addEventListener("touchstart", dragTouchStart);
-    }
-    function dragMouseDown(e) {
-      e.preventDefault();
-      pos3 = e.clientX;
-      pos4 = e.clientY;
-      document.addEventListener("mouseup", closeDragElement);
-      document.addEventListener("mousemove", elementDrag);
-    }
-    function dragTouchStart(e) {
-      e.preventDefault();
-      pos3 = e.touches[0].clientX;
-      pos4 = e.touches[0].clientY;
-      document.addEventListener("touchend", closeDragElement);
-      document.addEventListener("touchmove", elementDragTouch);
-    }
-    function elementDrag(e) {
-      e.preventDefault();
-      pos1 = pos3 - e.clientX;
-      pos2 = pos4 - e.clientY;
-      pos3 = e.clientX;
-      pos4 = e.clientY;
-      setPosition(panel, pos1, pos2);
-    }
-    function elementDragTouch(e) {
-      e.preventDefault();
-      pos1 = pos3 - e.touches[0].clientX;
-      pos2 = pos4 - e.touches[0].clientY;
-      pos3 = e.touches[0].clientX;
-      pos4 = e.touches[0].clientY;
-      setPosition(panel, pos1, pos2);
-    }
-    function setPosition(el, dx, dy) {
-      const top = el.offsetTop - dy;
-      const left = el.offsetLeft - dx;
-      el.style.top = Math.max(0, Math.min(window.innerHeight - el.offsetHeight, top)) + "px";
-      el.style.left = Math.max(0, Math.min(window.innerWidth - el.offsetWidth, left)) + "px";
-    }
-    function closeDragElement() {
-      document.removeEventListener("mouseup", closeDragElement);
-      document.removeEventListener("mousemove", elementDrag);
-      document.removeEventListener("touchend", closeDragElement);
-      document.removeEventListener("touchmove", elementDragTouch);
+  let pingInterval = null;
+  function startPing() {
+    pingInterval = setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send("2");
+      }
+    }, 25000);
+  }
+
+  function stopPing() {
+    clearInterval(pingInterval);
+  }
+
+  function handleGameData(data) {
+    if (data.status) {
+      gameStatus.textContent = `Status: ${capitalize(data.status)}`;
+
+      if (data.status === "complete" && data.color !== undefined && data.roll !== undefined) {
+        updateResultDisplay(data.color, data.roll);
+      }
+      if (data.status === "rolling") {
+        makePrediction(data.hash);
+      }
     }
   }
 
-  const doubleGame = {
-    // Aqui entra toda a lÃ³gica existente da variÃ¡vel _0x17ad9b
-    // (vou copiar exatamente como era)
-  };
+  function makePrediction(hash) {
+    if (hash) {
+      const colorNumber = parseInt(hash.substring(0, 8), 16) % 15;
+      if (colorNumber === 0) predictedColor = 0;
+      else if (colorNumber >= 1 && colorNumber <= 7) predictedColor = 1;
+      else predictedColor = 2;
 
-  document.addEventListener("dblclick", () => {
-    const panel = document.getElementById("double-game-container");
-    if (panel) {
-      panel.style.display = "block";
-    } else {
-      doubleGame.init();
+      const prediction = colorMap[predictedColor];
+      predictionDisplay.textContent = `Previsão: ${prediction.name}`;
     }
-  });
+  }
 
-  createFloatingButton();
-  doubleGame.init();
+  function updateResultDisplay(color, roll) {
+    let colorInfo;
+    if (color === 0) colorInfo = colorMap[0];
+    else if (color >= 1 && color <= 7) colorInfo = colorMap[1];
+    else if (color >= 8 && color <= 14) colorInfo = colorMap[2];
+
+    if (colorInfo) {
+      resultBall.className = `dp-result ${colorInfo.className}`;
+      resultBall.textContent = roll;
+      colorName.textContent = colorInfo.name;
+    }
+  }
+
+  function capitalize(text) {
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
+  // Inicializa
+  connectWebSocket();
 })();
