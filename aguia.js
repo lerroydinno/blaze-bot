@@ -1,172 +1,258 @@
 (() => {
-  if (window.doublePredictorInjected) {
-    console.log("Script já está rodando.");
+  // Impede múltiplas injeções
+  if (window.doubleGameInjected) {
+    console.log("Script já está em execução!");
     return;
   }
-  window.doublePredictorInjected = true;
+  window.doubleGameInjected = true;
 
-  // Estilos do painel e botão
-  const style = document.createElement("style");
-  style.textContent = `
-    .dp-container { position: fixed; top: 20px; right: 20px; width: 320px; background-color: #1f2937; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.5); font-family: Arial, sans-serif; z-index: 999999; color: #f3f4f6; max-height: 90vh; overflow-y: auto; }
-    .dp-header { background-color: #111827; padding: 10px; display: flex; justify-content: space-between; align-items: center; }
-    .dp-header h1 { margin: 0; font-size: 16px; flex: 1; text-align: center; }
-    .dp-close-btn { background: none; border: none; color: #f3f4f6; cursor: pointer; font-size: 16px; width: 30px; }
-    .dp-content { padding: 15px; position: relative; }
-    .dp-section { margin-bottom: 15px; background-color: #111827c9; border-radius: 6px; padding: 10px; }
-    .dp-connection { padding: 6px; border-radius: 4px; text-align: center; font-size: 12px; font-weight: bold; margin-bottom: 10px; }
-    .dp-connected { background-color: #111827c9; color: #10b981; }
-    .dp-disconnected { background-color: #ef4444; color: #f3f4f6; }
-    .dp-status-text { text-align: center; margin-bottom: 10px; font-size: 14px; }
-    .dp-result { display: flex; justify-content: center; align-items: center; width: 40px; height: 40px; border-radius: 50%; border: 2px solid; font-weight: bold; margin: 0 auto; }
-    .dp-white { background-color: #f3f4f6; color: #1f2937; border-color: #d1d5db; }
-    .dp-red { background-color: #dc2626; color: #f3f4f6; border-color: #b91c1c; }
-    .dp-black { background-color: #000; color: #f3f4f6; border-color: #4b5563; }
-    .dp-floating-btn { position: fixed; bottom: 20px; right: 20px; width: 80px; height: 80px; border-radius: 50%; cursor: pointer; background: url('https://t.me/i/userpic/320/chefe00blaze.jpg') center/cover; border: 3px solid #3b82f6; z-index: 999998; }
-    .dp-prediction { margin-top: 10px; font-weight: bold; text-align: center; }
+  // Força acesso direto, sem login
+  let isLoggedIn = true;
+
+  // --- Estilos ---
+  const styleEl = document.createElement("style");
+  styleEl.textContent = `
+    .dg-container { position: fixed; top: 20px; right: 20px; width: 320px; background-color: #1f2937; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.5); font-family: Arial,sans-serif; z-index: 999999; max-height:90vh; overflow-y:auto; color:#f3f4f6; }
+    .dg-header { background:#111827; display:flex; align-items:center; justify-content:space-between; padding:10px; }
+    .dg-header h1 { margin:0;font-size:16px;flex:1;text-align:center; }
+    .dg-close-btn { background:none;border:none;color:#f3f4f6;cursor:pointer;font-size:16px;width:30px;text-align:center; }
+    .dg-drag-handle { cursor:move;width:30px;text-align:center; }
+    .dg-content { padding:15px; position:relative; background-image:url('https://t.me/i/userpic/320/chefe00blaze.jpg'); background-size:cover; background-position:center; }
+    .dg-content::before { content:''; position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(31,41,55,0.85);z-index:-1; }
+    .dg-section { margin-bottom:15px;background:#111827c9;border-radius:6px;padding:10px;box-shadow:0 1px 3px rgba(0,0,0,0.3);position:relative;z-index:1; }
+    .dg-section-title { font-weight:bold;margin-bottom:10px;font-size:14px; }
+    .dg-connection { padding:6px;border-radius:4px;text-align:center;font-size:12px;font-weight:bold;margin-bottom:10px;position:relative;z-index:1; }
+    .dg-connected { background:#111827c9;color:#10b981; }
+    .dg-disconnected { background:#ef4444;color:#f3f4f6; }
+    .dg-btn { padding:6px 10px;border:none;border-radius:4px;cursor:pointer;font-size:12px;transition:background-color .2s;color:#f3f4f6; }
+    .dg-btn-primary { background:#3b82f6; }
+    .dg-btn-primary:hover { background:#2563eb; }
+    .dg-btn-disabled { background:#4b5563;cursor:not-allowed; }
+    .dg-game-status { text-align:center; }
+    .dg-status-text { font-size:14px;margin-bottom:10px; }
+    .dg-rolling { animation:pulse 1.5s infinite; }
+    @keyframes pulse { 0%{opacity:1;}50%{opacity:0.5;}100%{opacity:1;} }
+    .dg-result { display:inline-flex;justify-content:center;align-items:center;width:40px;height:40px;border-radius:50%;border:2px solid;font-weight:bold;margin:0 auto; }
+    .dg-white { background:#f3f4f6;color:#1f2937;border-color:#d1d5db; }
+    .dg-red { background:#dc2626;color:#f3f4f6;border-color:#b91c1c; }
+    .dg-black { background:#000;color:#f3f4f6;border-color:#4b5563; }
+    .dg-gray { background:#4b5563;color:#f3f4f6;border-color:#6b7280; }
+    .dg-prediction-box { text-align:center;margin-bottom:10px; }
+    .dg-prediction-title { font-size:13px;margin-bottom:8px; }
+    .dg-prediction { width:70px;height:70px;border-radius:50%;display:flex;justify-content:center;align-items:center;margin:0 auto;font-weight:bold;font-size:14px;border:2px solid; }
+    .dg-prediction-accuracy { text-align:center;font-size:12px;color:#f3f4f6;margin-top:5px; }
+    .dg-prediction-result { padding:8px;border-radius:4px;text-align:center;font-weight:bold;margin-top:10px;font-size:14px; }
+    .dg-win { background:#047857; }
+    .dg-lose { background:#b91c1c; }
+    .dg-floating-image { position:fixed;bottom:20px;right:20px;width:80px;height:80px;border-radius:50%;cursor:pointer;box-shadow:0 4px 8px rgba(0,0,0,0.3);z-index:999998;transition:transform .2s;border:3px solid #3b82f6; }
+    .dg-floating-image:hover { transform:scale(1.05); }
   `;
-  document.head.appendChild(style);
+  document.head.appendChild(styleEl);
 
-  // Cria botão flutuante
-  const floatingButton = document.createElement("div");
-  floatingButton.className = "dp-floating-btn";
-  floatingButton.title = "Abrir Painel";
-  floatingButton.style.display = "none";
-  document.body.appendChild(floatingButton);
+  // --- Botão flutuante ---
+  const floatingBtn = document.createElement("img");
+  floatingBtn.id = "dg-floating-image";
+  floatingBtn.className = "dg-floating-image";
+  floatingBtn.src = "https://t.me/i/userpic/320/chefe00blaze.jpg";
+  floatingBtn.alt = "Blaze Chefe";
+  document.body.appendChild(floatingBtn);
 
-  // Cria painel
-  const panel = document.createElement("div");
-  panel.className = "dp-container";
-  panel.innerHTML = `
-    <div class="dp-header">
-      <button class="dp-close-btn" id="dp-close-btn">×</button>
-      <h1>@wallan00chefe</h1>
-      <div style="width:30px;"></div>
-    </div>
-    <div class="dp-content">
-      <div id="dp-connection-status" class="dp-connection dp-disconnected">Desconectado</div>
-      <div class="dp-section">
-        <div id="dp-game-status" class="dp-status-text">Status: Esperando</div>
-        <div id="dp-result" class="dp-result dp-black">?</div>
-        <div id="dp-color-name" class="dp-status-text">-</div>
+  // --- Cria painel ---
+  function createPanel() {
+    const container = document.createElement("div");
+    container.id = "double-game-container";
+    container.className = "dg-container";
+    container.innerHTML = `
+      <div class="dg-header">
+        <div class="dg-drag-handle">⋮⋮</div>
+        <h1>@wallan00chefe</h1>
+        <button class="dg-close-btn" id="dg-close">×</button>
       </div>
-      <div class="dp-section dp-prediction" id="dp-prediction">Previsão: --</div>
-    </div>
-  `;
-  document.body.appendChild(panel);
+      <div class="dg-content">
+        <div id="dg-connection-status" class="dg-connection dg-disconnected">Desconectado - tentando conectar...</div>
+        <div class="dg-section">
+          <div class="dg-section-title" id="dg-game-status-label">Status do Jogo</div>
+          <div class="dg-game-status">
+            <p class="dg-status-text"><span id="dg-game-status">Esperando</span></p>
+            <div id="dg-result-container" style="display:none;">
+              <div id="dg-result" class="dg-result dg-gray">?</div>
+              <p id="dg-color-name" style="margin-top:5px;font-size:13px;">-</p>
+            </div>
+          </div>
+        </div>
+        <div class="dg-section" id="dg-consumer-mode">
+          <div id="dg-prediction-container" class="dg-prediction-box" style="display:none;">
+            <p class="dg-prediction-title">Previsão para esta rodada:</p>
+            <div id="dg-prediction" class="dg-prediction dg-gray">?</div>
+            <p id="dg-prediction-accuracy" class="dg-prediction-accuracy">--</p>
+          </div>
+          <button id="dg-new-prediction" class="dg-btn dg-btn-primary" style="width:100%;margin-top:10px;">Gerar Nova Previsão</button>
+          <div id="dg-result-message" class="dg-prediction-result" style="display:none;">Resultado</div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(container);
 
-  // Elementos
-  const connectionStatus = document.getElementById("dp-connection-status");
-  const gameStatus = document.getElementById("dp-game-status");
-  const resultBall = document.getElementById("dp-result");
-  const colorName = document.getElementById("dp-color-name");
-  const predictionDisplay = document.getElementById("dp-prediction");
+    // fechar
+    document.getElementById("dg-close").onclick = () => {
+      container.style.display = "none";
+      floatingBtn.style.display = "block";
+    };
+    container.style.display = "block";
+    return container;
+  }
 
-  document.getElementById("dp-close-btn").onclick = () => {
-    panel.style.display = "none";
-    floatingButton.style.display = "block";
+  // --- Drag & Drop ---
+  function makeDraggable(el) {
+    let startX, startY, initialX, initialY;
+    const handle = el.querySelector(".dg-drag-handle");
+    if (!handle) return;
+    handle.onmousedown = e => {
+      e.preventDefault();
+      startX = e.clientX;
+      startY = e.clientY;
+      initialX = el.offsetLeft;
+      initialY = el.offsetTop;
+      document.onmousemove = onMouseMove;
+      document.onmouseup = onMouseUp;
+    };
+    function onMouseMove(e) {
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      el.style.left = Math.min(Math.max(0, initialX + dx), window.innerWidth - el.offsetWidth) + "px";
+      el.style.top = Math.min(Math.max(0, initialY + dy), window.innerHeight - el.offsetHeight) + "px";
+    }
+    function onMouseUp() {
+      document.onmousemove = null;
+      document.onmouseup = null;
+    }
+  }
+
+  // --- Lógica de conexão e predição ---
+  const panelEl = createPanel();
+  makeDraggable(panelEl);
+
+  floatingBtn.onclick = () => {
+    panelEl.style.display = "block";
+    floatingBtn.style.display = "none";
   };
-  floatingButton.onclick = () => {
-    panel.style.display = "block";
-    floatingButton.style.display = "none";
-  };
 
-  // Variáveis
-  let ws = null;
-  let predictedColor = null;
-  let reconnectTimeout = null;
+  let ws, pingInterval, reconnectTimeout;
+  const gameData = { status: "waiting", color: null, roll: null };
+  let prediction = null;
 
   const colorMap = {
-    0: { name: "Branco", className: "dp-white" },
-    1: { name: "Vermelho", className: "dp-red" },
-    2: { name: "Preto", className: "dp-black" }
+    0: { name: "Branco", class: "dg-white" },
+    1: { name: "Vermelho", class: "dg-red" },
+    2: { name: "Preto", class: "dg-black" }
   };
 
-  function connectWebSocket() {
+  function connectWS() {
     ws = new WebSocket("wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket");
-
     ws.onopen = () => {
-      console.log("WebSocket conectado.");
-      connectionStatus.className = "dp-connection dp-connected";
-      connectionStatus.textContent = "Conectado";
+      isLoggedIn = true;
+      updateConnectionUI(true);
       ws.send('421["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
-      startPing();
+      pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.send("2");
+      }, 30000);
     };
-
-    ws.onmessage = event => {
-      if (event.data.startsWith("42[")) {
-        const message = JSON.parse(event.data.slice(2));
-        const payload = message[1]?.payload;
-        if (payload) {
-          handleGameData(payload);
-        }
+    ws.onmessage = msg => {
+      if (msg.data.startsWith("42[")) {
+        try {
+          const [ , { payload } ] = JSON.parse(msg.data.replace(/^42/, ""));
+          if (payload) handleGameData(payload);
+        } catch (e) { /* ignora */ }
       }
     };
-
     ws.onclose = () => {
-      console.warn("WebSocket desconectado. Reconectando...");
-      connectionStatus.className = "dp-connection dp-disconnected";
-      connectionStatus.textContent = "Reconectando...";
-      stopPing();
-      reconnectTimeout = setTimeout(connectWebSocket, 5000);
+      updateConnectionUI(false);
+      clearInterval(pingInterval);
+      reconnectTimeout = setTimeout(connectWS, 5000);
     };
   }
 
-  let pingInterval = null;
-  function startPing() {
-    pingInterval = setInterval(() => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send("2");
-      }
-    }, 25000);
-  }
-
-  function stopPing() {
-    clearInterval(pingInterval);
+  function updateConnectionUI(connected) {
+    const el = document.getElementById("dg-connection-status");
+    if (connected) {
+      el.className = "dg-connection dg-connected";
+      el.textContent = "Conectado ao servidor";
+    } else {
+      el.className = "dg-connection dg-disconnected";
+      el.textContent = "Desconectado - tentando reconectar...";
+    }
   }
 
   function handleGameData(data) {
+    const statusEl = document.getElementById("dg-game-status");
+    const resultContainer = document.getElementById("dg-result-container");
+    const resultEl = document.getElementById("dg-result");
+    const colorNameEl = document.getElementById("dg-color-name");
+
     if (data.status) {
-      gameStatus.textContent = `Status: ${capitalize(data.status)}`;
-
-      if (data.status === "complete" && data.color !== undefined && data.roll !== undefined) {
-        updateResultDisplay(data.color, data.roll);
+      statusEl.textContent = capitalize(data.status);
+    }
+    if (data.status === "rolling") {
+      resultContainer.style.display = "block";
+      if (data.color != null) {
+        // exibe previsão
+        predictColor(data.hash);
+        resultEl.className = "dg-result " + colorMap[prediction].class;
+        resultEl.textContent = colorMap[prediction].name;
+        colorNameEl.textContent = "Predição";
       }
-      if (data.status === "rolling") {
-        makePrediction(data.hash);
+      statusEl.classList.add("dg-rolling");
+    }
+    else if (data.status === "complete") {
+      statusEl.classList.remove("dg-rolling");
+      if (data.color != null && data.roll != null) {
+        resultContainer.style.display = "block";
+        const realColor = mapRealColor(data.color);
+        resultEl.className = "dg-result " + realColor.class;
+        resultEl.textContent = data.roll;
+        colorNameEl.textContent = realColor.name;
       }
     }
-  }
-
-  function makePrediction(hash) {
-    if (hash) {
-      const colorNumber = parseInt(hash.substring(0, 8), 16) % 15;
-      if (colorNumber === 0) predictedColor = 0;
-      else if (colorNumber >= 1 && colorNumber <= 7) predictedColor = 1;
-      else predictedColor = 2;
-
-      const prediction = colorMap[predictedColor];
-      predictionDisplay.textContent = `Previsão: ${prediction.name}`;
+    else {
+      statusEl.classList.remove("dg-rolling");
+      resultContainer.style.display = "none";
     }
   }
 
-  function updateResultDisplay(color, roll) {
-    let colorInfo;
-    if (color === 0) colorInfo = colorMap[0];
-    else if (color >= 1 && color <= 7) colorInfo = colorMap[1];
-    else if (color >= 8 && color <= 14) colorInfo = colorMap[2];
+  function predictColor(hash) {
+    const num = parseInt(hash.substring(0,8),16) % 15;
+    if (num === 0) prediction = 0;
+    else if (num >=1 && num <=7) prediction = 1;
+    else prediction = 2;
+  }
 
-    if (colorInfo) {
-      resultBall.className = `dp-result ${colorInfo.className}`;
-      resultBall.textContent = roll;
-      colorName.textContent = colorInfo.name;
+  function mapRealColor(colorNum) {
+    if (colorNum === 0) return colorMap[0];
+    if (colorNum >=1 && colorNum <=7) return colorMap[1];
+    return colorMap[2];
+  }
+
+  function capitalize(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  // Inicia tudo
+  connectWS();
+
+  // Dblclick ou tap duplo ainda abre, mas isLoggedIn já é true
+  function showPanel() {
+    panelEl.style.display = "block";
+    floatingBtn.style.display = "none";
+  }
+  document.addEventListener("dblclick", showPanel);
+  let lastTap = 0;
+  document.addEventListener("touchend", e => {
+    const now = Date.now();
+    if (now - lastTap < 300) {
+      showPanel();
+      e.preventDefault();
     }
-  }
+    lastTap = now;
+  });
 
-  function capitalize(text) {
-    return text.charAt(0).toUpperCase() + text.slice(1);
-  }
-
-  // Inicializa
-  connectWebSocket();
 })();
