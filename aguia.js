@@ -1,6 +1,6 @@
 (function () { if (window.doubleGameInjected) { console.log("Script já está em execução!"); return; } window.doubleGameInjected = true;
 
-const style = document.createElement('style'); style.textContent = /* TODO: inserir o CSS completo original aqui */; document.head.appendChild(style);
+const style = document.createElement('style'); style.textContent = /* TODO: inserir o CSS completo original aqui (sem login) */; document.head.appendChild(style);
 
 const createFloatingImage = () => { const image = document.createElement("img"); image.className = "dg-floating-image"; image.id = "dg-floating-image"; image.src = "https://t.me/i/userpic/320/chefe00blaze.jpg"; image.alt = "Blaze Chefe"; image.addEventListener('click', toggleMainPanel); document.body.appendChild(image); };
 
@@ -8,7 +8,7 @@ const toggleMainPanel = () => { const panel = document.getElementById("double-ga
 
 const createPanel = () => { const container = document.createElement("div"); container.className = "dg-container"; container.id = "double-game-container"; container.innerHTML = <div class="dg-header"> <div class="dg-drag-handle">⋮⋮</div> <h1>Hacker00 I.A</h1> <button class="dg-close-btn" id="dg-close">×</button> </div> <div class="dg-content"> <div class="dg-connection dg-disconnected" id="dg-connection-status">Desconectado - tentando conectar...</div> <div class="dg-section"> <div class="dg-section-title" id="dg-game-status-label">Status do Jogo</div> <div class="dg-game-status"> <p class="dg-status-text"><span id="dg-game-status">Esperando</span></p> <div id="dg-result-container" style="display: none;"> <div class="dg-result dg-gray" id="dg-result">?</div> <p id="dg-color-name" style="margin-top: 5px; font-size: 13px;">-</p> </div> </div> </div> <div class="dg-section" id="dg-consumer-mode"> <div class="dg-prediction-box" id="dg-prediction-container" style="display: none;"> <p class="dg-prediction-title">Previsão para esta rodada:</p> <div class="dg-prediction dg-gray" id="dg-prediction">?</div> <p class="dg-prediction-accuracy" id="dg-prediction-accuracy">--</p> </div> <button id="dg-new-prediction" class="dg-btn dg-btn-primary" style="width: 100%; margin-top: 10px;"> Gerar Nova Previsão </button> <div class="dg-prediction-result" id="dg-result-message" style="display: none;">Resultado</div> </div> </div>; document.body.appendChild(container); addDragEvents(container); document.getElementById("dg-close").addEventListener("click", () => { container.style.display = "none"; const image = document.getElementById("dg-floating-image"); if (image) image.style.display = "block"; }); container.style.display = "none"; };
 
-const addDragEvents = (element) => { let startX = 0, startY = 0, offsetX = 0, offsetY = 0; const handle = element.querySelector(".dg-drag-handle");
+const addDragEvents = (element) => { let startX = 0, startY = 0; const handle = element.querySelector(".dg-drag-handle");
 
 const move = (e) => {
   e.preventDefault();
@@ -50,7 +50,7 @@ if (handle) {
 
 let lastTap = 0; document.addEventListener("dblclick", toggleMainPanel); document.addEventListener("touchend", (e) => { const now = Date.now(); if (now - lastTap < 300) { toggleMainPanel(); e.preventDefault(); } lastTap = now; });
 
-const DoubleGamePanel = { ws: null, pingInterval: null, connected: false, prediction: null, lastStatus: null, gameData: { color: null, roll: null, status: "waiting" }, colorMap: { 0: { name: "Branco", class: "dg-white" }, 1: { name: "Verde", class: "dg-red" }, 2: { name: "Preto", class: "dg-black" } },
+const DoubleGamePanel = { ws: null, pingInterval: null, connected: false, prediction: null, gameData: { color: null, roll: null, status: "waiting" }, colorMap: { 0: { name: "Branco", class: "dg-white" }, 1: { name: "Verde", class: "dg-red" }, 2: { name: "Preto", class: "dg-black" } },
 
 init() {
   createPanel();
@@ -157,5 +157,5 @@ updatePredictionUI() {
 
 };
 
-createFloatingImage(); createPanel(); })();
+createFloatingImage(); })();
 
