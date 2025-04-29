@@ -31,7 +31,7 @@ ws.onerror = () => ws.close();
 
 };
 
-createFloatingImage();
+createFloatingImage(); const painel = createPanel(); painel.style.display = "block"; setupPrediction(); connectWebSocket();
 
 document.addEventListener("dblclick", toggleMainPanel); let lastTap = 0; document.addEventListener("touchend", (e) => { const now = Date.now(); if (now - lastTap < 300) { toggleMainPanel(); e.preventDefault(); } lastTap = now; }); })();
 
