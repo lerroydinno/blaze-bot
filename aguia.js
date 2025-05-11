@@ -141,7 +141,7 @@ class BlazeInterface {
     }
 }
 
-// Inicializa monitoramento
+// Inicializa monitoramento automaticamente
 const ws = new BlazeWebSocket();
 const ui = new BlazeInterface();
 
