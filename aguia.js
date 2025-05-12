@@ -51,55 +51,9 @@ class BlazeInterface {
   constructor() {
     this.nextPredColor = null;
     this.results = [];
-    this.processedIds = new Set();
-    this.notifiedIds = new Set();
     this.correctPredictions = 0;
     this.totalPredictions = 0;
     this.initMonitorInterface();
-  }
-
-  injectGlobalStyles() {
-    const css = `
-      .blaze-min-btn{background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;padding:0 8px}
-      .blaze-min-btn:hover{opacity:.75}
-      .blaze-bubble{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;
-        background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);
-        box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:none;}
-      .blaze-overlay{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-        z-index:9999;font-family:'Arial',sans-serif;}
-      .blaze-monitor{background:rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;
-        background-blend-mode:overlay;border-radius:10px;padding:15px;
-        box-shadow:0 5px 15px rgba(0,0,0,.5);color:#fff;width:300px}
-      .blaze-monitor h3{margin:0 0 10px;text-align:center;font-size:18px}
-      .result-card{background:#4448;border-radius:5px;padding:10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
-      .result-number{font-size:24px;font-weight:bold}
-      .result-color-0{color:#fff;background:linear-gradient(45deg,#fff,#ddd);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-      .result-color-1{color:#f44336}.result-color-2{color:#0F1923}
-      .result-status{padding:5px 10px;border-radius:3px;font-size:12px;font-weight:bold;text-transform:uppercase}
-      .result-status-waiting{background:#ffc107;color:#000}
-      .result-status-rolling{background:#ff9800;color:#000;animation:pulse 1s infinite}
-      .result-status-complete{background:#4caf50;color:#fff}
-      @keyframes pulse{0%{opacity:1}50%{opacity:.5}100%{opacity:1}}
-      .blaze-notification{position:fixed;top:80px;right:20px;padding:15px;border-radius:5px;
-        color:#fff;font-weight:bold;opacity:0;transform:translateY(-20px);
-        transition:all .3s ease;z-index:10000}
-      .blaze-notification.show{opacity:1;transform:translateY(0)}
-      .notification-win{background:#4caf50}.notification-loss{background:#f44336}
-      .prediction-card{background:#4448;border-radius:5px;padding:15px;margin-bottom:15px;text-align:center;font-weight:bold}
-      .prediction-title{font-size:14px;opacity:.8;margin-bottom:5px}
-      .prediction-value{font-size:18px;font-weight:bold;display:flex;align-items:center;justify-content:center}
-      .color-dot{width:24px;height:24px;border-radius:50%;display:inline-block;margin-right:10px}
-      .color-dot-0{background:#fff;border:1px solid #777}.color-dot-1{background:#f44336}.color-dot-2{background:#212121}
-      .prediction-accuracy{font-size:12px;margin-top:5px;opacity:.7}
-      .prediction-waiting{color:#00e676;text-shadow:0 0 5px rgba(0,230,118,.7)}
-    `;
-    const style = document.createElement('style');
-    style.textContent = css;
-    document.head.appendChild(style);
-
-    this.bubble = document.createElement('div');
-    this.bubble.className = 'blaze-bubble';
-    document.body.appendChild(this.bubble);
   }
 
   initMonitorInterface() {
@@ -122,6 +76,9 @@ class BlazeInterface {
       this.bubble.style.display = 'block';
     });
 
+    this.bubble = document.createElement('div');
+    this.bubble.className = 'blaze-bubble';
+    document.body.appendChild(this.bubble);
     this.bubble.addEventListener('click', () => {
       this.bubble.style.display = 'none';
       document.getElementById('blazeMonitorBox').style.display = 'block';
@@ -135,7 +92,6 @@ class BlazeInterface {
     if (this.results.length < 2) return null;
     const lastResults = this.results.slice(0, 10);
     const colorCounts = { 0: 0, 1: 0, 2: 0 };
-
     lastResults.forEach((r) => {
       colorCounts[r.color]++;
     });
@@ -149,7 +105,7 @@ class BlazeInterface {
 
   updatePredictionStats(cur) {
     if (this.results.length < 2 || cur.status !== 'complete') return;
-    const prev = this.results.filter(r => r.status === 'complete')[1];
+    const prev = this.results.find(r => r.status === 'complete');
     if (!prev) return;
     this.totalPredictions++;
     if (prev.color === cur.color) this.correctPredictions++;
@@ -157,12 +113,12 @@ class BlazeInterface {
 
   updateResults(d) {
     const id = d.id || `tmp-${Date.now()}-${d.color}-${d.roll}`;
-    const i = this.results.findIndex(r => (r.id || r.tmp) === id);
-    if (i >= 0) this.results[i] = { ...this.results[i], ...d };
-    else {
-      if (this.results.length > 5) this.results.pop();
+    const existing = this.results.find(r => (r.id || r.tmp) === id);
+    if (!existing) {
+      if (this.results.length > 20) this.results.pop();
       this.results.unshift({ ...d, tmp: id });
-      if (d.status === 'complete') this.updatePredictionStats(d);
+    } else {
+      Object.assign(existing, d);
     }
 
     const r = this.results[0];
@@ -181,40 +137,44 @@ class BlazeInterface {
       `;
     }
 
-    const pred = this.predictNextColor();
-    const pDiv = document.getElementById('blazePrediction');
-    if (pDiv && pred) {
-      const acc = this.totalPredictions ? Math.round((this.correctPredictions / this.totalPredictions) * 100) : 0;
-      const waitCls = pred.isWaiting ? 'prediction-waiting' : '';
-      pDiv.innerHTML = `
-        <div class="prediction-title">${pred.isWaiting ? 'PREVISÃO PARA PRÓXIMA RODADA' : 'PRÓXIMA COR PREVISTA'}</div>
-        <div class="prediction-value ${waitCls}">
-          <span class="color-dot color-dot-${pred.color}"></span> ${pred.colorName}
-        </div>
-        <div class="prediction-accuracy">Taxa de acerto: ${acc}% (${this.correctPredictions}/${this.totalPredictions})</div>
-      `;
-      this.nextPredColor = pred.color;
+    if (d.status === 'waiting') {
+      const pred = this.predictNextColor();
+      const pDiv = document.getElementById('blazePrediction');
+      if (pDiv && pred) {
+        const acc = this.totalPredictions ? Math.round((this.correctPredictions / this.totalPredictions) * 100) : 0;
+        pDiv.innerHTML = `
+          <div class="prediction-title">PREVISÃO PARA PRÓXIMA RODADA</div>
+          <div class="prediction-value prediction-waiting">
+            <span class="color-dot color-dot-${pred.color}"></span> ${pred.colorName}
+          </div>
+          <div class="prediction-accuracy">Assertividade: ${acc}%</div>
+        `;
+      }
     }
 
-    const needToast = (d.status === 'rolling' || d.status === 'complete') && !this.notifiedIds.has(id);
-    if (needToast && this.nextPredColor !== null) {
-      this.notifiedIds.add(id);
-      const win = d.color === this.nextPredColor;
-      this.showNotification(d, win);
+    if (d.status === 'complete') {
+      this.updatePredictionStats(d);
     }
   }
 
-  showNotification(data, win) {
-    const notif = document.createElement('div');
-    notif.className = `blaze-notification ${win ? 'notification-win' : 'notification-loss'}`;
-    notif.innerText = win ? 'Acertou a cor!' : 'Errou a cor!';
-    document.body.appendChild(notif);
-    setTimeout(() => notif.classList.add('show'), 50);
-    setTimeout(() => {
-      notif.classList.remove('show');
-      setTimeout(() => notif.remove(), 300);
-    }, 3000);
+  injectGlobalStyles() {
+    const css = `.blaze-bubble{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;background:#222;cursor:pointer;z-index:10000;}
+    .blaze-overlay{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;font-family:'Arial',sans-serif;}
+    .blaze-monitor{background:#222;border-radius:10px;padding:15px;color:#fff;width:300px;}
+    .result-card{margin-top:10px}
+    .result-number{font-size:22px;font-weight:bold}
+    .result-color-0{color:#fff}.result-color-1{color:red}.result-color-2{color:#222}
+    .result-status{margin-top:5px}
+    .prediction-card{background:#333;border-radius:5px;padding:10px;text-align:center}
+    .prediction-title{font-size:12px;color:#aaa}
+    .prediction-value{font-size:16px;margin-top:5px}
+    .prediction-accuracy{font-size:10px;color:#ccc;margin-top:5px}
+    .color-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+    .color-dot-0{background:white}.color-dot-1{background:red}.color-dot-2{background:#222}`;
+    const style = document.createElement('style');
+    style.textContent = css;
+    document.head.appendChild(style);
   }
 }
 
-new BlazeInterface();
+window.onload = () => new BlazeInterface();
