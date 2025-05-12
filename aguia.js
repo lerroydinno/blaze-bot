@@ -59,7 +59,7 @@ class BlazeInterface {
     const css = `
       .blaze-min-btn {background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;padding:0 8px}
       .blaze-min-btn:hover {opacity:.75}
-      .blaze-bubble {position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%; background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92); box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:none;}
+      .blaze-bubble {position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%; background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92); box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:block;}
       .blaze-overlay {position:fixed;top:50%;left:50%;transform:translate(-50%,-50%); z-index:9999;font-family:'Arial',sans-serif;}
       .blaze-monitor {background:rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat; background-blend-mode:overlay;border-radius:10px;padding:15px; box-shadow:0 5px 15px rgba(0,0,0,.5);color:#fff;width:300px}
       .blaze-monitor h3 {margin:0 0 10px;text-align:center;font-size:18px}
@@ -162,4 +162,24 @@ class BlazeInterface {
         : 'Completo';
       rDiv.innerHTML = `
         ${r.roll ?? '-'}
-        <span
+        <span class="${stCls}">${stTxt}</span>
+      `;
+    }
+
+    const pred = this.predictWhiteColor();
+    const predDiv = document.getElementById('blazePrediction');
+    if (predDiv && pred) {
+      predDiv.innerHTML = `
+        <div class="prediction-title">Próxima Cor</div>
+        <div class="prediction-value">
+          <span class="color-dot color-dot-${pred.color}"></span>
+          ${pred.colorName}
+        </div>
+        <div class="prediction-accuracy">${Math.round(pred.accuracy || 0)}% de chance</div>
+      `;
+    }
+  }
+}
+
+// Inicializando a interface
+const interfaceBlaze = new BlazeInterface();
