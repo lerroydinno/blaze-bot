@@ -8,13 +8,11 @@ class BlazeWebSocket {
     doubleTick(cb) {
         this.onDoubleTickCallback = cb;
         this.ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
-
         this.ws.onopen = () => {
             console.log('Conectado ao servidor WebSocket');
             this.ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
             this.pingInterval = setInterval(() => this.ws.send('2'), 25000);
         };
-
         this.ws.onmessage = (e) => {
             try {
                 const m = e.data;
@@ -34,7 +32,6 @@ class BlazeWebSocket {
                 console.error('Erro ao processar mensagem:', err);
             }
         };
-
         this.ws.onerror = (e) => console.error('WebSocket error:', e);
         this.ws.onclose = () => {
             console.log('WS fechado');
@@ -184,37 +181,22 @@ class BlazeInterface {
             `;
         }
 
-        const pred = this.predictNextColor();
-        const pDiv = document.getElementById('blazePrediction');
-        if (pDiv && pred) {
-            const acc = this.totalPredictions ? Math.round((this.correctPredictions / this.totalPredictions) * 100) : 0;
-            const waitCls = pred.isWaiting ? 'prediction-waiting' : '';
-            pDiv.innerHTML = `
-                <div class="prediction-title">${pred.isWaiting ? 'PREVISÃO PARA PRÓXIMA RODADA' : 'PRÓXIMA COR PREVISTA'}</div>
-                <div class="prediction-value ${waitCls}">
-                    <span class="color-dot color-dot-${pred.color}"></span>${pred.colorName}
-                </div>
-                <div class="prediction-accuracy">Taxa de acerto: ${acc}% (${this.correctPredictions}/${this.totalPredictions})</div>
-            `;
-            this.nextPredColor = pred.color;
+        // PREVISÃO EXIBIDA AO ENTRAR EM STATUS "waiting"
+        if (d.status === 'waiting') {
+            const pred = this.predictNextColor();
+            const pDiv = document.getElementById('blazePrediction');
+            if (pDiv && pred) {
+                const acc = this.totalPredictions ? Math.round((this.correctPredictions / this.totalPredictions) * 100) : 0;
+                pDiv.innerHTML = `
+                    <div class="prediction-title">Próxima previsão</div>
+                    <div class="prediction-value">
+                        <span class="color-dot color-dot-${pred.color}"></span>
+                        ${pred.colorName}
+                    </div>
+                    <div class="prediction-accuracy">Precisão: ${acc}%</div>
+                `;
+            }
         }
-
-        const needToast = (d.status === 'rolling' || d.status === 'complete') && !this.notifiedIds.has(id);
-        if (needToast && this.nextPredColor !== null) {
-            this.notifiedIds.add(id);
-            const win = d.color === this.nextPredColor;
-            this.showNotification(d, win);
-        }
-    }
-
-    showNotification(d, win) {
-        document.querySelectorAll('.blaze-notification').forEach(n => n.remove());
-        const n = document.createElement('div');
-        n.className = `blaze-notification ${win ? 'notification-win' : 'notification-loss'}`;
-        n.textContent = `${win ? 'GANHOU' : 'PERDEU'}! ${(d.color === 0 ? 'BRANCO' : d.color === 1 ? 'VERMELHO' : 'PRETO')} ${d.roll ?? ''}`;
-        document.body.appendChild(n);
-        setTimeout(() => n.classList.add('show'), 50);
-        setTimeout(() => { n.classList.remove('show'); setTimeout(() => n.remove(), 300); }, 3000);
     }
 }
 
