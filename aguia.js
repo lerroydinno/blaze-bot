@@ -53,8 +53,6 @@ class BlazeInterface {
         this.results = [];
         this.processedIds = new Set();
         this.notifiedIds = new Set();
-        this.correctPredictions = 0;
-        this.totalPredictions = 0;
         this.initMonitorInterface();
     }
 
@@ -192,4 +190,32 @@ class BlazeInterface {
             const acc = this.totalPredictions ? Math.round((this.correctPredictions / this.totalPredictions) * 100) : 0;
             const waitCls = pred.isWaiting ? 'prediction-waiting' : '';
             pDiv.innerHTML = `
-                <0
+                <div class="prediction-title">${pred.isWaiting ? 'PREVISÃO PARA PRÓXIMA RODADA' : 'PRÓXIMA COR PREVISTA'}</div>
+                <div class="prediction-value ${waitCls}">
+                    <span class="color-dot color-dot-${pred.color}"></span>${pred.colorName}
+                </div>
+                <div class="prediction-accuracy">Taxa de acerto: ${acc}% (${this.correctPredictions}/${this.totalPredictions})</div>
+            `;
+            this.nextPredColor = pred.color;
+        }
+
+        const needToast = (d.status === 'rolling' || d.status === 'complete') && !this.notifiedIds.has(id);
+        if (needToast && this.nextPredColor !== null) {
+            this.notifiedIds.add(id);
+            const win = d.color === this.nextPredColor;
+            this.showNotification(d, win);
+        }
+    }
+
+    showNotification(d, win) {
+        document.querySelectorAll('.blaze-notification').forEach(n => n.remove());
+        const n = document.createElement('div');
+        n.className = `blaze-notification ${win ? 'notification-win' : 'notification-loss'}`;
+        n.textContent = `${win ? 'GANHOU' : 'PERDEU'}! ${(d.color === 0 ? 'BRANCO' : d.color === 1 ? 'VERMELHO' : 'PRETO')} ${d.roll ?? ''}`;
+        document.body.appendChild(n);
+        setTimeout(() => n.classList.add('show'), 50);
+        setTimeout(() => { n.classList.remove('show'); setTimeout(() => n.remove(), 300); }, 3000);
+    }
+}
+
+new BlazeInterface();
