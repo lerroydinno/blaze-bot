@@ -1,3 +1,89 @@
+// ==UserScript== // @name         Blaze Double Bot com WebSocket Interceptado // @version      1.0 // @description  Bot com previsão para o jogo Double da Blaze com interceptação WebSocket, Fetch e XMLHttpRequest // @match        ://blaze.bet/ // @grant        none // ==/UserScript==
+
+(function () { 'use strict';
+
+const interceptarRequisicoes = () => { // Intercepta WebSocket const wsOriginal = window.WebSocket; window.WebSocket = function (url, protocols) { const socket = protocols ? new wsOriginal(url, protocols) : new wsOriginal(url);
+
+socket.addEventListener('message', event => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data && data.type === 'roulette' && data.payload && data.payload.color !== undefined) {
+        const corNum = Number(data.payload.color);
+        const cor = corNum === 0 ? 'BRANCO' : corNum <= 7 ? 'VERMELHO' : 'PRETO';
+        const numero = data.payload.roll;
+        const hash = data.payload.server_seed || 'indefinido';
+        window.dispatchEvent(new CustomEvent('blaze_resultado', {
+          detail: { cor, numero, hash }
+        }));
+      }
+    } catch (e) {}
+  });
+
+  return socket;
+};
+window.WebSocket.prototype = wsOriginal.prototype;
+
+// Intercepta Fetch
+const originalFetch = window.fetch;
+window.fetch = async (...args) => {
+  const response = await originalFetch(...args);
+  const url = args[0];
+  if (typeof url === 'string' && url.includes('/roulette_games/recent')) {
+    try {
+      const clone = response.clone();
+      const json = await clone.json();
+      const ultimo = json[0];
+      const corNum = Number(ultimo.color);
+      const cor = corNum === 0 ? 'BRANCO' : corNum <= 7 ? 'VERMELHO' : 'PRETO';
+      const numero = ultimo.roll;
+      const hash = ultimo.hash || ultimo.server_seed || 'indefinido';
+      window.dispatchEvent(new CustomEvent('blaze_resultado', {
+        detail: { cor, numero, hash }
+      }));
+    } catch (e) {}
+  }
+  return response;
+};
+
+// Intercepta XMLHttpRequest
+const originalOpen = XMLHttpRequest.prototype.open;
+XMLHttpRequest.prototype.open = function (...args) {
+  this._url = args[1];
+  return originalOpen.apply(this, args);
+};
+
+const originalSend = XMLHttpRequest.prototype.send;
+XMLHttpRequest.prototype.send = function (...args) {
+  this.addEventListener('load', function () {
+    if (this._url && this._url.includes('/roulette_games/recent')) {
+      try {
+        const json = JSON.parse(this.responseText);
+        const ultimo = json[0];
+        const corNum = Number(ultimo.color);
+        const cor = corNum === 0 ? 'BRANCO' : corNum <= 7 ? 'VERMELHO' : 'PRETO';
+        const numero = ultimo.roll;
+        const hash = ultimo.hash || ultimo.server_seed || 'indefinido';
+        window.dispatchEvent(new CustomEvent('blaze_resultado', {
+          detail: { cor, numero, hash }
+        }));
+      } catch (e) {}
+    }
+  });
+  return originalSend.apply(this, args);
+};
+
+};
+
+interceptarRequisicoes();
+
+// Seu código original começa aqui (restante já existente do bot, mantido como estava)
+
+(async function () { const apiURL = "https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
+
+// ... todo o código original do bot que você enviou vai aqui abaixo, exatamente como você mandou ...
+
+})(); })();
+
 (async function () {
   const apiURL = "https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
 
@@ -11,7 +97,7 @@
   function getRollColor(hash) {
     const number = parseInt(hash.slice(0, 8), 16) % 15;
     if (number === 0) return { cor: "BRANCO", numero: 0 };
-    if (number <= 7) return { cor: "VERMELHO", numero: number };
+    if (number >= 1 && number <= 7) return { cor: "VERMELHO", numero: number };
     return { cor: "PRETO", numero: number };
   }
 
@@ -63,15 +149,28 @@
     const previsao = getRollColor(novaHash);
     const recente = hist.slice(-100);
     const ocorrencias = recente.filter(c => c === previsao.cor).length;
-    let confianca = recente.length ? ((ocorrencias / recente.length) * 100) : 0;
+
+    const totalPreto = recente.filter(c => c === "PRETO").length;
+    const totalVermelho = recente.filter(c => c === "VERMELHO").length;
+    const totalBranco = recente.filter(c => c === "BRANCO").length;
+    const total = totalPreto + totalVermelho + totalBranco;
+
+    let confianca = total ? ((ocorrencias / total) * 100) : 0;
+
     const sugestaoSequencia = analisarSequencias(hist);
     if (sugestaoSequencia === previsao.cor) confianca += 10;
+
     if (previsao.cor === "BRANCO") {
       const { media, desdeUltimo } = calcularIntervaloBranco(hist);
       if (desdeUltimo >= media * 0.8) confianca += 10;
     }
+
     const reforco = reforcoPrefixo(novaHash);
     if (reforco[previsao.cor]) confianca += parseFloat(reforco[previsao.cor]) / 10;
+
+    if (previsao.cor === "VERMELHO" && totalVermelho > totalPreto + 5) confianca -= 5;
+    if (previsao.cor === "PRETO" && totalPreto > totalVermelho + 5) confianca -= 5;
+
     let aposta = calcularAposta(confianca);
     return { ...previsao, confianca: Math.min(100, confianca.toFixed(2)), aposta };
   }
@@ -150,6 +249,9 @@
     <button id="btn_prever" style="margin-top:5px;">🔁 Gerar previsão manual</button>
     <button id="btn_baixar" style="margin-top:5px;">⬇️ Baixar CSV</button>
     <div id="historico_resultados" style="margin-top:10px;max-height:100px;overflow:auto;text-align:left;font-size:12px;"></div>
+    <div id="barra_progresso" style="margin-top:10px; height: 10px; background: #ccc; border-radius: 5px;">
+      <div id="progresso" style="width: 0%; height: 100%; background: limegreen; border-radius: 5px;"></div>
+    </div>
   `;
   document.body.appendChild(painel);
 
@@ -222,56 +324,14 @@
         if (coresAnteriores.length > 200) coresAnteriores.shift();
         lastHash = hash;
         document.getElementById('historico_resultados').innerHTML += `<div id="log_${hash}">${cor} (${numero})</div>`;
+
+        // Atualizando a barra de progresso
+        const totalEntradas = historicoCSV.split("\n").length - 1;
+        const progresso = totalEntradas / 4000 * 100; // Ajuste para 4000 entradas
+        document.getElementById('progresso').style.width = `${Math.min(progresso, 100)}%`;
       }
     } catch (e) {
       console.error("Erro ao buscar API:", e);
     }
   }, 8000);
-// === INTERCEPTAÇÃO AVANÇADA ===
-
-  // Interceptar WebSocket
-  const OriginalWebSocket = window.WebSocket;
-  window.WebSocket = function (...args) {
-    const ws = new OriginalWebSocket(...args);
-    const originalAddEventListener = ws.addEventListener;
-    ws.addEventListener = function (type, listener, ...rest) {
-      if (type === 'message') {
-        const customListener = function (event) {
-          console.log("[Interceptação WebSocket] Mensagem recebida:", event.data);
-          listener.call(this, event);
-        };
-        return originalAddEventListener.call(ws, type, customListener, ...rest);
-      }
-      return originalAddEventListener.call(ws, type, listener, ...rest);
-    };
-    return ws;
-  };
-
-  // Interceptar Fetch API
-  const originalFetch = window.fetch;
-  window.fetch = async (...args) => {
-    const response = await originalFetch(...args);
-    const clone = response.clone();
-    clone.text().then(text => {
-      console.log("[Interceptação Fetch] URL:", args[0]);
-      console.log("[Interceptação Fetch] Resposta:", text);
-    });
-    return response;
-  };
-
-  // Interceptar XMLHttpRequest
-  const originalOpen = XMLHttpRequest.prototype.open;
-  const originalSend = XMLHttpRequest.prototype.send;
-
-  XMLHttpRequest.prototype.open = function (method, url, ...rest) {
-    this._url = url;
-    return originalOpen.call(this, method, url, ...rest);
-  };
-
-  XMLHttpRequest.prototype.send = function (...args) {
-    this.addEventListener("load", function () {
-      console.log("[Interceptação XHR] URL:", this._url);
-      console.log("[Interceptação XHR] Resposta:", this.responseText);
-    });
-    return originalSend.apply(this, args);
-  };})();
+})();
