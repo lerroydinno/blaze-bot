@@ -4,7 +4,6 @@ class BlazeWebSocket {
         this.pingInterval = null;
         this.onDoubleTickCallback = null;
     }
-
     doubleTick(cb) {
         this.onDoubleTickCallback = cb;
         this.ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
@@ -24,26 +23,16 @@ class BlazeWebSocket {
                     const j = JSON.parse(m.slice(2));
                     if (j[0] === 'data' && j[1].id === 'double.tick') {
                         const p = j[1].payload;
-                        this.onDoubleTickCallback?.({
-                            id: p.id, color: p.color, roll: p.roll, status: p.status
-                        });
+                        this.onDoubleTickCallback?.({ id: p.id, color: p.color, roll: p.roll, status: p.status });
                     }
                 }
-            } catch (err) {
-                console.error('Erro ao processar mensagem:', err);
-            }
+            } catch (err) { console.error('Erro ao processar mensagem:', err); }
         };
 
         this.ws.onerror = (e) => console.error('WebSocket error:', e);
-        this.ws.onclose = () => {
-            console.log('WS fechado');
-            clearInterval(this.pingInterval);
-        };
+        this.ws.onclose = () => { console.log('WS fechado'); clearInterval(this.pingInterval); };
     }
-
-    close() {
-        this.ws?.close();
-    }
+    close() { this.ws?.close(); }
 }
 
 class BlazeInterface {
@@ -52,30 +41,21 @@ class BlazeInterface {
         this.results = [];
         this.processedIds = new Set();
         this.notifiedIds = new Set();
-        this.injectGlobalStyles();
-        this.initMonitorInterface(); // pula direto para o painel
+        this.initMonitorInterface();
     }
 
     injectGlobalStyles() {
         const css = `
             .blaze-min-btn{background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;padding:0 8px}
             .blaze-min-btn:hover{opacity:.75}
-            .blaze-bubble{
-                position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;
-                background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat,
-                           rgba(34,34,34,.92);
-                box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:none;
-            }
-            .blaze-overlay{
-                position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-                z-index:9999;font-family:'Arial',sans-serif;
-            }
-            .blaze-monitor{
-                background:rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg')
-                           center/contain no-repeat;
+            .blaze-bubble{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;
+                background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);
+                box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:none;}
+            .blaze-overlay{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+                z-index:9999;font-family:'Arial',sans-serif;}
+            .blaze-monitor{background:rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;
                 background-blend-mode:overlay;border-radius:10px;padding:15px;
-                box-shadow:0 5px 15px rgba(0,0,0,.5);color:#fff;width:300px
-            }
+                box-shadow:0 5px 15px rgba(0,0,0,.5);color:#fff;width:300px}
             .blaze-monitor h3{margin:0 0 10px;text-align:center;font-size:18px}
             .result-card{background:#4448;border-radius:5px;padding:10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
             .result-number{font-size:24px;font-weight:bold}
@@ -86,6 +66,11 @@ class BlazeInterface {
             .result-status-rolling{background:#ff9800;color:#000;animation:pulse 1s infinite}
             .result-status-complete{background:#4caf50;color:#fff}
             @keyframes pulse{0%{opacity:1}50%{opacity:.5}100%{opacity:1}}
+            .blaze-notification{position:fixed;top:80px;right:20px;padding:15px;border-radius:5px;
+                color:#fff;font-weight:bold;opacity:0;transform:translateY(-20px);
+                transition:all .3s ease;z-index:10000}
+            .blaze-notification.show{opacity:1;transform:translateY(0)}
+            .notification-win{background:#4caf50}.notification-loss{background:#f44336}
             .prediction-card{background:#4448;border-radius:5px;padding:15px;margin-bottom:15px;text-align:center;font-weight:bold}
             .prediction-title{font-size:14px;opacity:.8;margin-bottom:5px}
             .prediction-value{font-size:18px;font-weight:bold;display:flex;align-items:center;justify-content:center}
@@ -104,25 +89,25 @@ class BlazeInterface {
     }
 
     initMonitorInterface() {
+        this.injectGlobalStyles();
+
         this.overlay = document.createElement('div');
         this.overlay.className = 'blaze-overlay';
         this.overlay.innerHTML = `
             <div class="blaze-monitor" id="blazeMonitorBox">
-                <h3>App sha256 <button id="blazeMinBtn" class="blaze-min-btn">-</button></h3>
-                <div id="predictionBox" class="prediction-card">
-                    <div class="prediction-title">Próxima cor:</div>
-                    <div class="prediction-value" id="predValue">Aguardando...</div>
-                    <div class="prediction-accuracy" id="predAccuracy"></div>
-                </div>
-                <div id="resultsList"></div>
+                <h3>App SHA256</h3>
+                <button id="blazeMinBtn" class="blaze-min-btn">−</button>
+                <div class="prediction-card" id="blazePrediction"></div>
+                <div class="result-card" id="blazeResults"></div>
             </div>
         `;
         document.body.appendChild(this.overlay);
 
-        document.getElementById('blazeMinBtn').addEventListener('click', () => {
-            document.getElementById('blazeMonitorBox').style.display = 'none';
-            this.bubble.style.display = 'block';
-        });
+        document.getElementById('blazeMinBtn')
+            .addEventListener('click', () => {
+                document.getElementById('blazeMonitorBox').style.display = 'none';
+                this.bubble.style.display = 'block';
+            });
 
         this.bubble.addEventListener('click', () => {
             this.bubble.style.display = 'none';
@@ -130,8 +115,8 @@ class BlazeInterface {
         });
 
         this.results = [];
-        this.processedIds.clear();
-        this.notifiedIds.clear();
+        this.processedIds = new Set();
+        this.notifiedIds = new Set();
         this.correctPredictions = 0;
         this.totalPredictions = 0;
 
@@ -152,35 +137,71 @@ class BlazeInterface {
     }
 
     updatePredictionStats(cur) {
-        const predBox = document.getElementById('predValue');
-        const accBox = document.getElementById('predAccuracy');
-        const pred = this.predictNextColor();
-        if (!pred) {
-            predBox.textContent = 'Aguardando...';
-            accBox.textContent = '';
-            return;
-        }
-        predBox.innerHTML = `<span class="color-dot color-dot-${pred.color}"></span> ${pred.colorName}`;
-        accBox.textContent = pred.isWaiting ? 'Aguardando resultado atual...' : '';
+        if (this.results.length < 2 || cur.status !== 'complete') return;
+        const prev = this.results.filter(r => r.status === 'complete')[1];
+        if (!prev) return;
+        this.totalPredictions++;
+        if (prev.color === cur.color) this.correctPredictions++;
     }
 
     updateResults(d) {
-        if (this.processedIds.has(d.id)) return;
-        this.processedIds.add(d.id);
-        this.results.unshift(d);
-        if (this.results.length > 30) this.results.pop();
+        const id = d.id || `tmp-${Date.now()}-${d.color}-${d.roll}`;
+        const i = this.results.findIndex(r => (r.id || r.tmp) === id);
+        if (i >= 0) this.results[i] = { ...this.results[i], ...d };
+        else {
+            if (this.results.length > 5) this.results.pop();
+            this.results.unshift({ ...d, tmp: id });
+            if (d.status === 'complete') this.updatePredictionStats(d);
+        }
 
-        const list = document.getElementById('resultsList');
-        const div = document.createElement('div');
-        div.className = 'result-card';
-        div.innerHTML = `
-            <div class="result-number result-color-${d.color}">${d.roll}</div>
-            <div class="result-status result-status-${d.status}">${d.status}</div>
-        `;
-        list.prepend(div);
-        this.updatePredictionStats(d);
+        const r = this.results[0];
+        const rDiv = document.getElementById('blazeResults');
+        if (rDiv && r) {
+            const stCls = r.status === 'waiting' ? 'result-status-waiting'
+                : r.status === 'rolling' ? 'result-status-rolling'
+                    : 'result-status-complete';
+            const stTxt = r.status === 'waiting' ? 'Aguardando'
+                : r.status === 'rolling' ? 'Girando'
+                    : 'Completo';
+            rDiv.innerHTML = `
+                <div class="result-number result-color-${r.color}">${r.roll ?? '-'}</div>
+                <div>${r.color === 0 ? 'Branco' : r.color === 1 ? 'Vermelho' : 'Preto'}</div>
+                <div class="result-status ${stCls}">${stTxt}</div>
+            `;
+        }
+
+        const pred = this.predictNextColor();
+        const pDiv = document.getElementById('blazePrediction');
+        if (pDiv && pred) {
+            const acc = this.totalPredictions ? Math.round((this.correctPredictions / this.totalPredictions) * 100) : 0;
+            const waitCls = pred.isWaiting ? 'prediction-waiting' : '';
+            pDiv.innerHTML = `
+                <div class="prediction-title">${pred.isWaiting ? 'PREVISÃO PARA PRÓXIMA RODADA' : 'PRÓXIMA COR PREVISTA'}</div>
+                <div class="prediction-value ${waitCls}">
+                    <span class="color-dot color-dot-${pred.color}"></span>${pred.colorName}
+                </div>
+                <div class="prediction-accuracy">Taxa de acerto: ${acc}% (${this.correctPredictions}/${this.totalPredictions})</div>
+            `;
+            this.nextPredColor = pred.color;
+        }
+
+        const needToast = (d.status === 'rolling' || d.status === 'complete') && !this.notifiedIds.has(id);
+        if (needToast && this.nextPredColor !== null) {
+            this.notifiedIds.add(id);
+            const win = d.color === this.nextPredColor;
+            this.showNotification(d, win);
+        }
+    }
+
+    showNotification(d, win) {
+        document.querySelectorAll('.blaze-notification').forEach(n => n.remove());
+        const n = document.createElement('div');
+        n.className = `blaze-notification ${win ? 'notification-win' : 'notification-loss'}`;
+        n.textContent = `${win ? 'GANHOU' : 'PERDEU'}! ${(d.color === 0 ? 'BRANCO' : d.color === 1 ? 'VERMELHO' : 'PRETO')} ${d.roll ?? ''}`;
+        document.body.appendChild(n);
+        setTimeout(() => n.classList.add('show'), 50);
+        setTimeout(() => { n.classList.remove('show'); setTimeout(() => n.remove(), 300); }, 3000);
     }
 }
 
-// Ativação automática:
 new BlazeInterface();
