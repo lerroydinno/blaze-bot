@@ -1,9 +1,8 @@
-// === Código original mantido intacto até aqui ===
+// Blaze Analyzer com painel flutuante e análises avançadas
 
 class BlazeWebSocket { constructor() { this.ws = null; this.pingInterval = null; this.onDoubleTickCallback = null; } doubleTick(cb) { this.onDoubleTickCallback = cb; this.ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
 
 this.ws.onopen = () => {
-        console.log('Conectado ao servidor WebSocket');
         this.ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
         this.pingInterval = setInterval(() => this.ws.send('2'), 25000);
     };
@@ -20,71 +19,136 @@ this.ws.onopen = () => {
                     this.onDoubleTickCallback?.({ id: p.id, color: p.color, roll: p.roll, status: p.status });
                 }
             }
-        } catch (err) { console.error('Erro ao processar mensagem:', err); }
+        } catch (err) {}
     };
 
-    this.ws.onerror = (e) => console.error('WebSocket error:', e);
-    this.ws.onclose = () => { console.log('WS fechado'); clearInterval(this.pingInterval); };
+    this.ws.onclose = () => clearInterval(this.pingInterval);
 }
 close() { this.ws?.close(); }
 
 }
 
-class BlazeInterface { constructor() { this.nextPredColor = null; this.results = []; this.processedIds = new Set(); this.notifiedIds = new Set(); this.initMonitorInterface(); }
+class BlazeInterface { constructor() { this.results = []; this.nextPredColor = null; this.correctPredictions = 0; this.totalPredictions = 0; this.processedIds = new Set(); this.notifiedIds = new Set(); this.initMonitorInterface(); }
 
-injectGlobalStyles() { /* ... */ } // Código de estilo mantido igual
+injectGlobalStyles() {
+    const css = `
+        .blaze-bubble{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;
+        background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat,#222e;border:2px solid #fff;
+        box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;}
+        .blaze-overlay{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999}
+        .blaze-monitor{background:#222d;padding:15px;border-radius:10px;color:#fff;width:300px;box-shadow:0 5px 15px rgba(0,0,0,.5)}
+        .result-card,.prediction-card{margin-bottom:15px;padding:10px;border-radius:5px;background:#333e}
+        .color-dot{width:20px;height:20px;border-radius:50%;display:inline-block;margin-right:10px}
+        .color-dot-0{background:#fff;border:1px solid #999}.color-dot-1{background:#f00}.color-dot-2{background:#000}
+        .prediction-accuracy{font-size:12px;margin-top:5px;opacity:.7}
+        .blaze-min-btn{position:absolute;top:5px;right:10px;font-size:18px;color:#fff;background:none;border:none;cursor:pointer}
+    `;
+    const style = document.createElement('style');
+    style.textContent = css;
+    document.head.appendChild(style);
 
-initMonitorInterface() { /* ... */ } // Painel e monitor mantido igual
+    this.bubble = document.createElement('div');
+    this.bubble.className = 'blaze-bubble';
+    document.body.appendChild(this.bubble);
+}
+
+initMonitorInterface() {
+    this.injectGlobalStyles();
+
+    this.overlay = document.createElement('div');
+    this.overlay.className = 'blaze-overlay';
+    this.overlay.innerHTML = `
+        <div class="blaze-monitor" id="blazeMonitorBox">
+            <button id="blazeMinBtn" class="blaze-min-btn">−</button>
+            <div class="prediction-card" id="blazePrediction"></div>
+            <div class="result-card" id="blazeResults"></div>
+        </div>
+    `;
+    document.body.appendChild(this.overlay);
+
+    document.getElementById('blazeMinBtn')
+        .addEventListener('click', () => {
+            document.getElementById('blazeMonitorBox').style.display = 'none';
+            this.bubble.style.display = 'block';
+        });
+    this.bubble.addEventListener('click', () => {
+        this.bubble.style.display = 'none';
+        document.getElementById('blazeMonitorBox').style.display = 'block';
+    });
+
+    this.ws = new BlazeWebSocket();
+    this.ws.doubleTick((d) => this.updateResults(d));
+}
 
 predictNextColor() {
     if (this.results.length < 10) return null;
+    const lastColors = this.results.filter(r => r.status === 'complete').slice(0, 10).map(r => r.color);
+    const lastRolls = this.results.filter(r => r.status === 'complete').slice(0, 10).map(r => r.roll);
 
-    const lastColors = this.results.filter(r => r.status === 'complete').map(r => r.color);
-    const lastRolls = this.results.filter(r => r.status === 'complete').map(r => r.roll);
+    // Análise por sequência de cor
+    const colorCount = [0, 0, 0];
+    lastColors.forEach(c => colorCount[c]++);
+    const predByColor = colorCount.indexOf(Math.max(...colorCount));
 
-    const corPredita = this.analisarSequenciaCores(lastColors);
-    const corPorRoll = this.analisarRolls(lastRolls);
+    // Análise por padrão de número (roll)
+    const avgRoll = Math.round(lastRolls.reduce((a, b) => a + b, 0) / lastRolls.length);
+    const predByRoll = avgRoll <= 7 ? 1 : 2;
 
-    // Combina as duas análises (prioriza coincidência)
-    let finalCor = null;
-    if (corPredita !== null && corPredita === corPorRoll) finalCor = corPredita;
-    else finalCor = corPredita ?? corPorRoll;
+    // Decisão final combinada com reforço se branco veio recentemente
+    const whiteRecent = lastColors.includes(0);
+    let finalPred = (predByColor === predByRoll) ? predByColor : predByRoll;
+    if (!whiteRecent && Math.random() < 0.1) finalPred = 0; // pequena chance de branco
 
     return {
-        color: finalCor,
-        colorName: finalCor === 0 ? 'Branco' : finalCor === 1 ? 'Vermelho' : 'Preto',
-        isWaiting: this.results[0]?.status === 'waiting'
+        color: finalPred,
+        colorName: finalPred === 0 ? 'Branco' : (finalPred === 1 ? 'Vermelho' : 'Preto'),
+        isWaiting: !!this.results.find(r => r.status === 'waiting')
     };
 }
 
-analisarSequenciaCores(lista) {
-    if (lista.length < 5) return null;
-    const ultimos = lista.slice(0, 5).reverse();
-    for (let i = 5; i < lista.length - 5; i++) {
-        const seq = lista.slice(i, i + 5);
-        if (JSON.stringify(seq) === JSON.stringify(ultimos)) {
-            return lista[i - 1] ?? null;
-        }
+updateResults(d) {
+    const id = d.id || `tmp-${Date.now()}-${d.color}-${d.roll}`;
+    const i = this.results.findIndex(r => (r.id || r.tmp) === id);
+    if (i >= 0) this.results[i] = { ...this.results[i], ...d };
+    else {
+        if (this.results.length > 100) this.results.pop();
+        this.results.unshift({ ...d, tmp: id });
+        if (d.status === 'complete') this.updatePredictionStats(d);
     }
-    return null;
+
+    const pred = this.predictNextColor();
+    if (pred) {
+        const acc = this.totalPredictions ? Math.round((this.correctPredictions / this.totalPredictions) * 100) : 0;
+        const pDiv = document.getElementById('blazePrediction');
+        if (pDiv) pDiv.innerHTML = `
+            <div class="prediction-title">${pred.isWaiting ? 'PREVISÃO PARA PRÓXIMA RODADA' : 'PRÓXIMA COR PREVISTA'}</div>
+            <div class="prediction-value">
+                <span class="color-dot color-dot-${pred.color}"></span>${pred.colorName}
+            </div>
+            <div class="prediction-accuracy">Taxa de acerto: ${acc}% (${this.correctPredictions}/${this.totalPredictions})</div>
+        `;
+        this.nextPredColor = pred.color;
+    }
+
+    const r = this.results[0];
+    const rDiv = document.getElementById('blazeResults');
+    if (rDiv && r) {
+        const stTxt = r.status === 'waiting' ? 'Aguardando' : r.status === 'rolling' ? 'Girando' : 'Completo';
+        rDiv.innerHTML = `
+            <div class="result-number">${r.roll ?? '-'}</div>
+            <div>${r.color === 0 ? 'Branco' : r.color === 1 ? 'Vermelho' : 'Preto'}</div>
+            <div>${stTxt}</div>
+        `;
+    }
 }
 
-analisarRolls(lista) {
-    if (lista.length < 5) return null;
-    const ultimo = lista[0];
-    const rep = lista.filter(r => r === ultimo);
-    if (rep.length > 1) {
-        const idx = lista.lastIndexOf(ultimo, 1);
-        return this.results[idx - 1]?.color ?? null;
-    }
-    return null;
+updatePredictionStats(cur) {
+    if (this.results.length < 2 || cur.status !== 'complete') return;
+    const prev = this.results.filter(r => r.status === 'complete')[1];
+    if (!prev) return;
+    this.totalPredictions++;
+    if (prev.color === cur.color) this.correctPredictions++;
 }
-
-updatePredictionStats(cur) { /* ... */ } // Mantido
-
-updateResults(d) { /* ... */ } // Mantido
-
-showNotification(d, win) { /* ... */ } // Mantido
 
 }
 
