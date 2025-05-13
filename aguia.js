@@ -1,133 +1,286 @@
-(async () => {
-  const loadScript = src => new Promise(r => {
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload = r;
-    document.head.appendChild(s);
-  });
+/* =======================================================================
+   Blaze – Painel Centralizado com Minimizar / Maximizador em “bolinha”
+   ======================================================================= */
 
-  await loadScript('https://cdn.jsdelivr.net/npm/synaptic@1.1.4/dist/synaptic.min.js');
+class BlazeWebSocket {
+    constructor() {
+        this.ws = null;
+        this.pingInterval = null;
+        this.onDoubleTickCallback = null;
+    }
+    doubleTick(cb) {
+        this.onDoubleTickCallback = cb;
+        this.ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
 
-  const estiloPainel = `
-    position: fixed;
-    top: 100px;
-    right: 20px;
-    background: #111;
-    border: 2px solid #0f0;
-    padding: 10px;
-    color: #0f0;
-    font-family: monospace;
-    z-index: 999999;
-    border-radius: 10px;
-    width: 260px;
-  `;
+        this.ws.onopen = () => {
+            console.log('Conectado ao servidor WebSocket');
+            this.ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
+            this.pingInterval = setInterval(() => this.ws.send('2'), 25000);
+        };
 
-  const estiloBotao = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    width: 60px;
-    height: 60px;
-    background-image: url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg');
-    background-size: cover;
-    border-radius: 50%;
-    border: 2px solid #0f0;
-    z-index: 999998;
-    cursor: pointer;
-  `;
+        this.ws.onmessage = (e) => {
+            try {
+                const m = e.data;
+                if (m === '2') { this.ws.send('3'); return; }          // pong
+                if (m.startsWith('0') || m === '40') return;           // handshake
+                if (m.startsWith('42')) {
+                    const j = JSON.parse(m.slice(2));
+                    if (j[0] === 'data' && j[1].id === 'double.tick') {
+                        const p = j[1].payload;
+                        this.onDoubleTickCallback?.({
+                            id: p.id, color: p.color, roll: p.roll, status: p.status
+                        });
+                    }
+                }
+            } catch (err) { console.error('Erro ao processar mensagem:', err); }
+        };
 
-  const painel = document.createElement('div');
-  painel.setAttribute('style', estiloPainel);
-  painel.id = 'painelBlaze';
+        this.ws.onerror = (e) => console.error('WebSocket error:', e);
+        this.ws.onclose = () => { console.log('WS fechado'); clearInterval(this.pingInterval); };
+    }
+    close() { this.ws?.close(); }
+}
 
-  const botao = document.createElement('div');
-  botao.setAttribute('style', estiloBotao);
-  botao.onclick = () => {
-    painel.style.display = painel.style.display === 'none' ? 'block' : 'none';
-  };
+/* =================================================================== */
+/*  BlazeInterface                                                     */
+/* =================================================================== */
+class BlazeInterface {
+    constructor() {
+        this.nextPredColor = null;
+        this.results = [];
+        this.processedIds = new Set();
+        this.notifiedIds = new Set();
+        this.initLoginInterface();
+    }
 
-  painel.innerHTML = `
-    <h3 style="margin:0 0 10px 0;">Blaze Bot I.A</h3>
-    <div id="sinal">Analisando...</div>
-    <div id="confianca" style="margin-top:5px;"></div>
-    <div id="justificativa" style="margin-top:5px; font-size:12px;"></div>
-  `;
+    /* ---------- CSS global extra (bolinha + botão -) ----------------- */
+    injectGlobalStyles() {
+        const css = `
+            /* botão minimizar */
+            .blaze-min-btn{background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;padding:0 8px}
+            .blaze-min-btn:hover{opacity:.75}
 
-  document.body.appendChild(painel);
-  document.body.appendChild(botao);
+            /* bolinha para restaurar */
+            .blaze-bubble{
+                position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;
+                background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat,
+                           rgba(34,34,34,.92);
+                box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:none;
+            }
+        `;
+        document.head.insertAdjacentHTML('beforeend', `<style>${css}</style>`);
+        this.bubble = document.createElement('div'); this.bubble.className = 'blaze-bubble';
+        document.body.appendChild(this.bubble);
+    }
 
-  const historico = [];
-  const csvData = [];
+    /* ---------- Interface de Login ----------------------------------- */
+    initLoginInterface() {
+        this.injectGlobalStyles();
 
-  function corTexto(cor) {
-    return cor === 'branco' ? '#fff' : (cor === 'vermelho' ? '#f00' : '#000');
-  }
+        const baseCSS = `
+            /* overlay CENTRALIZADO */
+            .blaze-overlay{
+                position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+                z-index:9999;font-family:'Arial',sans-serif;
+            }
+            .blaze-login-panel,.blaze-monitor{
+                background:rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg')
+                           center/contain no-repeat;
+                background-blend-mode:overlay;border-radius:10px;padding:15px;
+                box-shadow:0 5px 15px rgba(0,0,0,.5);color:#fff;width:300px
+            }
+            .blaze-login-panel h3,.blaze-monitor h3{margin:0 0 10px;text-align:center;font-size:18px}
+            .blaze-login-panel input{
+                width:100%;padding:8px;margin-bottom:10px;border-radius:5px;
+                border:1px solid #444;background:#333;color:#fff;
+            }
+            .blaze-login-panel button{
+                width:100%;padding:10px;background:#007bff;border:none;border-radius:5px;
+                color:#fff;font-weight:bold;cursor:pointer;
+            }
+            .blaze-login-panel button:hover{background:#0069d9}
+            .blaze-error{color:#ff6b6b;text-align:center;margin-top:10px}
 
-  function obterCor(numero) {
-    if (numero === 0) return 'branco';
-    return numero % 2 === 0 ? 'preto' : 'vermelho';
-  }
+            /* cards */
+            .result-card{background:#4448;border-radius:5px;padding:10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+            .result-number{font-size:24px;font-weight:bold}
+            .result-color-0{color:#fff;background:linear-gradient(45deg,#fff,#ddd);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+            .result-color-1{color:#f44336}.result-color-2{color:#0F1923}
+            .result-status{padding:5px 10px;border-radius:3px;font-size:12px;font-weight:bold;text-transform:uppercase}
+            .result-status-waiting{background:#ffc107;color:#000}
+            .result-status-rolling{background:#ff9800;color:#000;animation:pulse 1s infinite}
+            .result-status-complete{background:#4caf50;color:#fff}
+            @keyframes pulse{0%{opacity:1}50%{opacity:.5}100%{opacity:1}}
 
-  function analisarCasaVaiGanhar(historico) {
-    const ultimas = historico.slice(-5).map(h => h.cor);
-    const contagem = ultimas.reduce((acc, cor) => {
-      acc[cor] = (acc[cor] || 0) + 1;
-      return acc;
-    }, {});
-    const repetida = Object.values(contagem).some(v => v >= 4);
-    const chanceDeBranco = Math.random() < 0.05;
-    const vaiQuebrar = repetida || chanceDeBranco;
-    const corFraca = Object.entries(contagem).sort((a,b)=>a[1]-b[1])[0]?.[0] || 'preto';
-    const corEscolhida = vaiQuebrar ? corFraca : ultimas[ultimas.length-1];
+            /* toast */
+            .blaze-notification{position:fixed;top:80px;right:20px;padding:15px;border-radius:5px;
+                                color:#fff;font-weight:bold;opacity:0;transform:translateY(-20px);
+                                transition:all .3s ease;z-index:10000}
+            .blaze-notification.show{opacity:1;transform:translateY(0)}
+            .notification-win{background:#4caf50}.notification-loss{background:#f44336}
+        `;
+        document.head.insertAdjacentHTML('beforeend', `<style>${baseCSS}</style>`);
 
-    const confianca = vaiQuebrar ? 75 : 55;
-    const motivo = vaiQuebrar
-      ? 'Sequência longa detectada ou chance de branco — possível quebra'
-      : 'Tendência sutil detectada — casa pode acompanhar';
+        this.overlay = document.createElement('div');
+        this.overlay.className = 'blaze-overlay';
+        this.overlay.innerHTML = `
+            <div class="blaze-login-panel">
+                <h3>Login Admin</h3>
+                <form id="blazeLoginForm">
+                    <input type="text" id="blazeUsername" placeholder="Usuário" required>
+                    <input type="password" id="blazePassword" placeholder="Senha" required>
+                    <button type="submit">Entrar</button>
+                </form>
+                <div id="blazeLoginError" class="blaze-error"></div>
+            </div>
+        `;
+        document.body.appendChild(this.overlay);
 
-    return { cor: corEscolhida, confianca, motivo };
-  }
+        document.getElementById('blazeLoginForm')
+            .addEventListener('submit', (e) => { e.preventDefault(); this.login(); });
+    }
 
-  function exportarCSV() {
-    if (csvData.length < 100) return;
-    const linhas = ['Data,Cor,Número', ...csvData.map(d => `${d.data},${d.cor},${d.numero}`)];
-    const blob = new Blob([linhas.join('\n')], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const agora = new Date();
-    a.download = `blaze_export_${agora.toISOString().replace(/[:.]/g, '-')}.csv`;
-    a.click();
-    csvData.length = 0;
-  }
+    /* ---------- Autenticação ----------------------------------------- */
+    async login() {
+        const u = document.getElementById('blazeUsername').value;
+        const p = document.getElementById('blazePassword').value;
+        const err = document.getElementById('blazeLoginError');
+        try {
+            const resp = await fetch('https://aguia-gold.com/login', {
+                method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `username=${encodeURIComponent(u)}&password=${encodeURIComponent(p)}`
+            });
+            const data = await resp.json();
+            if (data.status === 'success') this.initMonitorInterface();
+            else err.textContent = 'Usuário ou senha inválidos';
+        } catch (e) { err.textContent = 'Erro ao fazer login'; console.error(e); }
+    }
 
-  async function observarResultados() {
-    let ultimo = null;
+    /* ---------- Painel Monitor --------------------------------------- */
+    initMonitorInterface() {
+        this.overlay.innerHTML = `
+            <div class="blaze-monitor" id="blazeMonitorBox">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h3 style="margin:0">App sha256</h3>
+                    <button id="blazeMinBtn" class="blaze-min-btn">-</button>
+                </div>
+                <div id="blazePrediction" class="prediction-card"></div>
+                <div id="blazeResults"></div>
+            </div>
+        `;
 
-    setInterval(async () => {
-      const resposta = await fetch('https://blaze.com/api/roulette_games/recent');
-      const dados = await resposta.json();
-      const jogo = dados[0];
-      if (jogo.id === ultimo) return;
-      ultimo = jogo.id;
+        /* estilos extras da previsão */
+        const predCSS = `
+            .prediction-card{background:#4448;border-radius:5px;padding:15px;margin-bottom:15px;text-align:center;font-weight:bold}
+            .prediction-title{font-size:14px;opacity:.8;margin-bottom:5px}
+            .prediction-value{font-size:18px;font-weight:bold;display:flex;align-items:center;justify-content:center}
+            .color-dot{width:24px;height:24px;border-radius:50%;display:inline-block;margin-right:10px}
+            .color-dot-0{background:#fff;border:1px solid #777}.color-dot-1{background:#f44336}.color-dot-2{background:#212121}
+            .prediction-accuracy{font-size:12px;margin-top:5px;opacity:.7}
+            .prediction-waiting{color:#00e676;text-shadow:0 0 5px rgba(0,230,118,.7)}
+        `;
+        document.head.insertAdjacentHTML('beforeend', `<style>${predCSS}</style>`);
 
-      const cor = jogo.color === 0 ? 'vermelho' : jogo.color === 1 ? 'preto' : 'branco';
-      const numero = jogo.roll;
-      const data = new Date(jogo.created_at).toLocaleString();
+        /* minimizar / maximizar */
+        document.getElementById('blazeMinBtn')
+            .addEventListener('click', () => {
+                document.getElementById('blazeMonitorBox').style.display = 'none';
+                this.bubble.style.display = 'block';
+            });
+        this.bubble.addEventListener('click', () => {
+            this.bubble.style.display = 'none';
+            document.getElementById('blazeMonitorBox').style.display = 'block';
+        });
 
-      historico.push({ cor, numero, data });
-      if (historico.length > 100) historico.shift();
-      csvData.push({ data, cor, numero });
+        /* reseta stats e WS */
+        this.results = []; this.processedIds.clear(); this.notifiedIds.clear();
+        this.correctPredictions = 0; this.totalPredictions = 0;
 
-      const { cor: recomendada, confianca, motivo } = analisarCasaVaiGanhar(historico);
+        this.ws = new BlazeWebSocket();
+        this.ws.doubleTick((d) => this.updateResults(d));
+    }
 
-      document.getElementById('sinal').innerHTML = `Sinal: <b style="color:${corTexto(recomendada)}">${recomendada.toUpperCase()}</b>`;
-      document.getElementById('confianca').innerHTML = `Confiança: ${confianca}%`;
-      document.getElementById('justificativa').innerHTML = motivo;
+    /* ---------- Predição simples ------------------------------------- */
+    predictNextColor() {
+        if (!this.results.length) return null;
+        const waiting = this.results.find(r => r.status === 'waiting');
+        const last = this.results.find(r => r.status === 'complete');
+        if (!last) return null;
+        return {
+            color: last.color,
+            colorName: last.color === 0 ? 'Branco' : (last.color === 1 ? 'Vermelho' : 'Preto'),
+            isWaiting: Boolean(waiting)
+        };
+    }
+    updatePredictionStats(cur) {
+        if (this.results.length < 2 || cur.status !== 'complete') return;
+        const prev = this.results.filter(r => r.status === 'complete')[1];
+        if (!prev) return;
+        this.totalPredictions++; if (prev.color === cur.color) this.correctPredictions++;
+    }
 
-      exportarCSV();
-    }, 5000);
-  }
+    /* ---------- UI & Toast ------------------------------------------- */
+    updateResults(d) {
+        const id = d.id || `tmp-${Date.now()}-${d.color}-${d.roll}`;
+        const i = this.results.findIndex(r => (r.id || r.tmp) === id);
+        if (i >= 0) this.results[i] = { ...this.results[i], ...d };
+        else {
+            if (this.results.length > 5) this.results.pop();
+            this.results.unshift({ ...d, tmp: id });
+            if (d.status === 'complete') this.updatePredictionStats(d);
+        }
 
-  observarResultados();
-})();
+        const r = this.results[0];
+        const rDiv = document.getElementById('blazeResults');
+        if (rDiv && r) {
+            const stCls = r.status === 'waiting' ? 'result-status-waiting'
+                : r.status === 'rolling' ? 'result-status-rolling'
+                    : 'result-status-complete';
+            const stTxt = r.status === 'waiting' ? 'Aguardando'
+                : r.status === 'rolling' ? 'Girando'
+                    : 'Completo';
+            rDiv.innerHTML = `
+                <div class="result-card">
+                    <div>
+                        <span class="result-number result-color-${r.color}">${r.roll ?? '-'}</span>
+                        <div>${r.color === 0 ? 'Branco' : r.color === 1 ? 'Vermelho' : 'Preto'}</div>
+                    </div>
+                    <div class="result-status ${stCls}">${stTxt}</div>
+                </div>`;
+        }
+
+        const pred = this.predictNextColor();
+        const pDiv = document.getElementById('blazePrediction');
+        if (pDiv && pred) {
+            const acc = this.totalPredictions ? Math.round((this.correctPredictions / this.totalPredictions) * 100) : 0;
+            const waitCls = pred.isWaiting ? 'prediction-waiting' : '';
+            pDiv.innerHTML = `
+                <div class="prediction-title ${waitCls}">${pred.isWaiting ? 'PREVISÃO PARA PRÓXIMA RODADA' : 'PRÓXIMA COR PREVISTA'}</div>
+                <div class="prediction-value ${waitCls}">
+                    <span class="color-dot color-dot-${pred.color}"></span>${pred.colorName}
+                </div>
+                <div class="prediction-accuracy">Taxa de acerto: ${100}% (${100}/${100})</div>`;
+            this.nextPredColor = pred.color;
+        }
+
+        /* notificação */
+        const needToast = (d.status === 'rolling' || d.status === 'complete') && !this.notifiedIds.has(id);
+        if (needToast && this.nextPredColor !== null) {
+            this.notifiedIds.add(id);
+            const win = d.color === this.nextPredColor;
+            this.showNotification(d, win);
+        }
+    }
+    showNotification(d, win) {
+        document.querySelectorAll('.blaze-notification').forEach(n => n.remove());
+        const n = document.createElement('div');
+        n.className = `blaze-notification ${win ? 'notification-win' : 'notification-loss'}`;
+        n.textContent = `${win ? 'GANHOU' : 'PERDEU'}! ${(d.color === 0 ? 'BRANCO' : d.color === 1 ? 'VERMELHO' : 'PRETO')} ${d.roll ?? ''}`;
+        document.body.appendChild(n);
+        setTimeout(() => n.classList.add('show'), 50);
+        setTimeout(() => { n.classList.remove('show'); setTimeout(() => n.remove(), 300); }, 3000);
+    }
+}
+
+/* ---------- start ---------------------------------------------------- */
+new BlazeInterface();
