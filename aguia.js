@@ -1,17 +1,17 @@
 // ==UserScript==
-// @name         Blaze Double Assertivo Completo
+// @name         Blaze Double Assertivo IA
 // @namespace    http://tampermonkey.net/
 // @version      2.0
-// @description  Bot com IA, Markov, SHA-256, horário e reforço cruzado
+// @description  Bot com IA, previsão automática, aprendizado e exibição por rodada
 // @match        *://blaze.bet.br/*
 // @grant        none
 // ==/UserScript==
 
-(async function() {
+(async function () {
 'use strict';
 
 const config = {
-    minConfidence: 0.85,
+    minConfidence: 0.7,
     historyLength: 50,
 };
 
@@ -19,26 +19,38 @@ const tfURL = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.4.0/dist/tf.min.j
 await loadScript(tfURL);
 
 class BlazeWebSocket {
-    constructor() { this.ws = null; this.pingInterval = null; this.onDoubleTickCallback = null; }
+    constructor() {
+        this.ws = null;
+        this.pingInterval = null;
+        this.onDoubleTickCallback = null;
+    }
+
     doubleTick(cb) {
         this.onDoubleTickCallback = cb;
         try {
             this.ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
-        } catch(e) { return; }
+        } catch (e) {
+            console.warn('WS falhou, usando fallback');
+            return;
+        }
         this.ws.onopen = () => {
             this.ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
             this.pingInterval = setInterval(() => this.ws.send('2'), 25000);
         };
         this.ws.onmessage = (e) => {
             const m = e.data;
-            if (m==='2') { this.ws.send('3'); return; }
+            if (m === '2') this.ws.send('3');
             if (m.startsWith('42')) {
                 const j = JSON.parse(m.slice(2));
-                if (j[0]==='data' && j[1].id==='double.tick')
-                    this.onDoubleTickCallback && this.onDoubleTickCallback(j[1].payload);
+                if (j[0] === 'data' && j[1].id === 'double.tick')
+                    this.onDoubleTickCallback(j[1].payload);
             }
         };
         this.ws.onclose = () => clearInterval(this.pingInterval);
+    }
+
+    close() {
+        this.ws && this.ws.close();
     }
 }
 
@@ -46,69 +58,80 @@ class BlazeInterface {
     constructor() {
         this.history = [];
         this.model = null;
-        this.markov = {};
-        this.prediction = null;
-        this.result = null;
-        this.initStyles();
-        this.initUI();
+        this.stats = { counts: { 0: 0, 1: 0, 2: 0 }, whiteIntervals: [] };
+        this.nextPred = null;
+        this.lastResult = null;
+        this.panelMinimized = false;
+        this.injectStyles();
+        this.initInterface();
         this.initModel();
     }
 
-    initStyles() {
+    injectStyles() {
         const css = `
-            .blaze-panel{position:fixed;bottom:20px;right:20px;width:320px;background:rgba(34,34,34,0.9);color:#fff;
-            font-family:sans-serif;border-radius:10px;padding:10px;z-index:99999;}
-            .blaze-header{display:flex;justify-content:space-between;align-items:center;}
-            .blaze-body{margin-top:10px;max-height:400px;overflow:auto;}
-            .blaze-btn{background:#007bff;border:none;padding:5px 10px;margin:2px;border-radius:5px;color:#fff;cursor:pointer;}
-            .blaze-input{width:40px;margin-right:5px;}
+        .blaze-panel{position:fixed;bottom:20px;right:20px;width:320px;background:rgba(34,34,34,0.95);color:#fff;
+        font-family:sans-serif;border-radius:10px;padding:10px;z-index:99999;box-shadow:0 0 10px #000;}
+        .blaze-header{display:flex;justify-content:space-between;align-items:center;}
+        .blaze-body{margin-top:10px;max-height:400px;overflow:auto;}
+        .blaze-btn{background:#007bff;border:none;padding:5px 10px;margin:2px;border-radius:5px;color:#fff;cursor:pointer;}
+        .blaze-input{width:40px;margin-right:5px;}
+        .hidden { display: none; }
         `;
         document.head.insertAdjacentHTML('beforeend', `<style>${css}</style>`);
     }
 
-    initUI() {
+    initInterface() {
         this.panel = document.createElement('div');
         this.panel.className = 'blaze-panel';
         this.panel.innerHTML = `
             <div class="blaze-header">
                 <h4>Blaze Assertivo</h4>
-                <button id="minBtn" class="blaze-btn">–</button>
+                <div>
+                    <button id="minimizeBtn" class="blaze-btn">−</button>
+                    <button id="exportBtn" class="blaze-btn">CSV</button>
+                </div>
             </div>
-            <div class="blaze-body" id="blazeBody">
+            <div id="blaze-body" class="blaze-body">
+                <div id="stats"></div>
                 <div id="prediction"></div>
-                <div id="result"></div>
+                <div id="resultStatus"></div>
             </div>
         `;
         document.body.appendChild(this.panel);
-        document.getElementById('minBtn').addEventListener('click', () => {
-            const body = document.getElementById('blazeBody');
-            body.style.display = body.style.display === 'none' ? 'block' : 'none';
-        });
+        document.getElementById('exportBtn').addEventListener('click', () => this.exportCSV());
+        document.getElementById('minimizeBtn').addEventListener('click', () => this.togglePanel());
+    }
+
+    togglePanel() {
+        this.panelMinimized = !this.panelMinimized;
+        document.getElementById('blaze-body').classList.toggle('hidden');
+        const btn = document.getElementById('minimizeBtn');
+        btn.textContent = this.panelMinimized ? '+' : '−';
     }
 
     async initModel() {
         this.model = tf.sequential();
-        this.model.add(tf.layers.dense({units:16, activation:'relu', inputShape:[config.historyLength*3]}));
-        this.model.add(tf.layers.dense({units:3, activation:'softmax'}));
-        this.model.compile({optimizer:'adam', loss:'categoricalCrossentropy', metrics:['accuracy']});
+        this.model.add(tf.layers.dense({ units: 16, activation: 'relu', inputShape: [config.historyLength * 3] }));
+        this.model.add(tf.layers.dense({ units: 3, activation: 'softmax' }));
+        this.model.compile({ optimizer: 'adam', loss: 'categoricalCrossentropy', metrics: ['accuracy'] });
     }
 
     async trainModel() {
-        if (this.history.length < config.historyLength+1) return;
+        if (this.history.length < config.historyLength + 1) return;
         const X = [], Y = [];
-        for (let i = 0; i <= this.history.length - (config.historyLength+1); i++) {
-            const seq = this.history.slice(i, i+config.historyLength).flatMap(r => this.oneHot(r.color));
+        for (let i = 0; i <= this.history.length - (config.historyLength + 1); i++) {
+            const seq = this.history.slice(i, i + config.historyLength).flatMap(r => this.oneHot(r.color));
             X.push(seq);
-            const next = this.oneHot(this.history[i+config.historyLength].color);
-            Y.push(next);
+            Y.push(this.oneHot(this.history[i + config.historyLength].color));
         }
-        const xs = tf.tensor2d(X);
-        const ys = tf.tensor2d(Y);
-        await this.model.fit(xs, ys, {epochs:3, verbose:0});
+        const xs = tf.tensor2d(X), ys = tf.tensor2d(Y);
+        await this.model.fit(xs, ys, { epochs: 5, verbose: 0 });
         xs.dispose(); ys.dispose();
     }
 
-    oneHot(color) { return color===0?[1,0,0]:color===1?[0,1,0]:[0,0,1]; }
+    oneHot(c) {
+        return c === 0 ? [1, 0, 0] : c === 1 ? [0, 1, 0] : [0, 0, 1];
+    }
 
     async makePrediction() {
         const last = this.history.slice(-config.historyLength);
@@ -117,44 +140,11 @@ class BlazeInterface {
         const pred = this.model.predict(input);
         const data = await pred.array();
         input.dispose(); pred.dispose();
-        const [w,r,b] = data[0];
-        const maxP = Math.max(w,r,b);
-        const color = [0,1,2][data[0].indexOf(maxP)];
+        const [pWhite, pRed, pBlack] = data[0];
+        const maxP = Math.max(pWhite, pRed, pBlack);
+        const color = [0, 1, 2][data[0].indexOf(maxP)];
         if (maxP < config.minConfidence) return;
-        this.prediction = {color, confidence: maxP};
-        this.renderPrediction();
-    }
-
-    updateMarkov() {
-        this.markov = {};
-        for (let i = 1; i < this.history.length; i++) {
-            const prev = this.history[i-1].color;
-            const curr = this.history[i].color;
-            if (!this.markov[prev]) this.markov[prev] = {};
-            if (!this.markov[prev][curr]) this.markov[prev][curr] = 0;
-            this.markov[prev][curr]++;
-        }
-    }
-
-    predictMarkov() {
-        if (this.history.length < 1) return null;
-        const last = this.history[this.history.length-1].color;
-        const probs = this.markov[last];
-        if (!probs) return null;
-        const entries = Object.entries(probs).sort((a,b)=>b[1]-a[1]);
-        return entries[0] ? parseInt(entries[0][0]) : null;
-    }
-
-    predictSHA(id, color, roll, time) {
-        const prefix = id.toString().slice(0,4);
-        const hour = new Date(time).getHours();
-        if (prefix.startsWith('1') && hour % 2 === 0) return 0; // ex: pseudo padrão para branco
-        return null;
-    }
-
-    resetPrediction() {
-        this.prediction = null;
-        this.result = null;
+        this.nextPred = { color, confidence: maxP };
         this.renderPrediction();
     }
 
@@ -162,51 +152,78 @@ class BlazeInterface {
         if (r.status !== 'complete') return;
         r.time = new Date().toISOString();
         r.hash = await sha256(r.id + r.color + r.roll + r.time);
+        if (this.nextPred) {
+            const acerto = r.color === this.nextPred.color;
+            document.getElementById('resultStatus').innerHTML = `<b>Resultado:</b> ${this.colorName(r.color)} (${acerto ? 'GANHOU' : 'PERDEU'})`;
+        } else {
+            document.getElementById('resultStatus').innerHTML = `<b>Resultado:</b> ${this.colorName(r.color)}`;
+        }
         this.history.push(r);
+        this.updateStats(r);
+        this.renderStats();
         await this.trainModel();
-        this.updateMarkov();
-        await this.makePrediction();
-        const predColor = this.prediction?.color ?? -1;
-        const markov = this.predictMarkov();
-        const sha = this.predictSHA(r.id, r.color, r.roll, r.time);
-        const votes = [predColor, markov, sha].filter(v=>v!==null);
-        const final = votes.length ? mostCommon(votes) : null;
-        const win = final === r.color;
-        this.result = { real: r.color, predicted: final, win };
-        this.renderPrediction();
-        setTimeout(() => this.resetPrediction(), 2000);
+        this.makePrediction();
+        setTimeout(() => {
+            document.getElementById('prediction').innerHTML = '';
+            document.getElementById('resultStatus').innerHTML = '';
+            this.nextPred = null;
+        }, 6000);
+    }
+
+    colorName(cor) {
+        return cor === 0 ? 'BRANCO' : cor === 1 ? 'VERMELHO' : 'PRETO';
+    }
+
+    updateStats(r) {
+        this.stats.counts[r.color]++;
+        if (r.color === 0) {
+            const lastWhite = this.history.slice(0, -1).reverse().find(x => x.color === 0);
+            if (lastWhite) {
+                const interval = (new Date(r.time) - new Date(lastWhite.time)) / 1000;
+                this.stats.whiteIntervals.push(interval);
+            }
+        }
+    }
+
+    renderStats() {
+        const s = this.stats;
+        document.getElementById('stats').innerHTML = `
+            <div>Branco: ${s.counts[0]} | Vermelho: ${s.counts[1]} | Preto: ${s.counts[2]}</div>
+            <div>Intervalos Branco (s): ${s.whiteIntervals.slice(-5).join(', ')}</div>
+        `;
     }
 
     renderPrediction() {
-        const predEl = document.getElementById('prediction');
-        const resEl = document.getElementById('result');
-        if (!this.prediction) {
-            predEl.innerHTML = 'Aguardando previsão...';
-            resEl.innerHTML = '';
-            return;
-        }
-        const p = this.prediction;
-        const colorStr = p.color===0?'Branco':p.color===1?'Vermelho':'Preto';
-        predEl.innerHTML = `Previsão: <b>${colorStr}</b> (${(p.confidence*100).toFixed(1)}%)`;
-        if (this.result) {
-            const r = this.result;
-            const real = r.real===0?'Branco':r.real===1?'Vermelho':'Preto';
-            const status = r.win ? 'Acertou' : 'Errou';
-            resEl.innerHTML = `Resultado: <b>${real}</b> – ${status}`;
+        const p = this.nextPred;
+        const cor = this.colorName(p.color);
+        document.getElementById('prediction').innerHTML = `<b>Previsão:</b> ${cor} (${(p.confidence * 100).toFixed(1)}%)`;
+    }
+
+    exportCSV() {
+        const header = ['time,color,roll,hash'];
+        const lines = this.history.map(r => `${r.time},${r.color},${r.roll},${r.hash}`);
+        const blob = new Blob([header.concat(lines).join('\n')], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = 'blaze_history.csv'; a.click();
+    }
+
+    async fallbackFetch() {
+        try {
+            const res = await fetch('https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1');
+            const json = await res.json();
+            const p = json.payload;
+            return { id: p.id, color: p.color, roll: p.roll, status: 'complete' };
+        } catch {
+            const el = document.querySelector('.roulette-result');
+            return { id: Date.now(), color: parseInt(el.dataset.color), roll: el.textContent, status: 'complete' };
         }
     }
-}
-
-function mostCommon(arr) {
-    return arr.sort((a,b) =>
-        arr.filter(v=>v===a).length - arr.filter(v=>v===b).length
-    ).pop();
 }
 
 async function sha256(str) {
     const buf = new TextEncoder().encode(str);
     const hash = await crypto.subtle.digest('SHA-256', buf);
-    return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 function loadScript(src) {
@@ -219,5 +236,12 @@ function loadScript(src) {
 const iface = new BlazeInterface();
 const ws = new BlazeWebSocket();
 ws.doubleTick(d => iface.onNewResult(d));
+
+setInterval(async () => {
+    if (!ws.ws || ws.ws.readyState !== WebSocket.OPEN) {
+        const r = await iface.fallbackFetch();
+        iface.onNewResult(r);
+    }
+}, 10000);
 
 })();
