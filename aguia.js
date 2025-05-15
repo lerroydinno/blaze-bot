@@ -1,16 +1,15 @@
 // ==UserScript==
 // @name         Blaze Double Assertivo
 // @namespace    http://tampermonkey.net/
-// @version      1.1
-// @description  Bot completo com coleta, estatísticas, IA, filtros e relatórios
+// @version      1.0
+// @description  Bot com IA, coleta, estatísticas, previsão automática e interface
 // @match        *://blaze.bet.br/*
 // @grant        none
 // ==/UserScript==
 
-(async function() {
+(async function () {
 'use strict';
 
-/* ======================= Configurações de Filtros ======================= */
 const config = {
     minRepetitions: 2,
     afterNumbers: [7, 0],
@@ -18,27 +17,17 @@ const config = {
     historyLength: 50,
 };
 
-/* ======================= Bibliotecas Dinâmicas ======================= */
 const tfURL = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.4.0/dist/tf.min.js';
 await loadScript(tfURL);
 
-/* ======================= BlazeWebSocket ======================= */
 class BlazeWebSocket {
-    constructor() {
-        this.ws = null;
-        this.pingInterval = null;
-        this.onDoubleTickCallback = null;
-    }
+    constructor() { this.ws = null; this.pingInterval = null; this.onDoubleTickCallback = null; }
     doubleTick(cb) {
         this.onDoubleTickCallback = cb;
         try {
             this.ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
-        } catch(e) {
-            console.warn('WS falhou, usando API');
-            return;
-        }
+        } catch (e) { console.warn('WS falhou, usando API'); return; }
         this.ws.onopen = () => {
-            console.log('WS conectado');
             this.ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
             this.pingInterval = setInterval(() => this.ws.send('2'), 25000);
         };
@@ -51,22 +40,20 @@ class BlazeWebSocket {
                     this.onDoubleTickCallback && this.onDoubleTickCallback(j[1].payload);
             }
         };
-        this.ws.onclose = () => { clearInterval(this.pingInterval); console.log('WS fechado'); };
+        this.ws.onclose = () => { clearInterval(this.pingInterval); };
         this.ws.onerror = () => console.warn('WS error, usando fallback');
     }
     close() { this.ws && this.ws.close(); }
 }
 
-/* ======================= BlazeInterface ======================= */
 class BlazeInterface {
     constructor() {
         this.history = [];
         this.model = null;
-        this.stats = { counts: {0:0,1:0,2:0}, whiteIntervals: [], sequence: [] };
+        this.stats = { counts: { 0: 0, 1: 0, 2: 0 }, whiteIntervals: [] };
         this.nextPred = null;
-        this.lastPred = null;
-        this.status = '';
-        this.minimized = false;
+        this.lastResult = null;
+        this.panelMinimized = false;
         this.injectStyles();
         this.initInterface();
         this.initModel();
@@ -74,13 +61,13 @@ class BlazeInterface {
 
     injectStyles() {
         const css = `
-            .blaze-panel{position:fixed;bottom:20px;right:20px;width:320px;background:rgba(34,34,34,0.9);color:#fff;
-                         font-family:sans-serif;border-radius:10px;padding:10px;z-index:99999;}
-            .blaze-header{display:flex;justify-content:space-between;align-items:center;}
-            .blaze-body{margin-top:10px;max-height:400px;overflow:auto;}
-            .blaze-btn{background:#007bff;border:none;padding:5px 10px;margin:2px;border-radius:5px;color:#fff;cursor:pointer;}
-            .blaze-input{width:40px;margin-right:5px;}
-            .blaze-status{margin-top:5px;font-weight:bold;}
+        .blaze-panel{position:fixed;bottom:20px;right:20px;width:320px;background:rgba(34,34,34,0.95);color:#fff;
+        font-family:sans-serif;border-radius:10px;padding:10px;z-index:99999;box-shadow:0 0 10px #000;}
+        .blaze-header{display:flex;justify-content:space-between;align-items:center;}
+        .blaze-body{margin-top:10px;max-height:400px;overflow:auto;}
+        .blaze-btn{background:#007bff;border:none;padding:5px 10px;margin:2px;border-radius:5px;color:#fff;cursor:pointer;}
+        .blaze-input{width:40px;margin-right:5px;}
+        .hidden { display: none; }
         `;
         document.head.insertAdjacentHTML('beforeend', `<style>${css}</style>`);
     }
@@ -92,34 +79,35 @@ class BlazeInterface {
             <div class="blaze-header">
                 <h4>Blaze Assertivo</h4>
                 <div>
-                    <button id="minimizeBtn" class="blaze-btn">_</button>
-                    <button id="exportBtn" class="blaze-btn">Export CSV</button>
+                    <button id="minimizeBtn" class="blaze-btn">−</button>
+                    <button id="exportBtn" class="blaze-btn">CSV</button>
                 </div>
             </div>
-            <div class="blaze-body" id="blaze-body">
+            <div id="blaze-body" class="blaze-body">
                 <div id="stats"></div>
-                <div class="blaze-status" id="statusInfo">Status: Aguardando</div>
                 <div id="prediction"></div>
-                <div id="resultMsg"></div>
+                <div id="resultStatus"></div>
                 <button id="manualPredict" class="blaze-btn">Prever Agora</button>
             </div>
         `;
         document.body.appendChild(this.panel);
         document.getElementById('exportBtn').addEventListener('click', () => this.exportCSV());
         document.getElementById('manualPredict').addEventListener('click', () => this.makePrediction());
-        document.getElementById('minimizeBtn').addEventListener('click', () => this.toggleMinimize());
+        document.getElementById('minimizeBtn').addEventListener('click', () => this.togglePanel());
     }
 
-    toggleMinimize() {
-        this.minimized = !this.minimized;
-        document.getElementById('blaze-body').style.display = this.minimized ? 'none' : 'block';
+    togglePanel() {
+        this.panelMinimized = !this.panelMinimized;
+        document.getElementById('blaze-body').classList.toggle('hidden');
+        const btn = document.getElementById('minimizeBtn');
+        btn.textContent = this.panelMinimized ? '+' : '−';
     }
 
     async initModel() {
         this.model = tf.sequential();
-        this.model.add(tf.layers.dense({units: 16, activation:'relu', inputShape:[config.historyLength*3]}));
-        this.model.add(tf.layers.dense({units: 3, activation:'softmax'}));
-        this.model.compile({optimizer:'adam', loss:'categoricalCrossentropy', metrics:['accuracy']});
+        this.model.add(tf.layers.dense({ units: 16, activation: 'relu', inputShape: [config.historyLength * 3] }));
+        this.model.add(tf.layers.dense({ units: 3, activation: 'softmax' }));
+        this.model.compile({ optimizer: 'adam', loss: 'categoricalCrossentropy', metrics: ['accuracy'] });
     }
 
     async trainModel() {
@@ -131,13 +119,12 @@ class BlazeInterface {
             const next = this.oneHot(this.history[i + config.historyLength].color);
             Y.push(next);
         }
-        const xs = tf.tensor2d(X);
-        const ys = tf.tensor2d(Y);
-        await this.model.fit(xs, ys, {epochs: 5, verbose: 0});
+        const xs = tf.tensor2d(X), ys = tf.tensor2d(Y);
+        await this.model.fit(xs, ys, { epochs: 5, verbose: 0 });
         xs.dispose(); ys.dispose();
     }
 
-    oneHot(color) { return color === 0 ? [1,0,0] : color === 1 ? [0,1,0] : [0,0,1]; }
+    oneHot(color) { return color === 0 ? [1, 0, 0] : color === 1 ? [0, 1, 0] : [0, 0, 1]; }
 
     async makePrediction() {
         const last = this.history.slice(-config.historyLength);
@@ -148,45 +135,38 @@ class BlazeInterface {
         input.dispose(); pred.dispose();
         const [pWhite, pRed, pBlack] = data[0];
         const maxP = Math.max(pWhite, pRed, pBlack);
-        const color = [0,1,2][data[0].indexOf(maxP)];
+        const color = [0, 1, 2][data[0].indexOf(maxP)];
         if (maxP < config.minConfidence) return;
         this.nextPred = { color, confidence: maxP };
-        this.lastPred = this.nextPred;
         this.renderPrediction();
     }
 
     async onNewResult(r) {
-        if (r.status === 'rolling') {
-            this.updateStatus('Status: Rolling');
-            return;
-        }
-
         if (r.status !== 'complete') return;
         r.time = new Date().toISOString();
         r.hash = await sha256(r.id + r.color + r.roll + r.time);
+        if (this.nextPred) {
+            const acerto = r.color === this.nextPred.color;
+            document.getElementById('resultStatus').innerHTML = `<b>Resultado:</b> ${this.colorName(r.color)} (${acerto ? 'GANHOU' : 'PERDEU'})`;
+        } else {
+            document.getElementById('resultStatus').innerHTML = `<b>Resultado:</b> ${this.colorName(r.color)}`;
+        }
         this.history.push(r);
         this.updateStats(r);
-        await this.trainModel();
         this.renderStats();
-        this.makePrediction();
-
-        // verificar resultado da previsão
-        if (this.lastPred) {
-            const acertou = this.lastPred.color === r.color;
-            document.getElementById('resultMsg').innerText = acertou ? 'Ganhou 🎉' : 'Perdeu ❌';
-        }
-        this.updateStatus('Status: Aguardando');
+        await this.trainModel();
+        this.makePrediction(); // previsão automática
     }
 
-    updateStatus(msg) {
-        document.getElementById('statusInfo').innerText = msg;
+    colorName(cor) {
+        return cor === 0 ? 'BRANCO' : cor === 1 ? 'VERMELHO' : 'PRETO';
     }
 
     updateStats(r) {
         this.stats.counts[r.color]++;
         if (r.color === 0) {
-            const lastWhite = this.history.slice(0,-1).reverse().find(x => x.color === 0);
-            if (lastWhite) this.stats.whiteIntervals.push((new Date(r.time) - new Date(lastWhite.time))/1000);
+            const lastWhite = this.history.slice(0, -1).reverse().find(x => x.color === 0);
+            if (lastWhite) this.stats.whiteIntervals.push((new Date(r.time) - new Date(lastWhite.time)) / 1000);
         }
     }
 
@@ -194,21 +174,20 @@ class BlazeInterface {
         const s = this.stats;
         document.getElementById('stats').innerHTML = `
             <div>Branco: ${s.counts[0]} | Vermelho: ${s.counts[1]} | Preto: ${s.counts[2]}</div>
-            <div>Intervalos Branco (s): ${s.whiteIntervals.join(', ')}</div>
+            <div>Intervalos Branco (s): ${s.whiteIntervals.slice(-5).join(', ')}</div>
         `;
     }
 
     renderPrediction() {
         const p = this.nextPred;
-        document.getElementById('prediction').innerHTML = `
-            <div>Próx: ${p.color === 0 ? 'Branco' : p.color === 1 ? 'Vermelho' : 'Preto'} (${(p.confidence*100).toFixed(1)}%)</div>
-        `;
+        const cor = this.colorName(p.color);
+        document.getElementById('prediction').innerHTML = `<b>Previsão:</b> ${cor} (${(p.confidence * 100).toFixed(1)}%)`;
     }
 
     exportCSV() {
         const header = ['time,color,roll,hash'];
         const lines = this.history.map(r => `${r.time},${r.color},${r.roll},${r.hash}`);
-        const blob = new Blob([header.concat(lines).join('\n')], {type:'text/csv'});
+        const blob = new Blob([header.concat(lines).join('\n')], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a'); a.href = url; a.download = 'blaze_history.csv'; a.click();
     }
@@ -218,19 +197,18 @@ class BlazeInterface {
             const res = await fetch('https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1');
             const json = await res.json();
             const p = json.payload;
-            return {id:p.id, color:p.color, roll:p.roll, status:'complete'};
-        } catch(e) {
+            return { id: p.id, color: p.color, roll: p.roll, status: 'complete' };
+        } catch {
             const el = document.querySelector('.roulette-result');
-            return {id:Date.now(), color:el.dataset.color, roll:el.textContent, status:'complete'};
+            return { id: Date.now(), color: parseInt(el.dataset.color), roll: el.textContent, status: 'complete' };
         }
     }
 }
 
-/* ---------- SHA-256 ---------- */
 async function sha256(str) {
     const buf = new TextEncoder().encode(str);
     const hash = await crypto.subtle.digest('SHA-256', buf);
-    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 function loadScript(src) {
@@ -240,7 +218,6 @@ function loadScript(src) {
     });
 }
 
-/* ======================= Início ======================= */
 const iface = new BlazeInterface();
 const ws = new BlazeWebSocket();
 ws.doubleTick(d => iface.onNewResult(d));
