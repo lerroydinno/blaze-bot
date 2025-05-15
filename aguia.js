@@ -87,161 +87,105 @@ class BlazeInterface {
             <div class="blaze-header">
                 <h4>Blaze Assertivo</h4>
                 <div>
-                    <button id="minimizeBtn" class="blaze-btn">−</button>
-                    <button id="exportBtn" class="blaze-btn">CSV</button>
+                    <button id="minBtn" class="blaze-btn">–</button>
                 </div>
             </div>
-            <div id="blaze-body" class="blaze-body">
-                <div id="stats"></div>
-                <div id="prediction"></div>
-                <div id="resultStatus"></div>
+            <div class="blaze-body" id="panelBody">
+                <div><strong>Último:</strong> <span id="lastResult">...</span></div>
+                <div><strong>Previsão:</strong> <span id="prediction">...</span></div>
+                <div><strong>Confiança:</strong> <span id="confidence">...</span></div>
+                <div><strong>Status:</strong> <span id="status">Aguardando</span></div>
             </div>
         `;
         document.body.appendChild(this.panel);
-        document.getElementById('exportBtn').addEventListener('click', () => this.exportCSV());
-        document.getElementById('minimizeBtn').addEventListener('click', () => this.togglePanel());
+        document.getElementById('minBtn').onclick = () => {
+            this.panelMinimized = !this.panelMinimized;
+            document.getElementById('panelBody').classList.toggle('hidden');
+        };
     }
 
-    togglePanel() {
-        this.panelMinimized = !this.panelMinimized;
-        document.getElementById('blaze-body').classList.toggle('hidden');
-        const btn = document.getElementById('minimizeBtn');
-        btn.textContent = this.panelMinimized ? '+' : '−';
-    }
-
-    async initModel() {
+    initModel() {
         this.model = tf.sequential();
-        this.model.add(tf.layers.dense({ units: 16, activation: 'relu', inputShape: [config.historyLength * 3] }));
+        this.model.add(tf.layers.dense({ units: 20, inputShape: [config.historyLength], activation: 'relu' }));
         this.model.add(tf.layers.dense({ units: 3, activation: 'softmax' }));
-        this.model.compile({ optimizer: 'adam', loss: 'categoricalCrossentropy', metrics: ['accuracy'] });
+        this.model.compile({ loss: 'categoricalCrossentropy', optimizer: 'adam' });
     }
 
-    async trainModel() {
-        if (this.history.length < config.historyLength + 1) return;
-        const X = [], Y = [];
-        for (let i = 0; i <= this.history.length - (config.historyLength + 1); i++) {
-            const seq = this.history.slice(i, i + config.historyLength).flatMap(r => this.oneHot(r.color));
-            X.push(seq);
-            Y.push(this.oneHot(this.history[i + config.historyLength].color));
-        }
-        const xs = tf.tensor2d(X), ys = tf.tensor2d(Y);
-        await this.model.fit(xs, ys, { epochs: 5, verbose: 0 });
-        xs.dispose(); ys.dispose();
+    async trainModel(data) {
+        const inputs = tf.tensor2d(data.map(d => d.input));
+        const labels = tf.tensor2d(data.map(d => d.output));
+        await this.model.fit(inputs, labels, { epochs: 10 });
+        inputs.dispose();
+        labels.dispose();
     }
 
-    oneHot(c) {
-        return c === 0 ? [1, 0, 0] : c === 1 ? [0, 1, 0] : [0, 0, 1];
+    predict() {
+        if (this.history.length < config.historyLength) return null;
+        const input = tf.tensor2d([this.history.slice(-config.historyLength)]);
+        const output = this.model.predict(input);
+        const prediction = output.argMax(-1).dataSync()[0];
+        const confidence = output.max().dataSync()[0];
+        input.dispose();
+        output.dispose();
+        if (confidence < config.minConfidence) return null;
+        return { prediction, confidence };
     }
 
-    async makePrediction() {
-        const last = this.history.slice(-config.historyLength);
-        if (last.length < config.historyLength) return;
-        const input = tf.tensor2d([last.flatMap(r => this.oneHot(r.color))]);
-        const pred = this.model.predict(input);
-        const data = await pred.array();
-        input.dispose(); pred.dispose();
-        const [pWhite, pRed, pBlack] = data[0];
-        const maxP = Math.max(pWhite, pRed, pBlack);
-        const color = [0, 1, 2][data[0].indexOf(maxP)];
-        if (maxP < config.minConfidence) return;
-        this.nextPred = { color, confidence: maxP };
-        this.renderPrediction();
-    }
+    update(result) {
+        const num = result.roll;
+        const color = num === 0 ? 2 : (num <= 7 ? 0 : 1);
+        this.lastResult = color;
+        this.history.push(color);
+        if (this.history.length > config.historyLength) this.history.shift();
+        this.updateDisplay();
 
-    async onNewResult(r) {
-        if (r.status !== 'complete') return;
-        r.time = new Date().toISOString();
-        r.hash = await sha256(r.id + r.color + r.roll + r.time);
-        if (this.nextPred) {
-            const acerto = r.color === this.nextPred.color;
-            document.getElementById('resultStatus').innerHTML = `<b>Resultado:</b> ${this.colorName(r.color)} (${acerto ? 'GANHOU' : 'PERDEU'})`;
-        } else {
-            document.getElementById('resultStatus').innerHTML = `<b>Resultado:</b> ${this.colorName(r.color)}`;
-        }
-        this.history.push(r);
-        this.updateStats(r);
-        this.renderStats();
-        await this.trainModel();
-        this.makePrediction();
-        setTimeout(() => {
-            document.getElementById('prediction').innerHTML = '';
-            document.getElementById('resultStatus').innerHTML = '';
+        if (this.nextPred !== null) {
+            const outcome = this.nextPred === color ? 'GANHOU' : 'PERDEU';
+            document.getElementById('status').textContent = outcome;
+
+            // Reset após mostrar GANHOU/PERDEU
             this.nextPred = null;
-        }, 6000);
-    }
+            document.getElementById('prediction').textContent = '...';
+            document.getElementById('confidence').textContent = '...';
+        }
 
-    colorName(cor) {
-        return cor === 0 ? 'BRANCO' : cor === 1 ? 'VERMELHO' : 'PRETO';
-    }
+        if (this.history.length >= config.historyLength + 1) {
+            const input = this.history.slice(-config.historyLength - 1, -1);
+            const output = [0, 0, 0];
+            output[color] = 1;
+            this.trainModel([{ input, output }]);
+        }
 
-    updateStats(r) {
-        this.stats.counts[r.color]++;
-        if (r.color === 0) {
-            const lastWhite = this.history.slice(0, -1).reverse().find(x => x.color === 0);
-            if (lastWhite) {
-                const interval = (new Date(r.time) - new Date(lastWhite.time)) / 1000;
-                this.stats.whiteIntervals.push(interval);
-            }
+        const pred = this.predict();
+        if (pred) {
+            this.nextPred = pred.prediction;
+            document.getElementById('prediction').textContent = this.colorName(pred.prediction);
+            document.getElementById('confidence').textContent = (pred.confidence * 100).toFixed(2) + '%';
+            document.getElementById('status').textContent = 'Previsão gerada';
         }
     }
 
-    renderStats() {
-        const s = this.stats;
-        document.getElementById('stats').innerHTML = `
-            <div>Branco: ${s.counts[0]} | Vermelho: ${s.counts[1]} | Preto: ${s.counts[2]}</div>
-            <div>Intervalos Branco (s): ${s.whiteIntervals.slice(-5).join(', ')}</div>
-        `;
+    updateDisplay() {
+        document.getElementById('lastResult').textContent = this.colorName(this.lastResult);
     }
 
-    renderPrediction() {
-        const p = this.nextPred;
-        const cor = this.colorName(p.color);
-        document.getElementById('prediction').innerHTML = `<b>Previsão:</b> ${cor} (${(p.confidence * 100).toFixed(1)}%)`;
-    }
-
-    exportCSV() {
-        const header = ['time,color,roll,hash'];
-        const lines = this.history.map(r => `${r.time},${r.color},${r.roll},${r.hash}`);
-        const blob = new Blob([header.concat(lines).join('\n')], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download = 'blaze_history.csv'; a.click();
-    }
-
-    async fallbackFetch() {
-        try {
-            const res = await fetch('https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1');
-            const json = await res.json();
-            const p = json.payload;
-            return { id: p.id, color: p.color, roll: p.roll, status: 'complete' };
-        } catch {
-            const el = document.querySelector('.roulette-result');
-            return { id: Date.now(), color: parseInt(el.dataset.color), roll: el.textContent, status: 'complete' };
-        }
+    colorName(code) {
+        return code === 0 ? 'Vermelho' : code === 1 ? 'Preto' : 'Branco';
     }
 }
 
-async function sha256(str) {
-    const buf = new TextEncoder().encode(str);
-    const hash = await crypto.subtle.digest('SHA-256', buf);
-    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-function loadScript(src) {
-    return new Promise(resolve => {
-        const s = document.createElement('script'); s.src = src;
-        s.onload = resolve; document.head.appendChild(s);
+function loadScript(url) {
+    return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = url;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
     });
 }
 
 const iface = new BlazeInterface();
 const ws = new BlazeWebSocket();
-ws.doubleTick(d => iface.onNewResult(d));
-
-setInterval(async () => {
-    if (!ws.ws || ws.ws.readyState !== WebSocket.OPEN) {
-        const r = await iface.fallbackFetch();
-        iface.onNewResult(r);
-    }
-}, 10000);
+ws.doubleTick(data => iface.update(data));
 
 })();
