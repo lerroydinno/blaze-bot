@@ -1,6 +1,6 @@
-/* ======================================================================= Blaze – Bot Assertivo para Double da Blaze (Único Script) ======================================================================= */
+/* ======================================================================= Blaze – Bot Assertivo para Double da Blaze (Único Script) =======================================================================*/
 
-// ==UserScript== // @name         Blaze Double Assertivo // @namespace    http://tampermonkey.net/ // @version      1.0 // @description  Bot completo com coleta, estatísticas, IA, filtros e relatórios // @match        ://blaze.bet.br/ // @grant        none // ==/UserScript==
+// ==UserScript== // @name         Blaze Double Assertivo // @namespace    http://tampermonkey.net/ // @version      1.1 // @description  Bot completo com coleta, estatísticas, IA, filtros e relatórios // @match        ://blaze.bet.br/ // @grant        none // ==/UserScript==
 
 (async function() { 'use strict';
 
@@ -48,9 +48,9 @@ class BlazeWebSocket {
 /* ======================= BlazeInterface ======================= */
 class BlazeInterface {
     constructor() {
-        this.history = [];       // histórico de resultados
-        this.model = null;       // modelo TensorFlow
-        this.stats = { counts: {0:0,1:0,2:0}, whiteIntervals: [], sequence: [] };
+        this.history = [];
+        this.model = null;
+        this.stats = { counts: {0:0,1:0,2:0}, whiteIntervals: [] };
         this.nextPred = null;
         this.injectStyles();
         this.initInterface();
@@ -66,6 +66,7 @@ class BlazeInterface {
             .blaze-body{margin-top:10px;max-height:400px;overflow:auto;}
             .blaze-btn{background:#007bff;border:none;padding:5px 10px;margin:2px;border-radius:5px;color:#fff;cursor:pointer;}
             .blaze-input{width:40px;margin-right:5px;}
+            .collapsed .blaze-body { display: none; }
         `;
         document.head.insertAdjacentHTML('beforeend', `<style>${css}</style>`);
     }
@@ -76,22 +77,30 @@ class BlazeInterface {
         this.panel.innerHTML = `
             <div class="blaze-header">
                 <h4>Blaze Assertivo</h4>
-                <button id="exportBtn" class="blaze-btn">Export CSV</button>
+                <div>
+                    <button id="toggleBtn" class="blaze-btn">_</button>
+                    <button id="exportBtn" class="blaze-btn">Export CSV</button>
+                </div>
             </div>
             <div class="blaze-body">
                 <div id="stats"></div>
+                <div id="status"></div>
                 <div id="prediction"></div>
+                <div id="outcome"></div>
                 <button id="manualPredict" class="blaze-btn">Prever Agora</button>
             </div>
         `;
         document.body.appendChild(this.panel);
         document.getElementById('exportBtn').addEventListener('click', () => this.exportCSV());
         document.getElementById('manualPredict').addEventListener('click', () => this.makePrediction());
+        document.getElementById('toggleBtn').addEventListener('click', () => {
+            this.panel.classList.toggle('collapsed');
+            document.getElementById('toggleBtn').textContent = this.panel.classList.contains('collapsed') ? '+' : '_';
+        });
     }
 
     /* ---------- Model / IA ---------- */
     async initModel() {
-        // modelo simples de classificação
         this.model = tf.sequential();
         this.model.add(tf.layers.dense({units: 16, activation:'relu', inputShape:[config.historyLength*3]}));
         this.model.add(tf.layers.dense({units: 3, activation:'softmax'}));
@@ -117,7 +126,6 @@ class BlazeInterface {
 
     /* ---------- Previsão ---------- */
     async makePrediction() {
-        // verifica filtros
         const last = this.history.slice(-config.historyLength);
         if (last.length < config.historyLength) return;
         const input = tf.tensor2d([last.flatMap(r => this.oneHot(r.color))]);
@@ -135,21 +143,24 @@ class BlazeInterface {
 
     /* ---------- Atualização de resultados ---------- */
     async onNewResult(r) {
-        // r: {id, color, roll, status, hash?}
-        if (r.status !== 'complete') return;
         r.time = new Date().toISOString();
+        // ao entrar em rolling, exibe status e previsão
+        if (r.status === 'rolling') {
+            this.showStatus('Rolling');
+        }
+        if (r.status !== 'complete') return;
         r.hash = await sha256(r.id + r.color + r.roll + r.time);
         this.history.push(r);
         this.updateStats(r);
         await this.trainModel();
         this.renderStats();
+        this.renderPrediction();
+        this.renderOutcome(r.color);
     }
 
     /* ---------- Estatísticas ---------- */
     updateStats(r) {
-        // contagem
         this.stats.counts[r.color]++;
-        // intervals branco
         if (r.color===0) {
             const lastWhite = this.history.slice(0,-1).reverse().find(x=>x.color===0);
             if (lastWhite) this.stats.whiteIntervals.push((new Date(r.time) - new Date(lastWhite.time))/1000);
@@ -165,10 +176,19 @@ class BlazeInterface {
     }
 
     renderPrediction() {
+        if (!this.nextPred) return;
         const p = this.nextPred;
-        document.getElementById('prediction').innerHTML = `
-            <div>Próx: ${p.color===0?'Branco':p.color===1?'Vermelho':'Preto'} (${(p.confidence*100).toFixed(1)}%)</div>
-        `;
+        document.getElementById('prediction').innerHTML = `<div>Próx: ${p.color===0?'Branco':p.color===1?'Vermelho':'Preto'} (${(p.confidence*100).toFixed(1)}%)</div>`;
+    }
+
+    renderOutcome(actual) {
+        if (!this.nextPred) return;
+        const win = (actual === this.nextPred.color);
+        document.getElementById('outcome').innerHTML = `<div>${win?'Ganhou 🎉':'Perdeu ❌'}</div>`;
+    }
+
+    showStatus(text) {
+        document.getElementById('status').innerHTML = `<div>Status: ${text}</div>`;
     }
 
     /* ---------- Export CSV ---------- */
@@ -177,51 +197,5 @@ class BlazeInterface {
         const lines = this.history.map(r=>`${r.time},${r.color},${r.roll},${r.hash}`);
         const blob = new Blob([header.concat(lines).join('\n')], {type:'text/csv'});
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = url; a.download='blaze_history.csv'; a.click();
-    }
-
-    /* ---------- Utilitários ---------- */
-    async fallbackFetch() {
-        try {
-            const res = await fetch('https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1');
-            const json = await res.json();
-            const p = json.payload;
-            return {id:p.id, color:p.color, roll:p.roll, status:'complete'};
-        } catch(e) {
-            // leitura DOM fallback
-            const el = document.querySelector('.roulette-result');
-            return {id:Date.now(), color:el.dataset.color, roll:el.textContent, status:'complete'};
-        }
-    }
-
-}
-
-/* ---------- SHA-256 ---------- */
-async function sha256(str) {
-    const buf = new TextEncoder().encode(str);
-    const hash = await crypto.subtle.digest('SHA-256', buf);
-    return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
-}
-
-/* ---------- Carregar Script Dinâmico ---------- */
-function loadScript(src) {
-    return new Promise(resolve => {
-        const s = document.createElement('script'); s.src = src;
-        s.onload = resolve; document.head.appendChild(s);
-    });
-}
-
-/* ======================= Início ======================= */
-const iface = new BlazeInterface();
-const ws = new BlazeWebSocket();
-ws.doubleTick(d => iface.onNewResult(d));
-
-// fallback periódico via API se WS falhar
-setInterval(async () => {
-    if (!ws.ws || ws.ws.readyState!==WebSocket.OPEN) {
-        const r = await iface.fallbackFetch(); iface.onNewResult(r);
-    }
-}, 10000);
-
-})();
+        const a = document.createElement('a'); a.href = url; a.download='blaze_history.csv'; a.
 
