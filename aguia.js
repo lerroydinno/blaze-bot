@@ -1,139 +1,117 @@
-(async () => {
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-  let historicoCSV = localStorage.getItem('historicoCSV') || "";
-  const salvarHistorico = () => localStorage.setItem('historicoCSV', historicoCSV);
+// ==UserScript== // @name         Blaze Predictor AI // @version      1.0 // @description  Previsão de cores com IA e análises combinadas // @match        ://blaze.com/ // @grant        none // ==/UserScript==
 
-  // IA simples baseada em sequência
-  function preverProximaCor(historico) {
-    const linhas = historico.trim().split('\n').slice(-100);
-    if (linhas.length < 5) return { cor: 'Aguardando...', confianca: 0, aposta: 0 };
+(async () => { const script = document.createElement('script'); script.src = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.14.0/dist/tf.min.js'; script.onload = init; document.head.appendChild(script);
 
-    const padrao = linhas.slice(-4).map(l => l.split(';')[1]).join('-');
-    const freq = {};
-    for (let i = 0; i < linhas.length - 4; i++) {
-      const seq = linhas.slice(i, i + 4).map(l => l.split(';')[1]).join('-');
-      const proxima = linhas[i + 4].split(';')[1];
-      if (seq === padrao) freq[proxima] = (freq[proxima] || 0) + 1;
+function init() { const BlazeAI = (() => { const colorMap = { red: 0, black: 1, white: 2 }; const reverseColorMap = ['red', 'black', 'white']; let model = null; let trainingData = [];
+
+function encodeHash(hash) {
+    return hash
+      .slice(0, 8)
+      .split('')
+      .map((c) => (parseInt(c, 16) || 0) / 15);
+  }
+
+  function prepareData(data) {
+    return data.map((entry) => {
+      const lastColors = entry.lastColors.map((c) => colorMap[c] ?? 0);
+      const number = entry.number / 14;
+      const minute = entry.minute / 59;
+      const hash = encodeHash(entry.hash);
+      const input = [...lastColors, number, minute, ...hash];
+      const output = [0, 0, 0];
+      output[colorMap[entry.nextColor] ?? 0] = 1;
+      return { input, output };
+    });
+  }
+
+  async function trainModel() {
+    if (!trainingData.length) return;
+    model = tf.sequential();
+    model.add(tf.layers.dense({ units: 32, inputShape: [inputSize()], activation: 'relu' }));
+    model.add(tf.layers.dense({ units: 16, activation: 'relu' }));
+    model.add(tf.layers.dense({ units: 3, activation: 'softmax' }));
+    model.compile({ optimizer: 'adam', loss: 'categoricalCrossentropy', metrics: ['accuracy'] });
+
+    const { inputs, outputs } = convertToTensors(trainingData);
+    await model.fit(inputs, outputs, { epochs: 25, batchSize: 8 });
+  }
+
+  function inputSize() {
+    return 4 + 1 + 1 + 8;
+  }
+
+  function convertToTensors(data) {
+    const inputs = tf.tensor2d(data.map((d) => d.input));
+    const outputs = tf.tensor2d(data.map((d) => d.output));
+    return { inputs, outputs };
+  }
+
+  function predictNext(input) {
+    if (!model) return null;
+    const tensorInput = tf.tensor2d([input]);
+    const prediction = model.predict(tensorInput);
+    const index = prediction.argMax(1).dataSync()[0];
+    return reverseColorMap[index];
+  }
+
+  function updateWithNewResult(newResult) {
+    const entry = {
+      lastColors: newResult.lastColors,
+      number: newResult.number,
+      minute: newResult.minute,
+      hash: newResult.hash,
+      nextColor: newResult.nextColor,
+    };
+    const formatted = prepareData([entry])[0];
+    trainingData.push(formatted);
+    if (model) {
+      const { inputs, outputs } = convertToTensors([formatted]);
+      model.fit(inputs, outputs, { epochs: 1, batchSize: 1 });
     }
-
-    const cores = ['VERMELHO', 'PRETO', 'BRANCO'];
-    const cor = cores.reduce((a, b) => (freq[a] || 0) > (freq[b] || 0) ? a : b);
-    const total = Object.values(freq).reduce((a, b) => a + b, 0);
-    const confianca = ((freq[cor] || 0) / total * 100).toFixed(0);
-    let aposta = cor === 'BRANCO' ? 14 : 2;
-
-    return { cor, confianca, aposta };
   }
 
-  // UI Flutuante
-  const css = `
-  #painelAguia {
-    position: fixed; top: 100px; right: 20px; width: 250px;
-    background: url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg') center/cover no-repeat;
-    border: 2px solid #00f; border-radius: 10px; padding: 10px;
-    color: lime; font-family: monospace; z-index: 9999;
-    box-shadow: 0 0 10px #00f;
-  }
-  #painelAguia.minimizado {
-    width: 50px; height: 50px; overflow: hidden;
-    border-radius: 50%; background-size: cover;
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
-  }
-  #painelAguia .bolinha {
-    width: 40px; height: 40px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: bold;
-  }
-  `;
-
-  const style = document.createElement('style');
-  style.textContent = css;
-  document.head.appendChild(style);
-
-  const painel = document.createElement('div');
-  painel.id = 'painelAguia';
-  painel.innerHTML = `
-    <div id="res">🎯 Resultado:</div>
-    <div id="hash">Hash:</div>
-    <div id="prev">🔮 Próxima:</div>
-    <div id="conf">📊 Confiança:</div>
-    <div id="apt">💰 Apostar:</div>
-    <div id="hist" style="max-height: 100px; overflow-y: auto; font-size: 11px; margin-top: 5px;"></div>
-    <button id="btnCSV">Importar CSV</button>
-    <button id="btnMin">Minimizar</button>
-  `;
-  document.body.appendChild(painel);
-
-  let minimizado = false;
-  document.getElementById('btnMin').onclick = () => {
-    minimizado = !minimizado;
-    painel.classList.toggle('minimizado', minimizado);
-  };
-
-  document.getElementById('btnCSV').onclick = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.csv';
-    input.onchange = e => {
-      const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onload = e => {
-        historicoCSV += '\n' + e.target.result.trim();
-        salvarHistorico();
-        alert('CSV importado!');
+  function importCSVandTrain(csvData) {
+    const lines = csvData.trim().split('\n');
+    const parsed = lines.map((line) => {
+      const [c1, c2, c3, c4, number, minute, hash, nextColor] = line.split(',');
+      return {
+        lastColors: [c1, c2, c3, c4],
+        number: parseInt(number),
+        minute: parseInt(minute),
+        hash,
+        nextColor,
       };
-      reader.readAsText(file);
-    };
-    input.click();
+    });
+    trainingData = prepareData(parsed);
+    return trainModel();
+  }
+
+  return {
+    predictNext,
+    updateWithNewResult,
+    importCSVandTrain,
   };
-
-  // Drag
-  painel.onmousedown = function (e) {
-    if (minimizado) return;
-    let x = e.clientX, y = e.clientY;
-    const onMouseMove = e => {
-      const dx = e.clientX - x;
-      const dy = e.clientY - y;
-      painel.style.top = (painel.offsetTop + dy) + 'px';
-      painel.style.right = (parseInt(painel.style.right) - dx) + 'px';
-      x = e.clientX; y = e.clientY;
-    };
-    document.addEventListener('mousemove', onMouseMove);
-    document.onmouseup = () => document.removeEventListener('mousemove', onMouseMove);
-  };
-
-  // WebSocket para capturar resultados ao vivo
-  const ws = new WebSocket('wss://blaze.com/api/roulette/subscribe');
-  ws.addEventListener('open', () => {
-    ws.send(JSON.stringify({ event: "subscribe", id: "roulette" }));
-  });
-
-  ws.addEventListener('message', async msg => {
-    const data = JSON.parse(msg.data);
-    if (data.event !== "roulette:result") return;
-
-    const cor = data.data.color === 0 ? "VERMELHO" : data.data.color === 1 ? "PRETO" : "BRANCO";
-    const numero = data.data.roll;
-    const hash = data.data.hash;
-
-    const pr = preverProximaCor(historicoCSV);
-
-    document.getElementById('res').innerText = `🎯 Resultado: ${cor} (${numero})`;
-    document.getElementById('hash').innerText = `Hash: ${hash}`;
-    document.getElementById('prev').innerText = `🔮 Próxima: ${pr.cor}`;
-    document.getElementById('conf').innerText = `📊 Confiança: ${pr.confianca}%`;
-    document.getElementById('apt').innerText = `💰 Apostar: ${pr.aposta > 0 ? pr.cor + " (x" + pr.aposta + ")" : "Não apostar"}`;
-
-    const histDiv = document.getElementById('hist');
-    const linha = `${new Date().toLocaleString()};${cor};${numero};${hash};${pr.cor};${pr.confianca}\n`;
-    historicoCSV += linha;
-    salvarHistorico();
-
-    const divLinha = document.createElement('div');
-    divLinha.textContent = linha.trim();
-    histDiv.prepend(divLinha);
-    if (histDiv.childElementCount > 50) histDiv.removeChild(histDiv.lastChild);
-  });
-
 })();
+
+window.BlazeAI = BlazeAI;
+
+// Exemplo de integração com o menu (chamar previsão com entrada simulada)
+const testInput = {
+  lastColors: ['black', 'red', 'red', 'white'],
+  number: 13,
+  minute: 21,
+  hash: 'a1b2c3d4e5f67890',
+};
+const encodedInput = [
+  ...testInput.lastColors.map((c) => ({ red: 0, black: 1, white: 2 }[c])),
+  testInput.number / 14,
+  testInput.minute / 59,
+  ...testInput.hash.slice(0, 8).split('').map((c) => (parseInt(c, 16) || 0) / 15),
+];
+setTimeout(() => {
+  const predictedColor = BlazeAI.predictNext(encodedInput);
+  console.log('Previsão com IA:', predictedColor);
+}, 2000);
+
+} })();
+
