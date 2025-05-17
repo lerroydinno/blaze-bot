@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blaze Bot com IA Expandida
 // @namespace    http://tampermonkey.net/
-// @version      3.1
+// @version      3.2
 // @description  Bot de previsão Blaze com IA, Markov, SHA256, Rede Neural, CSV, horário e mais
 // @author       Você
 // @match        https://blaze.com/pt/games/double
@@ -64,12 +64,12 @@
                 .blaze-min-btn:hover{opacity:.75}
                 .blaze-bubble{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;
                     background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);
-                    box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:block;}
+                    box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:none;}
                 .blaze-overlay{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-                    z-index:9999;font-family:'Arial',sans-serif;display:block;}
+                    z-index:9999;font-family:'Arial',sans-serif;}
                 .blaze-monitor{background:rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;
                     background-blend-mode:overlay;border-radius:10px;padding:15px;
-                    box-shadow:0 5px 15px rgba(0,0,0,.5);color:#fff;width:300px;display:block;}
+                    box-shadow:0 5px 15px rgba(0,0,0,.5);color:#fff;width:300px}
                 .blaze-monitor h3{margin:0 0 10px;text-align:center;font-size:18px}
                 .result-card{background:#4448;border-radius:5px;padding:10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
                 .result-number{font-size:24px;font-weight:bold}
@@ -174,7 +174,7 @@
                     <span class="result-number">${r.roll ?? '-'}</span>
                     <span class="result-color-${r.color}">${r.color === 0 ? 'Branco' : r.color === 1 ? 'Vermelho' : 'Preto'}</span>
                     <span class="result-status ${stCls}">${stTxt}</span>
-                `;
+               }`;
             }
             const pred = this.predictNextColor();
             const pDiv = document.getElementById('blazePrediction');
@@ -266,6 +266,20 @@
         return best[1] > 0 ? { color: best[0], score: best[1] } : null;
     }
 
+    // ### SHA-256
+    const shaMap = {};
+    function registerSHA(hash, color) { shaMap[hash.slice(0, 8)] = color; }
+    function predictSHA(hash) { return shaMap[hash.slice(0, 8)] ?? null; }
+
+    // ### CSV Externo
+    let externalData = [];
+    function importCSV(text) {
+        externalData = text.trim().split("\n").slice(1).map(l => {
+            const [id, color, roll, time] = l.split(",");
+            return { color: +color, roll: +roll, time };
+        });
+    }
+
     // ### Padrões Temporais
     const timeStats = {};
     function updateTimeStats(item) {
@@ -291,6 +305,8 @@
         const ai = predictAI(), mk = predictMarkov(), tm = predictTime(), wb = predictWhite();
         const votes = {};
         [ai, mk, tm, wb].forEach(p => p && (votes[p.color] = (votes[p.color] || 0) + 1));
+        const sha = window.latestHash ? predictSHA(window.latestHash) : null;
+        if (sha !== null) votes[sha] = (votes[sha] || 0) + 1;
         let best = [null, 0];
         for (const c in votes) if (votes[c] > best[1]) best = [c, votes[c]];
         return best[0];
@@ -306,6 +322,7 @@
         originalUpdate.call(this, d);
         aiHistory.unshift({ color: d.color, roll: d.roll, time: new Date().toTimeString().slice(0, 5) });
         if (aiHistory.length > 100) aiHistory.pop();
+        if (window.latestHash) registerSHA(window.latestHash, d.color);
         trainAI();
         updateMarkov();
         updateTimeStats({ color: d.color, time: new Date().toTimeString().slice(0, 5) });
