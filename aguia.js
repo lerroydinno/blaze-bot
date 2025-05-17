@@ -16,24 +16,6 @@
     const prefixStats = {};
     let lastRoll = null;
 
-    function trainFromCSV(csv) {
-      const rows = csv.trim().split('\n');
-      for (let i = 1; i < rows.length; i++) {
-        const [number, color, hora, data, aposta, seed] = rows[i].split(',');
-        if (seed && color) {
-          const prefix = seed.slice(0, 8);
-          prefixStats[prefix] = prefixStats[prefix] || { red: 0, black: 0, white: 0 };
-          prefixStats[prefix][color]++;
-        }
-        const input = extractFeatures({ number, color, hora, seed });
-        const output = colorToOutput(color);
-        trainingData.push({ input, output });
-      }
-      if (trainingData.length > 0) {
-        trainer.train(trainingData, { iterations: 500, log: false });
-      }
-    }
-
     function extractFeatures({ number, color, hora, seed }) {
       const n = parseInt(number);
       const hour = parseInt(hora.split(':')[0]);
@@ -79,84 +61,87 @@
       return final;
     }
 
-    function setupPanel() {
-      const style = `
-        position:fixed;top:50px;right:20px;width:200px;background:#111;color:#fff;
-        border:2px solid #aaa;padding:10px;z-index:9999;font-family:sans-serif;
-        border-radius:10px;box-shadow:0 0 10px #000;transition:0.3s;
-      `;
-      const panel = document.createElement('div');
-      panel.setAttribute('style', style);
-      panel.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <strong>Bot Blaze</strong>
-          <button id="minimizar" style="background:none;color:#fff;border:none;">–</button>
-        </div>
-        <div id="conteudoBot" style="margin-top:10px;"></div>
-      `;
-      document.body.appendChild(panel);
-      document.getElementById('minimizar').onclick = () => {
-        const content = document.getElementById('conteudoBot');
-        content.style.display = content.style.display === 'none' ? 'block' : 'none';
-      };
-      return document.getElementById('conteudoBot');
-    }
-
-    const display = setupPanel();
-
-    function atualizarPrevisao(pred) {
-      display.innerHTML = `<b>Próxima cor:</b> ${pred.toUpperCase()}`;
-    }
-
-    function interceptarWebSocket() {
-      const originalWebSocket = window.WebSocket;
-      window.WebSocket = function (...args) {
-        const ws = new originalWebSocket(...args);
-        ws.addEventListener('message', (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data && data[0] && data[0].roll) {
-              const roll = data[0].roll;
-              if (roll.seed && roll.number !== null) {
-                const cor = getCor(roll.number);
-                const hora = new Date().toLocaleTimeString().slice(0, 5);
-                const novaCor = getCor(roll.number);
-                const pred = predictColor(roll.seed, roll.number, hora);
-                atualizarPrevisao(pred);
-                updateMarkov(lastRoll ? lastRoll.color : null, novaCor);
-                const input = extractFeatures({
-                  number: roll.number,
-                  color: novaCor,
-                  hora,
-                  seed: roll.seed,
-                });
-                trainingData.push({ input, output: colorToOutput(novaCor) });
-                trainer.train(trainingData.slice(-200), { iterations: 10, log: false });
-                history.push({ number: roll.number, color: novaCor, seed: roll.seed, hora });
-                lastRoll = { color: novaCor };
-              }
-            }
-          } catch (e) {}
-        });
-        return ws;
-      };
-    }
-
     function getCor(number) {
       if (number === 0) return 'white';
       if (number >= 1 && number <= 7) return 'red';
       return 'black';
     }
 
-    function fetchCSV() {
-      fetch('https://example.com/historico.csv') // Substitua pela URL real
-        .then((r) => r.text())
-        .then((text) => trainFromCSV(text))
-        .catch(() => console.warn('Falha ao carregar CSV'));
+    function interceptarWebSocket() {
+      const OriginalWebSocket = window.WebSocket;
+      window.WebSocket = function (...args) {
+        const socket = new OriginalWebSocket(...args);
+        socket.addEventListener('message', (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data && data[0] && data[0].roll) {
+              const roll = data[0].roll;
+              const number = roll.number;
+              const color = getCor(number);
+              const hora = new Date().toLocaleTimeString().slice(0, 5);
+              const seed = roll.seed;
+              const pred = predictColor(seed, number, hora);
+              atualizarPainel(pred.toUpperCase());
+              updateMarkov(lastRoll ? lastRoll.color : null, color);
+              const input = extractFeatures({ number, color, hora, seed });
+              trainingData.push({ input, output: colorToOutput(color) });
+              trainer.train(trainingData.slice(-200), { iterations: 10, log: false });
+              prefixStats[seed.slice(0, 8)] = prefixStats[seed.slice(0, 8)] || { red: 0, black: 0, white: 0 };
+              prefixStats[seed.slice(0, 8)][color]++;
+              lastRoll = { color };
+            }
+          } catch {}
+        });
+        return socket;
+      };
     }
 
+    function atualizarPainel(texto) {
+      const painel = document.getElementById('painelBlazeBot');
+      if (painel) {
+        const info = painel.querySelector('#textoPrevisao');
+        if (info) info.innerHTML = `<b>Próxima cor:</b> ${texto}`;
+      }
+    }
+
+    function criarMenuFlutuante() {
+      const estiloBotao = `
+        position:fixed;bottom:20px;right:20px;width:50px;height:50px;
+        background:url('https://i.imgur.com/4NZ6uLY.png') no-repeat center center;
+        background-size:cover;border-radius:50%;z-index:99999;cursor:pointer;
+      `;
+      const botao = document.createElement('div');
+      botao.setAttribute('style', estiloBotao);
+      botao.onclick = () => {
+        painel.style.display = painel.style.display === 'none' ? 'block' : 'none';
+      };
+      document.body.appendChild(botao);
+
+      const painel = document.createElement('div');
+      painel.id = 'painelBlazeBot';
+      painel.setAttribute('style', `
+        position:fixed;bottom:80px;right:20px;width:220px;
+        background:#111;color:#fff;border:2px solid #aaa;padding:10px;
+        border-radius:10px;z-index:99999;font-family:sans-serif;display:block;
+        box-shadow:0 0 10px #000;
+      `);
+      painel.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span><b>Blaze Bot</b></span>
+          <button id="minimizarPainel" style="background:none;color:#fff;border:none;font-size:16px;">–</button>
+        </div>
+        <div id="textoPrevisao" style="margin-top:10px;"><b>Próxima cor:</b> ...</div>
+      `;
+      document.body.appendChild(painel);
+
+      document.getElementById('minimizarPainel').onclick = () => {
+        const conteudo = document.getElementById('textoPrevisao');
+        conteudo.style.display = conteudo.style.display === 'none' ? 'block' : 'none';
+      };
+    }
+
+    criarMenuFlutuante();
     interceptarWebSocket();
-    fetchCSV();
   };
   document.head.appendChild(script);
 })();
