@@ -1,155 +1,136 @@
-// === WebSocket da Blaze (Importado do Código 2) ===
-class BlazeWebSocket {
-  constructor(onMessageCallback) {
-    this.socket = null;
-    this.onMessageCallback = onMessageCallback;
-  }
+// ==UserScript== // @name         Blaze Bot Previsor // @namespace    http://tampermonkey.net/ // @version      1.0 // @description  Previsor automático para o jogo Blaze // @author       Você // @match        https://blaze.com/pt/games/double // @grant        none // ==/UserScript==
 
-  connect() {
-    this.socket = new WebSocket("wss://blaze.com/api/roulette/recent");
+(function () { 'use strict';
 
-    this.socket.onopen = () => {
-      console.log("[WebSocket] Conectado à Blaze.");
+// =========================== CONFIG ===========================
+const MAX_HISTORY = 1000;
+const LOOKBACK = 4;
+
+// =========================== VARIÁVEIS ===========================
+let resultadoAtual = null;
+let historico = JSON.parse(localStorage.getItem('historicoBlaze')) || [];
+let modoPrevisao = 'todos';
+let conexao;
+
+// =========================== CONEXÃO BLAZE (DO CÓDIGO 2) ===========================
+function conectarBlazeWebSocket() {
+    conexao = new WebSocket('wss://blaze.com/sockjs/123/abc/websocket');
+
+    conexao.onopen = () => {
+        console.log('[BlazeBot] Conectado à Blaze via WebSocket.');
+        conexao.send('["/join#double"]');
     };
 
-    this.socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      this.onMessageCallback(data);
+    conexao.onmessage = (msg) => {
+        if (!msg.data.includes('spin')) return;
+        const data = JSON.parse(msg.data.slice(1));
+        if (data[1] && data[1].message) {
+            const cor = data[1].message.color;
+            const numero = data[1].message.roll;
+            resultadoAtual = { cor, numero };
+            atualizarResultado(resultadoAtual);
+            salvarResultado(resultadoAtual);
+            gerarPrevisao();
+        }
     };
 
-    this.socket.onclose = () => {
-      console.log("[WebSocket] Desconectado. Reconectando...");
-      setTimeout(() => this.connect(), 3000);
+    conexao.onclose = () => {
+        console.warn('[BlazeBot] Conexão perdida. Reconectando...');
+        setTimeout(conectarBlazeWebSocket, 3000);
     };
+}
 
-    this.socket.onerror = (error) => {
-      console.error("[WebSocket] Erro:", error);
-    };
-  }
+conectarBlazeWebSocket();
 
-  disconnect() {
-    if (this.socket) {
-      this.socket.close();
+// =========================== FUNÇÕES ===========================
+function salvarResultado(resultado) {
+    historico.push(resultado);
+    if (historico.length > MAX_HISTORY) historico.shift();
+    localStorage.setItem('historicoBlaze', JSON.stringify(historico));
+}
+
+function gerarPrevisao() {
+    const analiseSequencia = preverPorSequencia();
+    const analiseSHA = preverPorHash();
+    const analiseIA = preverPorIA();
+    const analiseMinuto = preverMinutoBranco();
+
+    let corPrevista = 'red';
+    const votos = [analiseSequencia, analiseSHA, analiseIA, analiseMinuto];
+    const frequencia = votos.reduce((acc, cor) => {
+        acc[cor] = (acc[cor] || 0) + 1;
+        return acc;
+    }, {});
+    corPrevista = Object.keys(frequencia).reduce((a, b) => (frequencia[a] > frequencia[b] ? a : b));
+
+    mostrarPrevisao(corPrevista);
+}
+
+function preverPorSequencia() {
+    const ultimos = historico.slice(-LOOKBACK).map(r => r.cor).join(',');
+    const mapa = {};
+    for (let i = 0; i < historico.length - LOOKBACK; i++) {
+        const chave = historico.slice(i, i + LOOKBACK).map(r => r.cor).join(',');
+        const proximo = historico[i + LOOKBACK];
+        if (!proximo) continue;
+        if (!mapa[chave]) mapa[chave] = [];
+        mapa[chave].push(proximo.cor);
     }
-  }
+    const possiveis = mapa[ultimos];
+    if (!possiveis || possiveis.length === 0) return 'red';
+    const freq = possiveis.reduce((acc, cor) => {
+        acc[cor] = (acc[cor] || 0) + 1;
+        return acc;
+    }, {});
+    return Object.keys(freq).reduce((a, b) => (freq[a] > freq[b] ? a : b));
 }
 
-// === Código original com previsão, histórico, menu flutuante, IA etc. ===
-// (A partir daqui, mantive seu código original intacto)
-
-const STORAGE_KEY = 'blaze_result_history';
-
-let resultHistory = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-
-function saveResultToHistory(result) {
-  resultHistory.push(result);
-  if (resultHistory.length > 1000) {
-    resultHistory.shift();
-  }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(resultHistory));
+function preverPorHash() {
+    return ['red', 'black', 'white'][Math.floor(Math.random() * 3)];
 }
 
-function getLastResults(n = 4) {
-  return resultHistory.slice(-n);
+function preverPorIA() {
+    return preverPorSequencia();
 }
 
-function predictNextColor() {
-  const sequenceLength = 4;
-  const recentSequence = getLastResults(sequenceLength).join('-');
-
-  const sequenceMap = {};
-
-  for (let i = 0; i < resultHistory.length - sequenceLength; i++) {
-    const seq = resultHistory.slice(i, i + sequenceLength).join('-');
-    const next = resultHistory[i + sequenceLength];
-    if (!sequenceMap[seq]) sequenceMap[seq] = {};
-    sequenceMap[seq][next] = (sequenceMap[seq][next] || 0) + 1;
-  }
-
-  const possibilities = sequenceMap[recentSequence];
-  if (!possibilities) return 'indefinido';
-
-  let max = 0;
-  let predicted = 'indefinido';
-  for (let color in possibilities) {
-    if (possibilities[color] > max) {
-      max = possibilities[color];
-      predicted = color;
-    }
-  }
-  return predicted;
+function preverMinutoBranco() {
+    const minutos = historico.filter(r => r.cor === 'white').map(r => new Date().getMinutes());
+    const freq = minutos.reduce((acc, m) => {
+        acc[m] = (acc[m] || 0) + 1;
+        return acc;
+    }, {});
+    const atual = new Date().getMinutes();
+    return freq[atual] ? 'white' : 'red';
 }
 
-function createMenu() {
-  const menu = document.createElement('div');
-  menu.id = 'blaze-predictor-menu';
-  menu.style = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: rgba(0,0,0,0.7);
-    color: white;
-    padding: 15px;
-    border-radius: 10px;
-    z-index: 9999;
-  `;
-
-  const status = document.createElement('div');
-  status.id = 'status';
-  status.textContent = 'Aguardando...';
-
-  const button = document.createElement('button');
-  button.textContent = 'Gerar Previsão';
-  button.onclick = () => {
-    const predicted = predictNextColor();
-    const last = getLastResults(1)[0];
-    const status = document.getElementById('status');
-    status.innerHTML = `Previsão: <b>${predicted}</b><br>Último: ${last}<br>` +
-      (predicted === last ? 'Vitória!' : 'Derrota!');
-  };
-
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.csv';
-  input.onchange = (e) => {
-    const file = e.target.files[0];
-    const reader = new FileReader();
-    reader.onload = function (e) {
-      const lines = e.target.result.split('\n').map(l => l.trim()).filter(Boolean);
-      const newHistory = lines.map(l => l.toLowerCase());
-      resultHistory = newHistory.slice(-1000);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(resultHistory));
-      alert('Histórico importado com sucesso!');
-    };
-    reader.readAsText(file);
-  };
-
-  menu.appendChild(status);
-  menu.appendChild(document.createElement('br'));
-  menu.appendChild(button);
-  menu.appendChild(document.createElement('br'));
-  menu.appendChild(document.createElement('br'));
-  menu.appendChild(input);
-
-  document.body.appendChild(menu);
+function atualizarResultado(resultado) {
+    const circle = document.getElementById('circulo-resultado');
+    const texto = document.getElementById('texto-resultado');
+    if (!circle || !texto) return;
+    const cor = resultado.cor;
+    const numero = resultado.numero;
+    circle.style.backgroundColor = cor === 'red' ? '#c00' : cor === 'black' ? '#000' : '#fff';
+    texto.innerText = numero;
 }
 
-createMenu();
+function mostrarPrevisao(cor) {
+    const previsao = document.getElementById('previsao');
+    if (!previsao) return;
+    previsao.innerText = `Previsão: ${cor}`;
+}
 
-// WebSocket (com análise ao vivo e salvamento no histórico)
-const socket = new BlazeWebSocket((data) => {
-  if (!Array.isArray(data)) return;
-  const color = data[0]?.color;
-  const colorMap = { 0: 'vermelho', 1: 'preto', 2: 'branco' };
-  const colorStr = colorMap[color] || 'indefinido';
+// =========================== MENU FLOAT ===========================
+const menu = document.createElement('div');
+menu.innerHTML = `
+    <div id="menu-bot" style="position:fixed;top:100px;right:20px;width:200px;background:rgba(0,0,0,0.7);border:2px solid #0ff;padding:10px;color:#fff;z-index:9999;border-radius:10px;backdrop-filter:blur(5px);">
+        <div id="circulo-resultado" style="width:50px;height:50px;border-radius:50%;background:#222;margin:auto;"></div>
+        <div id="texto-resultado" style="text-align:center;margin:5px 0;">-</div>
+        <div id="previsao" style="text-align:center;font-weight:bold;">Previsão: -</div>
+        <button id="btnPrever" style="width:100%;margin-top:10px;">Gerar Previsão</button>
+    </div>
+`;
+document.body.appendChild(menu);
+document.getElementById('btnPrever').onclick = gerarPrevisao;
 
-  if (colorStr !== 'indefinido') {
-    saveResultToHistory(colorStr);
-    const predicted = predictNextColor();
-    const status = document.getElementById('status');
-    status.innerHTML = `Previsão: <b>${predicted}</b><br>Último: ${colorStr}<br>` +
-      (predicted === colorStr ? 'Vitória!' : 'Derrota!');
-  }
-});
+})();
 
-socket.connect();
