@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Blaze Bot com IA Expandida
 // @namespace    http://tampermonkey.net/
-// @version      3.3
+// @version      3.0
 // @description  Bot de previsão Blaze com IA, Markov, SHA256, Rede Neural, CSV, horário e mais
 // @author       Você
 // @match        https://blaze.com/pt/games/double
@@ -12,7 +12,8 @@
 (function() {
     'use strict';
 
-    // ### Classe WebSocket
+    // ─────────── SEU CÓDIGO ORIGINAL ───────────
+
     class BlazeWebSocket {
         constructor() {
             this.ws = null;
@@ -47,15 +48,12 @@
         close() { this.ws?.close(); }
     }
 
-    // ### Classe Interface
     class BlazeInterface {
         constructor() {
             this.nextPredColor = null;
             this.results = [];
             this.processedIds = new Set();
             this.notifiedIds = new Set();
-            this.correctPredictions = 0;
-            this.totalPredictions = 0;
             this.initMonitorInterface();
         }
         injectGlobalStyles() {
@@ -63,21 +61,19 @@
                 .blaze-min-btn{background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;padding:0 8px}
                 .blaze-min-btn:hover{opacity:.75}
                 .blaze-bubble{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;
-                    background:rgba(34,34,34,.92);box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;
-                    z-index:10000;display:none;}
+                    background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);
+                    box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:none;}
                 .blaze-overlay{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
                     z-index:9999;font-family:'Arial',sans-serif;}
-                .blaze-monitor{background:rgba(34,34,34,.92);border-radius:10px;padding:15px;
+                .blaze-monitor{background:rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;
+                    background-blend-mode:overlay;border-radius:10px;padding:15px;
                     box-shadow:0 5px 15px rgba(0,0,0,.5);color:#fff;width:300px}
                 .blaze-monitor h3{margin:0 0 10px;text-align:center;font-size:18px}
-                .result-card{background:#4448;border-radius:5px;padding:10px;margin-bottom:10px;
-                    display:flex;justify-content:space-between;align-items:center}
+                .result-card{background:#4448;border-radius:5px;padding:10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
                 .result-number{font-size:24px;font-weight:bold}
-                .result-color-0{color:#fff;background:linear-gradient(45deg,#fff,#ddd);
-                    -webkit-background-clip:text;-webkit-text-fill-color:transparent}
+                .result-color-0{color:#fff;background:linear-gradient(45deg,#fff,#ddd);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
                 .result-color-1{color:#f44336}.result-color-2{color:#0F1923}
-                .result-status{padding:5px 10px;border-radius:3px;font-size:12px;font-weight:bold;
-                    text-transform:uppercase}
+                .result-status{padding:5px 10px;border-radius:3px;font-size:12px;font-weight:bold;text-transform:uppercase}
                 .result-status-waiting{background:#ffc107;color:#000}
                 .result-status-rolling{background:#ff9800;color:#000;animation:pulse 1s infinite}
                 .result-status-complete{background:#4caf50;color:#fff}
@@ -87,25 +83,20 @@
                     transition:all .3s ease;z-index:10000}
                 .blaze-notification.show{opacity:1;transform:translateY(0)}
                 .notification-win{background:#4caf50}.notification-loss{background:#f44336}
-                .prediction-card{background:#4448;border-radius:5px;padding:15px;margin-bottom:15px;
-                    text-align:center;font-weight:bold}
+                .prediction-card{background:#4448;border-radius:5px;padding:15px;margin-bottom:15px;text-align:center;font-weight:bold}
                 .prediction-title{font-size:14px;opacity:.8;margin-bottom:5px}
-                .prediction-value{font-size:18px;font-weight:bold;display:flex;
-                    align-items:center;justify-content:center}
+                .prediction-value{font-size:18px;font-weight:bold;display:flex;align-items:center;justify-content:center}
                 .color-dot{width:24px;height:24px;border-radius:50%;display:inline-block;margin-right:10px}
-                .color-dot-0{background:#fff;border:1px solid #777}
-                .color-dot-1{background:#f44336}.color-dot-2{background:#212121}
+                .color-dot-0{background:#fff;border:1px solid #777}.color-dot-1{background:#f44336}.color-dot-2{background:#212121}
                 .prediction-accuracy{font-size:12px;margin-top:5px;opacity:.7}
                 .prediction-waiting{color:#00e676;text-shadow:0 0 5px rgba(0,230,118,.7)}
             `;
             const style = document.createElement('style');
             style.textContent = css;
             document.head.appendChild(style);
-            console.log('Estilos injetados no documento.');
             this.bubble = document.createElement('div');
             this.bubble.className = 'blaze-bubble';
             document.body.appendChild(this.bubble);
-            console.log('Bubble criado e adicionado ao DOM.');
         }
         initMonitorInterface() {
             this.injectGlobalStyles();
@@ -113,8 +104,8 @@
             this.overlay.className = 'blaze-overlay';
             this.overlay.innerHTML = `
                 <div id="blazeMonitorBox" class="blaze-monitor">
-                    <button id="blazeMinBtn" class="blaze-min-btn">−</button>
                     <h3>App SHA256</h3>
+                    <button id="blazeMinBtn" class="blaze-min-btn">−</button>
                     <div id="blazeResults" class="result-card">
                         <span class="result-number">-</span>
                         <span class="result-color-0">Branco</span>
@@ -130,24 +121,20 @@
                 </div>
             `;
             document.body.appendChild(this.overlay);
-            console.log('Overlay e monitor criados e adicionados ao DOM.');
-            const minBtn = document.getElementById('blazeMinBtn');
-            const monitorBox = document.getElementById('blazeMonitorBox');
-            if (minBtn && monitorBox) {
-                minBtn.addEventListener('click', () => {
-                    monitorBox.style.display = 'none';
+            document.getElementById('blazeMinBtn')
+                .addEventListener('click', () => {
+                    document.getElementById('blazeMonitorBox').style.display = 'none';
                     this.bubble.style.display = 'block';
-                    console.log('Monitor minimizado, bubble exibido.');
                 });
-                this.bubble.addEventListener('click', () => {
-                    this.bubble.style.display = 'none';
-                    monitorBox.style.display = 'block';
-                    console.log('Bubble clicado, monitor restaurado.');
-                });
-                console.log('Eventos de clique configurados para o menu flutuante.');
-            } else {
-                console.error('Erro: Não foi possível encontrar blazeMinBtn ou blazeMonitorBox no DOM.');
-            }
+            this.bubble.addEventListener('click', () => {
+                this.bubble.style.display = 'none';
+                document.getElementById('blazeMonitorBox').style.display = 'block';
+            });
+            this.results = [];
+            this.processedIds = new Set();
+            this.notifiedIds = new Set();
+            this.correctPredictions = 0;
+            this.totalPredictions = 0;
             this.ws = new BlazeWebSocket();
             this.ws.doubleTick((d) => this.updateResults(d));
         }
@@ -182,8 +169,7 @@
             const rDiv = document.getElementById('blazeResults');
             if (rDiv && r) {
                 const stCls = r.status === 'waiting' ? 'result-status-waiting' :
-                              r.status === 'rolling' ? 'result-status-rolling' :
-                              'result-status-complete';
+                              r.status === 'rolling' ? 'result-status-rolling' : 'result-status-complete';
                 const stTxt = r.status === 'waiting' ? 'Aguardando' :
                               r.status === 'rolling' ? 'Girando' : 'Completo';
                 rDiv.innerHTML = `
@@ -235,7 +221,11 @@
         }
     }
 
-    // ### Rede Neural
+    new BlazeInterface();
+
+    // ─────────── A PARTIR DAQUI, TODAS AS FUNCIONALIDADES ADICIONADAS ───────────
+
+    // 1) Rede Neural (Synaptic.js)
     const Layer = synaptic.Layer, Network = synaptic.Network;
     const INPUT_SIZE = 5;
     let aiNetwork = new Network({
@@ -266,7 +256,7 @@
         return { color: idx, score: out[idx] };
     }
 
-    // ### Cadeia de Markov
+    // 2) Cadeia de Markov (ordem 1)
     const markov = { 0: {}, 1: {}, 2: {} };
     function updateMarkov() {
         for (let i = 0; i < aiHistory.length - 1; i++) {
@@ -282,12 +272,12 @@
         return best[1] > 0 ? { color: best[0], score: best[1] } : null;
     }
 
-    // ### SHA-256
+    // 3) SHA-256 prefix
     const shaMap = {};
     function registerSHA(hash, color) { shaMap[hash.slice(0, 8)] = color; }
     function predictSHA(hash) { return shaMap[hash.slice(0, 8)] ?? null; }
 
-    // ### CSV Externo
+    // 4) CSV externo
     let externalData = [];
     function importCSV(text) {
         externalData = text.trim().split("\n").slice(1).map(l => {
@@ -296,7 +286,7 @@
         });
     }
 
-    // ### Padrões Temporais
+    // 5) Padrões temporais (hora)
     const timeStats = {};
     function updateTimeStats(item) {
         const h = item.time.split(":")[0];
@@ -311,12 +301,12 @@
         return best[1] > 0 ? { color: best[0], score: best[1] } : null;
     }
 
-    // ### Padrão Branco
+    // 6) Padrão branco
     let whiteGap = 0;
     function updateWhiteGap(color) { whiteGap = (color === 0 ? 0 : whiteGap + 1); }
     function predictWhite() { return whiteGap >= 10 ? { color: 0, score: 0.9 } : null; }
 
-    // ### Votação Cruzada
+    // 7) Votação cruzada
     function crossValidate() {
         const ai = predictAI(), mk = predictMarkov(), tm = predictTime(), wb = predictWhite();
         const votes = {};
@@ -328,11 +318,11 @@
         return best[0];
     }
 
-    // ### Persistência Local
+    // 8) Persistência local
     function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
     function load(key) { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
 
-    // ### Hook no updateResults
+    // ───────── Hook em updateResults para alimentar tudo ─────────
     const originalUpdate = BlazeInterface.prototype.updateResults;
     BlazeInterface.prototype.updateResults = function(d) {
         originalUpdate.call(this, d);
@@ -354,7 +344,6 @@
         save('blaze_markov', markov);
     };
 
-    // ### Instância
-    console.log('Inicializando BlazeInterface...');
+    // ───────── Instancia novamente para garantir hook ─────────
     new BlazeInterface();
 })();
