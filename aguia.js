@@ -315,7 +315,7 @@
         if (sha !== null) votes[sha] = (votes[sha] || 0) + 1;
         let best = [null, 0];
         for (const c in votes) if (votes[c] > best[1]) best = [c, votes[c]];
-        return best[0];
+        return best[0] !== null ? best[0] : Math.floor(Math.random() * 3); // Retorna um valor aleatório se não houver votos
     }
 
     // 8) Persistência local
