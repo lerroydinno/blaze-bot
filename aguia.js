@@ -1,4 +1,4 @@
-// == Código Integrado com WebSocket Blaze ==
+// == Código Integrado com WebSocket Blaze (com minimizar/maximizar) ==
 
 // --- WebSocket Blaze ---
 class BlazeWebSocket {
@@ -171,7 +171,7 @@ function carregarHistoricoLocal() {
 
 carregarHistoricoLocal();
 
-// --- Painel UI Básico ---
+// --- Painel UI com Minimizar ---
 const painel = document.createElement("div");
 painel.id = "painel_previsao";
 painel.style = `
@@ -180,13 +180,27 @@ painel.style = `
   border-radius: 20px; color: limegreen; padding: 20px;
   font-family: monospace; text-align: center; width: 360px;
 `;
+
 painel.innerHTML = `
-  <div id="resultado_cor">🎯 Resultado: </div>
-  <div id="resultado_hash">Hash: </div>
-  <div id="previsao_texto">🔮 Próxima: </div>
-  <div id="historico_resultados" style="margin-top:10px; max-height: 200px; overflow:auto;"></div>
+  <button id="btn_minimizar" style="
+    position:absolute; top:5px; right:10px; background:transparent; border:none; color:lime; font-size:18px; cursor:pointer;
+  ">−</button>
+  <div id="conteudo_painel">
+    <div id="resultado_cor">🎯 Resultado: </div>
+    <div id="resultado_hash">Hash: </div>
+    <div id="previsao_texto">🔮 Próxima: </div>
+    <div id="historico_resultados" style="margin-top:10px; max-height: 200px; overflow:auto;"></div>
+  </div>
 `;
+
 document.body.appendChild(painel);
+
+let minimizado = false;
+document.getElementById("btn_minimizar").onclick = () => {
+  minimizado = !minimizado;
+  document.getElementById("conteudo_painel").style.display = minimizado ? "none" : "block";
+  document.getElementById("btn_minimizar").innerText = minimizado ? "+" : "−";
+};
 
 // --- WebSocket Escuta ---
 const ws = new BlazeWebSocket();
@@ -204,6 +218,6 @@ ws.doubleTick(async (resultado) => {
   const previsao = await gerarPrevisao(hash, coresAnteriores);
   updatePainel(cor, numero, hash, previsao);
 
-  historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash};${previsao.cor};${previsao.confianca}\n`;
+  historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash};${previsao.cor};${previsao.confianca}%\n`;
   salvarHistoricoLocal();
 });
