@@ -151,7 +151,7 @@
         }
         updatePredictionStats(cur) {
             if (this.results.length < 2 || cur.status !== 'complete') return;
-            const prev = this.results.filter(r => r.status === 'complete')[1];
+            const prev = this.results.filter(r => r.status === 'complete')[0];
             if (!prev) return;
             this.totalPredictions++;
             if (prev.color === cur.color) this.correctPredictions++;
