@@ -1,19 +1,8 @@
-// ==UserScript==
-// @name         Blaze Bot com Previsões Otimizadas e Novo Método SMA
-// @namespace    http://tampermonkey.net/
-// @version      4.9
-// @description  Bot de previsão Blaze com previsões otimizadas, novo método SMA, e overlay corrigido
-// @author       Você
-// @match        https://blaze.com/pt/games/double
-// @grant        none
-// ==/UserScript==
-
 (function() {
     'use strict';
 
     // Embutindo brain.js (versão otimizada)
     const brain = (function() {
-        // [Código do NeuralNetwork permanece o mesmo]
         function NeuralNetwork(config) {
             this.inputSize = config.inputSize || 20;
             this.hiddenSizes = config.hiddenLayers || [20, 10];
@@ -237,6 +226,9 @@
             this.lastPrediction = null;
             this.consistencyCount = 0;
             this.methodAccuracy = { ai: 0, mk: 0, tm: 0, wb: 0, sma: 0 };
+            this.overlay = null;
+            this.bubble = null;
+            this.monitorBox = null;
             this.initMonitorInterface();
         }
 
@@ -246,7 +238,7 @@
                 .blaze-min-btn:hover{opacity:.75}
                 .blaze-bubble{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;
                     background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);
-                    box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:none;}
+                    box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;}
                 .blaze-overlay{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
                     z-index:9999;font-family:'Arial',sans-serif;}
                 .blaze-monitor{background:rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;
@@ -323,11 +315,14 @@
             document.body.appendChild(this.bubble);
             console.log('Bubble criado e anexado ao DOM:', this.bubble);
 
+            // Referência ao monitorBox
+            this.monitorBox = document.getElementById('blazeMonitorBox');
+
             // Adicionar eventos
             const minBtn = document.getElementById('blazeMinBtn');
             if (minBtn) {
                 minBtn.addEventListener('click', () => {
-                    document.getElementById('blazeMonitorBox').style.display = 'none';
+                    this.overlay.style.display = 'none';
                     this.bubble.style.display = 'block';
                     console.log('Botão minimizar clicado, overlay oculto, bubble exibido.');
                 });
@@ -335,11 +330,18 @@
                 console.error('Botão de minimizar (blazeMinBtn) não encontrado no DOM.');
             }
 
-            this.bubble.addEventListener('click', () => {
-                this.bubble.style.display = 'none';
-                document.getElementById('blazeMonitorBox').style.display = 'block';
-                console.log('Bubble clicado, overlay exibido, bubble oculto.');
-            });
+            if (this.bubble) {
+                this.bubble.addEventListener('click', () => {
+                    this.bubble.style.display = 'none';
+                    this.overlay.style.display = 'block';
+                    if (this.monitorBox) {
+                        this.monitorBox.style.display = 'block';
+                    }
+                    console.log('Bubble clicado, overlay exibido, bubble oculto.');
+                });
+            } else {
+                console.error('Bubble não encontrado no DOM.');
+            }
 
             console.log('Eventos de clique configurados.');
             this.results = [];
@@ -356,7 +358,7 @@
         }
 
         ensureOverlay() {
-            if (!document.querySelector('.blaze-overlay') || getComputedStyle(document.querySelector('.blaze-overlay')).display === 'none') {
+            if (!document.querySelector('.blaze-overlay') || getComputedStyle(this.overlay).display === 'none') {
                 console.warn('Overlay não encontrado ou oculto. Recriando...');
                 this.initMonitorInterface();
             }
