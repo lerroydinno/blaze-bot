@@ -13,9 +13,10 @@
 
     // Embutindo brain.js (versão otimizada)
     const brain = (function() {
+        // [Código do NeuralNetwork permanece o mesmo]
         function NeuralNetwork(config) {
-            this.inputSize = config.inputSize || 20; // Aumentado para janela de 10
-            this.hiddenSizes = config.hiddenLayers || [20, 10]; // Duas camadas ocultas
+            this.inputSize = config.inputSize || 20;
+            this.hiddenSizes = config.hiddenLayers || [20, 10];
             this.outputSize = config.outputSize || 3;
             this.weightsIH = [];
             this.weightsHH = [];
@@ -235,16 +236,17 @@
             this.predictionHistory = [];
             this.lastPrediction = null;
             this.consistencyCount = 0;
-            this.methodAccuracy = { ai: 0, mk: 0, tm: 0, wb: 0 }; // Rastrear acurácia por método
+            this.methodAccuracy = { ai: 0, mk: 0, tm: 0, wb: 0, sma: 0 };
             this.initMonitorInterface();
         }
+
         injectGlobalStyles() {
             const css = `
                 .blaze-min-btn{background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;padding:0 8px}
                 .blaze-min-btn:hover{opacity:.75}
                 .blaze-bubble{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;
                     background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);
-                    box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:block;}
+                    box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:none;}
                 .blaze-overlay{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
                     z-index:9999;font-family:'Arial',sans-serif;}
                 .blaze-monitor{background:rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;
@@ -277,20 +279,22 @@
             style.textContent = css;
             document.head.appendChild(style);
             console.log('Estilos injetados no documento com sucesso.');
-            this.bubble = document.createElement('div');
-            this.bubble.className = 'blaze-bubble';
-            document.body.appendChild(this.bubble);
-            console.log('Bubble criado e anexado ao DOM:', this.bubble);
         }
+
         initMonitorInterface() {
+            // Garantir que o DOM esteja pronto
             if (!document.body || !document.head) {
                 console.warn('DOM não está pronto. Aguardando...');
                 setTimeout(() => this.initMonitorInterface(), 100);
                 return;
             }
+
             this.injectGlobalStyles();
+
+            // Criar e anexar o overlay
             this.overlay = document.createElement('div');
             this.overlay.className = 'blaze-overlay';
+            this.overlay.style.display = 'none'; // Inicialmente oculto
             this.overlay.innerHTML = `
                 <div id="blazeMonitorBox" class="blaze-monitor">
                     <h3>App SHA256</h3>
@@ -312,6 +316,14 @@
             document.body.appendChild(this.overlay);
             console.log('Overlay criado e anexado ao DOM:', this.overlay);
 
+            // Criar e anexar o bubble
+            this.bubble = document.createElement('div');
+            this.bubble.className = 'blaze-bubble';
+            this.bubble.style.display = 'block'; // Inicialmente visível
+            document.body.appendChild(this.bubble);
+            console.log('Bubble criado e anexado ao DOM:', this.bubble);
+
+            // Adicionar eventos
             const minBtn = document.getElementById('blazeMinBtn');
             if (minBtn) {
                 minBtn.addEventListener('click', () => {
@@ -323,15 +335,12 @@
                 console.error('Botão de minimizar (blazeMinBtn) não encontrado no DOM.');
             }
 
-            if (this.bubble) {
-                this.bubble.addEventListener('click', () => {
-                    this.bubble.style.display = 'none';
-                    document.getElementById('blazeMonitorBox').style.display = 'block';
-                    console.log('Bubble clicado, overlay exibido, bubble oculto.');
-                });
-            } else {
-                console.error('Bubble não encontrado no DOM.');
-            }
+            this.bubble.addEventListener('click', () => {
+                this.bubble.style.display = 'none';
+                document.getElementById('blazeMonitorBox').style.display = 'block';
+                console.log('Bubble clicado, overlay exibido, bubble oculto.');
+            });
+
             console.log('Eventos de clique configurados.');
             this.results = [];
             this.processedIds = new Set();
@@ -341,27 +350,29 @@
             this.predictionHistory = [];
             this.lastPrediction = null;
             this.consistencyCount = 0;
-            this.methodAccuracy = { ai: 0, mk: 0, tm: 0, wb: 0 };
+            this.methodAccuracy = { ai: 0, mk: 0, tm: 0, wb: 0, sma: 0 };
             this.ws = new BlazeWebSocket();
             this.ws.doubleTick((d) => this.updateResults(d));
         }
+
         ensureOverlay() {
             if (!document.querySelector('.blaze-overlay') || getComputedStyle(document.querySelector('.blaze-overlay')).display === 'none') {
                 console.warn('Overlay não encontrado ou oculto. Recriando...');
                 this.initMonitorInterface();
             }
         }
+
         updatePredictionStats(cur) {
             if (this.results.length < 2 || cur.status !== 'complete') return;
             const prev = this.results.filter(r => r.status === 'complete')[0];
             if (!prev) return;
             this.totalPredictions++;
             if (prev.color === cur.color) this.correctPredictions++;
-            // Atualizar acurácia por método
             const predMethod = this.predictionHistory[this.predictionHistory.length - 1]?.method || 'unknown';
             if (predMethod !== 'unknown') this.methodAccuracy[predMethod] = (this.methodAccuracy[predMethod] * (this.totalPredictions - 1) + (prev.color === cur.color ? 1 : 0)) / this.totalPredictions;
             console.log('Acurácia por método:', this.methodAccuracy);
         }
+
         updateResults(d) {
             this.ensureOverlay();
 
@@ -455,6 +466,7 @@
                 updateWhiteGap(d.color);
             }
         }
+
         showNotification(d, win) {
             document.querySelectorAll('.blaze-notification').forEach(n => n.remove());
             const n = document.createElement('div');
@@ -464,6 +476,7 @@
             setTimeout(() => n.classList.add('show'), 50);
             setTimeout(() => { n.classList.remove('show'); setTimeout(() => n.remove(), 300); }, 3000);
         }
+
         analyzePatterns() {
             const history = this.results.filter(r => r.status === 'complete');
             if (history.length < 10) return;
@@ -474,11 +487,25 @@
             console.log('[Análise] Últimos 10 resultados:', lastColors);
             console.log(`[Análise] Frequência - Branco: ${brancoFreq}, Vermelho: ${vermelhoFreq}, Preto: ${pretoFreq}`);
         }
+
+        predictNextColor() {
+            const predictions = [
+                predictAI(),
+                predictMarkov(),
+                predictTime(),
+                predictWhite(),
+                predictSMA()
+            ];
+            this.predictionHistory.push({});
+            const result = crossValidate.call(this);
+            this.predictionHistory[this.predictionHistory.length - 1].color = result;
+            return { color: result, isWaiting: this.results[0]?.status === 'waiting' };
+        }
     }
 
-    const INPUT_SIZE = 10; // Aumentado para 10
+    const INPUT_SIZE = 10;
     let aiHistory = [];
-    for (let i = 0; i < 30; i++) { // Aumentado para 30
+    for (let i = 0; i < 30; i++) {
         aiHistory.push({ color: i % 3, roll: Math.floor(Math.random() * 15), time: new Date().toTimeString().slice(0, 5) });
     }
     console.log('Histórico inicial balanceado:', aiHistory);
@@ -487,7 +514,7 @@
     function initializeNetwork() {
         if (!aiNetwork) {
             aiNetwork = new brain.NeuralNetwork({
-                inputSize: 100, // Ajustado para 10 * (1 + 1 + 8)
+                inputSize: 100,
                 hiddenLayers: [20, 10],
                 outputSize: 3,
                 learningRate: 0.05,
@@ -648,19 +675,18 @@
     let whiteGap = 0;
     function updateWhiteGap(color) { whiteGap = (color === 0 ? 0 : whiteGap + 1); }
     function predictWhite() {
-        const result = whiteGap >= 15 ? { color: 0, score: 0.7, method: 'wb' } : null; // Ajustado para 15 e score 0.7
+        const result = whiteGap >= 15 ? { color: 0, score: 0.7, method: 'wb' } : null;
         console.log('Previsão Padrão Branco:', result);
         return result;
     }
 
-    // Novo método: Média Móvel Simples (SMA)
     function predictSMA() {
         if (aiHistory.length < 10) return null;
         const last10 = aiHistory.slice(-10).map(h => h.color);
         const avg = last10.reduce((sum, c) => sum + c, 0) / last10.length;
         const result = { 
             color: Math.round(avg), 
-            score: 0.6 + (1 - Math.abs(avg - Math.round(avg)) * 0.4), // Score baseado na proximidade da média
+            score: 0.6 + (1 - Math.abs(avg - Math.round(avg)) * 0.4),
             method: 'sma'
         };
         console.log('Previsão SMA:', result);
@@ -672,13 +698,13 @@
         const mk = predictMarkov(), tm = predictTime(), wb = predictWhite(), sma = predictSMA();
         const votes = {};
         const baseWeights = { ai: 0.3, mk: 0.2, tm: 0.2, wb: 0.1, sma: 0.2 };
-        const accuracyWeights = { ...this.methodAccuracy }; // Copia a acurácia atual
-        for (let method in accuracyWeights) accuracyWeights[method] = accuracyWeights[method] || 0.1; // Padrão 0.1 se não houver dados
+        const accuracyWeights = { ...this.methodAccuracy };
+        for (let method in accuracyWeights) accuracyWeights[method] = accuracyWeights[method] || 0.1;
         const totalAccuracy = Object.values(accuracyWeights).reduce((sum, v) => sum + v, 0);
         const dynamicWeights = {};
         for (let method in baseWeights) {
-            dynamicWeights[method] = baseWeights[method] * (accuracyWeights[method] / totalAccuracy) * 2; // Pondera com acurácia
-            if (dynamicWeights[method] > 0.5) dynamicWeights[method] = 0.5; // Limite máximo
+            dynamicWeights[method] = baseWeights[method] * (accuracyWeights[method] / totalAccuracy) * 2;
+            if (dynamicWeights[method] > 0.5) dynamicWeights[method] = 0.5;
         }
         const predictions = [
             { pred: ai, weight: dynamicWeights.ai },
@@ -705,7 +731,6 @@
             result = Math.floor(Math.random() * 3);
             console.log('Aleatoriedade aplicada devido a diferença pequena:', { best: best[1], secondBest, result });
         }
-        // Registrar o método dominante
         const winningMethod = predictions.find(p => p.pred && p.pred.color === result)?.pred.method || 'unknown';
         this.predictionHistory[this.predictionHistory.length - 1] = { ...this.predictionHistory[this.predictionHistory.length - 1], method: winningMethod };
         console.log('Votação cruzada detalhada:', { ai, mk, tm, wb, sma, sha, votes, result, dynamicWeights });
