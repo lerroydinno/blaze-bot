@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Blaze Bot com Previsões Estabilizadas
+// @name         Blaze Bot com Previsões Estabilizadas e Overlay Corrigido
 // @namespace    http://tampermonkey.net/
-// @version      4.7
-// @description  Bot de previsão Blaze com previsões estabilizadas e depuração avançada
+// @version      4.8
+// @description  Bot de previsão Blaze com previsões estabilizadas, overlay corrigido e depuração avançada
 // @author       Você
 // @match        https://blaze.com/pt/games/double
 // @grant        none
@@ -14,7 +14,7 @@
     // Embutindo brain.js (versão otimizada)
     const brain = (function() {
         function NeuralNetwork(config) {
-            this.inputSize = config.inputSize || 14; // Ajustado para janela de 7
+            this.inputSize = config.inputSize || 14;
             this.hiddenSizes = config.hiddenLayers || [15];
             this.outputSize = config.outputSize || 3;
             this.weightsIH = [];
@@ -202,7 +202,7 @@
                 .blaze-min-btn:hover{opacity:.75}
                 .blaze-bubble{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;
                     background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);
-                    box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:none;}
+                    box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:block;}
                 .blaze-overlay{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
                     z-index:9999;font-family:'Arial',sans-serif;}
                 .blaze-monitor{background:rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;
@@ -234,12 +234,19 @@
             const style = document.createElement('style');
             style.textContent = css;
             document.head.appendChild(style);
-            console.log('Estilos injetados no documento.');
+            console.log('Estilos injetados no documento com sucesso.');
             this.bubble = document.createElement('div');
             this.bubble.className = 'blaze-bubble';
             document.body.appendChild(this.bubble);
+            console.log('Bubble criado e anexado ao DOM:', this.bubble);
         }
         initMonitorInterface() {
+            // Garantir que o DOM esteja pronto
+            if (!document.body || !document.head) {
+                console.warn('DOM não está pronto. Aguardando...');
+                setTimeout(() => this.initMonitorInterface(), 100);
+                return;
+            }
             this.injectGlobalStyles();
             this.overlay = document.createElement('div');
             this.overlay.className = 'blaze-overlay';
@@ -262,13 +269,14 @@
                 </div>
             `;
             document.body.appendChild(this.overlay);
-            console.log('Overlay e bubble criados e adicionados ao DOM.');
+            console.log('Overlay criado e anexado ao DOM:', this.overlay);
 
             const minBtn = document.getElementById('blazeMinBtn');
             if (minBtn) {
                 minBtn.addEventListener('click', () => {
                     document.getElementById('blazeMonitorBox').style.display = 'none';
                     this.bubble.style.display = 'block';
+                    console.log('Botão minimizar clicado, overlay oculto, bubble exibido.');
                 });
             } else {
                 console.error('Botão de minimizar (blazeMinBtn) não encontrado no DOM.');
@@ -278,12 +286,12 @@
                 this.bubble.addEventListener('click', () => {
                     this.bubble.style.display = 'none';
                     document.getElementById('blazeMonitorBox').style.display = 'block';
+                    console.log('Bubble clicado, overlay exibido, bubble oculto.');
                 });
             } else {
                 console.error('Bubble não encontrado no DOM.');
             }
             console.log('Eventos de clique configurados.');
-
             this.results = [];
             this.processedIds = new Set();
             this.notifiedIds = new Set();
@@ -296,8 +304,8 @@
             this.ws.doubleTick((d) => this.updateResults(d));
         }
         ensureOverlay() {
-            if (!document.querySelector('.blaze-overlay')) {
-                console.warn('Overlay não encontrado no DOM. Recriando...');
+            if (!document.querySelector('.blaze-overlay') || getComputedStyle(document.querySelector('.blaze-overlay')).display === 'none') {
+                console.warn('Overlay não encontrado ou oculto. Recriando...');
                 this.initMonitorInterface();
             }
         }
@@ -364,7 +372,6 @@
             }
 
             const pred = this.predictNextColor();
-            // Suavização com base na consistência
             if (this.lastPrediction === pred.color) {
                 this.consistencyCount++;
             } else {
@@ -373,7 +380,7 @@
             this.lastPrediction = pred.color;
             let stabilizedColor = pred.color;
             if (this.consistencyCount >= 3 && Math.random() < 0.8) {
-                stabilizedColor = this.lastPrediction; // Mantém a cor se consistente por 3 rodadas
+                stabilizedColor = this.lastPrediction;
                 console.log('Previsão estabilizada por consistência:', stabilizedColor);
             }
             pred.color = stabilizedColor;
@@ -405,12 +412,11 @@
             this.analyzePatterns();
             if (d.status === 'complete') {
                 aiHistory.unshift({ color: d.color, roll: d.roll ?? 0, time: new Date().toTimeString().slice(0, 5) });
-                // Filtrar outliers (ex.: mudança abrupta de cor)
                 if (aiHistory.length > 2) {
                     const prevColor = aiHistory[1].color;
                     const currColor = d.color;
                     if (Math.abs(prevColor - currColor) > 1 && Math.random() < 0.7) {
-                        aiHistory[0].color = prevColor; // Suaviza a mudança
+                        aiHistory[0].color = prevColor;
                         console.log('Outlier detectado e suavizado:', { prevColor, currColor, newColor: prevColor });
                     }
                 }
@@ -450,9 +456,9 @@
         }
     }
 
-    const INPUT_SIZE = 7; // Aumentado para 7 para mais contexto
+    const INPUT_SIZE = 7;
     let aiHistory = [];
-    for (let i = 0; i < 21; i++) { // Aumentado para 21 para cobrir a nova janela
+    for (let i = 0; i < 21; i++) {
         aiHistory.push({ color: i % 3, roll: Math.floor(Math.random() * 15), time: new Date().toTimeString().slice(0, 5) });
     }
     console.log('Histórico inicial balanceado:', aiHistory);
@@ -461,7 +467,7 @@
     function initializeNetwork() {
         if (!aiNetwork) {
             aiNetwork = new brain.NeuralNetwork({
-                inputSize: 70, // Ajustado para 7 * (1 + 1 + 8)
+                inputSize: 70,
                 hiddenLayers: [15],
                 outputSize: 3,
                 learningRate: 0.05,
@@ -650,7 +656,6 @@
         let best = [null, 0];
         for (const c in votes) if (votes[c] > best[1]) best = [c, votes[c]];
         let result = best[0] !== null ? best[0] : Math.floor(Math.random() * 3);
-        // Reduzir aleatoriedade e condicionar a diferença pequena
         const secondBest = Object.entries(votes).reduce((prev, curr) => 
             (curr[1] > prev[1] && curr[1] < best[1]) ? curr : prev, [null, -1])[1];
         if (Math.random() < 0.05 && (best[1] - secondBest) < 0.1) {
