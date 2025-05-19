@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Blaze Bot com IA Balanceada e SHA-256 Corrigido
+// @name         Blaze Bot com IA Otimizada e Previsões Balanceadas
 // @namespace    http://tampermonkey.net/
-// @version      4.5
-// @description  Bot de previsão Blaze com IA balanceada, SHA-256 corrigido e depuração
+// @version      4.6
+// @description  Bot de previsão Blaze com IA otimizada, previsões balanceadas e depuração avançada
 // @author       Você
 // @match        https://blaze.com/pt/games/double
 // @grant        none
@@ -11,7 +11,7 @@
 (function() {
     'use strict';
 
-    // Embutindo brain.js (versão ajustada para evitar viés)
+    // Embutindo brain.js (versão otimizada)
     const brain = (function() {
         function NeuralNetwork(config) {
             this.inputSize = config.inputSize || 10;
@@ -22,6 +22,7 @@
             this.biasH = [];
             this.biasO = [];
             this.learningRate = config.learningRate || 0.05;
+            this.l2Lambda = config.l2Lambda || 0.01; // Regularização L2
 
             this.initialize();
         }
@@ -38,8 +39,12 @@
             console.log('Pesos iniciais da rede:', { weightsIH: this.weightsIH, weightsHO: this.weightsHO });
         };
 
-        NeuralNetwork.prototype.activate = function(x) {
-            return x > 0 ? x : 0; // ReLU
+        NeuralNetwork.prototype.leakyRelu = function(x) {
+            return x > 0 ? x : x * 0.01; // Leaky ReLU
+        };
+
+        NeuralNetwork.prototype.leakyReluDerivative = function(x) {
+            return x > 0 ? 1 : 0.01;
         };
 
         NeuralNetwork.prototype.feedForward = function(input) {
@@ -49,7 +54,7 @@
                 for (let j = 0; j < this.inputSize; j++) {
                     sum += input[j] * this.weightsIH[i][j];
                 }
-                hidden[i] = this.activate(sum);
+                hidden[i] = this.leakyRelu(sum);
             }
 
             let output = [];
@@ -58,15 +63,16 @@
                 for (let j = 0; j < this.hiddenSizes[0]; j++) {
                     sum += hidden[j] * this.weightsHO[i][j];
                 }
-                output[i] = this.activate(sum);
+                output[i] = this.leakyRelu(sum);
             }
             return output;
         };
 
         NeuralNetwork.prototype.train = function(trainingData, options) {
             options = options || {};
-            const iterations = options.iterations || 200;
+            const iterations = options.iterations || 500;
             const errorThresh = options.errorThresh || 0.005;
+            let lr = this.learningRate;
 
             for (let i = 0; i < iterations; i++) {
                 let errorSum = 0;
@@ -75,21 +81,25 @@
                     const target = data.output;
 
                     let hidden = [];
+                    let hiddenInputs = [];
                     for (let j = 0; j < this.hiddenSizes[0]; j++) {
                         let sum = this.biasH[j];
                         for (let k = 0; k < this.inputSize; k++) {
                             sum += input[k] * this.weightsIH[j][k];
                         }
-                        hidden[j] = this.activate(sum);
+                        hiddenInputs[j] = sum;
+                        hidden[j] = this.leakyRelu(sum);
                     }
 
                     let output = [];
+                    let outputInputs = [];
                     for (let j = 0; j < this.outputSize; j++) {
                         let sum = this.biasO[j];
                         for (let k = 0; k < this.hiddenSizes[0]; k++) {
                             sum += hidden[k] * this.weightsHO[j][k];
                         }
-                        output[j] = this.activate(sum);
+                        outputInputs[j] = sum;
+                        output[j] = this.leakyRelu(sum);
                     }
 
                     let outputErrors = [];
@@ -106,21 +116,25 @@
                     }
 
                     for (let j = 0; j < this.outputSize; j++) {
-                        this.biasO[j] += this.learningRate * outputErrors[j];
+                        this.biasO[j] += lr * outputErrors[j];
                         for (let k = 0; k < this.hiddenSizes[0]; k++) {
-                            this.weightsHO[j][k] += this.learningRate * outputErrors[j] * hidden[k];
+                            this.weightsHO[j][k] += lr * outputErrors[j] * hidden[k];
+                            this.weightsHO[j][k] -= lr * this.l2Lambda * this.weightsHO[j][k]; // Regularização L2
                         }
                     }
 
                     for (let j = 0; j < this.hiddenSizes[0]; j++) {
-                        this.biasH[j] += this.learningRate * hiddenErrors[j] * (hidden[j] > 0 ? 1 : 0);
+                        this.biasH[j] += lr * hiddenErrors[j] * this.leakyReluDerivative(hiddenInputs[j]);
                         for (let k = 0; k < this.inputSize; k++) {
-                            this.weightsIH[j][k] += this.learningRate * hiddenErrors[j] * (hidden[j] > 0 ? 1 : 0) * input[k];
+                            this.weightsIH[j][k] += lr * hiddenErrors[j] * this.leakyReluDerivative(hiddenInputs[j]) * input[k];
+                            this.weightsIH[j][k] -= lr * this.l2Lambda * this.weightsIH[j][k]; // Regularização L2
                         }
                     }
                 }
+                // Decaimento da taxa de aprendizado
+                lr = this.learningRate * (1 / (1 + 0.001 * i));
                 if (errorSum / trainingData.length < errorThresh) break;
-                if (options.log && i % options.logPeriod === 0) console.log(`Iteração ${i}, Erro: ${errorSum / trainingData.length}`);
+                if (options.log && i % options.logPeriod === 0) console.log(`Iteração ${i}, Erro: ${errorSum / trainingData.length}, LR: ${lr}`);
             }
         };
 
@@ -178,6 +192,7 @@
             this.notifiedIds = new Set();
             this.correctPredictions = 0;
             this.totalPredictions = 0;
+            this.predictionHistory = []; // Rastrear histórico de previsões
             this.initMonitorInterface();
         }
         injectGlobalStyles() {
@@ -273,6 +288,7 @@
             this.notifiedIds = new Set();
             this.correctPredictions = 0;
             this.totalPredictions = 0;
+            this.predictionHistory = [];
             this.ws = new BlazeWebSocket();
             this.ws.doubleTick((d) => this.updateResults(d));
         }
@@ -297,6 +313,11 @@
             const colorName = cvNum === 0 ? 'Branco' : cvNum === 1 ? 'Vermelho' : 'Preto';
             console.log('Mapeamento de cor:', { cv: cvNum, colorName });
             const waiting = this.results.find(r => r.status === 'waiting');
+            this.predictionHistory.push({ color: cvNum, time: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }) });
+            if (this.predictionHistory.length > 50) this.predictionHistory.shift();
+            const predDist = { 0: 0, 1: 0, 2: 0 };
+            this.predictionHistory.forEach(p => predDist[p.color]++);
+            console.log('Distribuição de previsões (últimas 50):', predDist);
             return {
                 color: cvNum,
                 colorName: colorName,
@@ -405,6 +426,11 @@
 
     const INPUT_SIZE = 5;
     let aiHistory = [];
+    // Inicializar o histórico com dados sintéticos para balancear
+    for (let i = 0; i < 15; i++) {
+        aiHistory.push({ color: i % 3, roll: Math.floor(Math.random() * 15), time: new Date().toTimeString().slice(0, 5) });
+    }
+    console.log('Histórico inicial balanceado:', aiHistory);
     let aiNetwork = null;
 
     function initializeNetwork() {
@@ -413,7 +439,8 @@
                 inputSize: 50,
                 hiddenLayers: [15],
                 outputSize: 3,
-                learningRate: 0.05
+                learningRate: 0.05,
+                l2Lambda: 0.01
             });
             console.log('Rede neural brain.js inicializada com sucesso embutida às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
             return true;
@@ -457,10 +484,10 @@
         });
         console.log('Dados de treinamento:', trainingData.length, 'Distribuição de alvos:', targetDist);
         aiNetwork.train(trainingData, {
-            iterations: 200,
+            iterations: 500,
             errorThresh: 0.005,
             log: true,
-            logPeriod: 10
+            logPeriod: 50
         });
         console.log('Rede neural treinada com', trainingData.length, 'exemplos às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
     }
@@ -497,7 +524,16 @@
             const b = next.color;
             markov[a][b] = (markov[a][b] || 0) + 1;
         }
-        console.log('Markov atualizado:', markov);
+        // Normalizar transições
+        for (let a in markov) {
+            const total = Object.values(markov[a]).reduce((sum, v) => sum + v, 0);
+            if (total > 0) {
+                for (let b in markov[a]) {
+                    markov[a][b] /= total;
+                }
+            }
+        }
+        console.log('Markov atualizado (normalizado):', markov);
     }
     function predictMarkov() {
         const last = aiHistory[aiHistory.length - 1]?.color;
@@ -536,16 +572,24 @@
 
     const timeStats = {};
     function updateTimeStats(item) {
-        const h = item.time.split(":")[0];
-        timeStats[h] = timeStats[h] || { 0: 0, 1: 0, 2: 0 };
-        timeStats[h][item.color]++;
+        const h = parseInt(item.time.split(":")[0]);
+        for (let i = Math.max(0, h - 1); i <= h + 1; i++) {
+            const key = String(i % 24).padStart(2, "0");
+            timeStats[key] = timeStats[key] || { 0: 0, 1: 0, 2: 0 };
+            timeStats[key][item.color]++;
+        }
         console.log('TimeStats atualizado:', timeStats);
     }
     function predictTime() {
         const h = String(new Date().getHours()).padStart(2, "0");
-        const stats = timeStats[h] || {};
+        const stats = timeStats[h] || { 0: 0, 1: 0, 2: 0 };
+        let total = stats[0] + stats[1] + stats[2];
+        if (total === 0) return null;
         let best = [0, 0];
-        for (const c in stats) if (stats[c] > best[1]) best = [+c, stats[c]];
+        for (const c in stats) {
+            const prob = stats[c] / total;
+            if (prob > best[1]) best = [+c, prob];
+        }
         const result = best[1] > 0 ? { color: best[0], score: best[1] } : null;
         console.log('Previsão Temporal:', result);
         return result;
@@ -563,20 +607,27 @@
         const ai = predictAI();
         const mk = predictMarkov(), tm = predictTime(), wb = predictWhite();
         const votes = {};
-        const predictions = [ai, mk, tm, wb];
-        predictions.forEach(p => {
-            if (p) {
-                // Normalizar scores para evitar dominância (ex.: Markov com score 21)
-                const normalizedScore = p.score ? Math.min(p.score / 10, 1) : 1;
-                votes[p.color] = (votes[p.color] || 0) + normalizedScore;
+        const weights = { ai: 0.4, mk: 0.3, tm: 0.2, wb: 0.1 };
+        const predictions = [
+            { pred: ai, weight: weights.ai },
+            { pred: mk, weight: weights.mk },
+            { pred: tm, weight: weights.tm },
+            { pred: wb, weight: weights.wb }
+        ];
+        predictions.forEach(({ pred, weight }) => {
+            if (pred) {
+                const normalizedScore = pred.score ? Math.min(pred.score, 1) : 1;
+                votes[pred.color] = (votes[pred.color] || 0) + (normalizedScore * weight);
             }
         });
         console.log('window.latestHash antes de predictSHA:', window.latestHash);
         const sha = window.latestHash ? predictSHA(window.latestHash) : null;
-        if (sha !== null) votes[sha] = (votes[sha] || 0) + 1;
+        if (sha !== null) votes[sha] = (votes[sha] || 0) + 0.2;
         let best = [null, 0];
         for (const c in votes) if (votes[c] > best[1]) best = [c, votes[c]];
-        const result = best[0] !== null ? best[0] : Math.floor(Math.random() * 3);
+        let result = best[0] !== null ? best[0] : Math.floor(Math.random() * 3);
+        // Adicionar aleatoriedade para evitar estagnação
+        if (Math.random() < 0.1) result = Math.floor(Math.random() * 3);
         console.log('Votação cruzada detalhada:', { ai, mk, tm, wb, sha, votes, result });
         return result;
     }
