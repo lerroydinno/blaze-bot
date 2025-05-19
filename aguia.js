@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Blaze Bot com Previsões Estabilizadas e Overlay Corrigido
+// @name         Blaze Bot com Previsões Otimizadas e Novo Método SMA
 // @namespace    http://tampermonkey.net/
-// @version      4.8
-// @description  Bot de previsão Blaze com previsões estabilizadas, overlay corrigido e depuração avançada
+// @version      4.9
+// @description  Bot de previsão Blaze com previsões otimizadas, novo método SMA, e overlay corrigido
 // @author       Você
 // @match        https://blaze.com/pt/games/double
 // @grant        none
@@ -14,12 +14,14 @@
     // Embutindo brain.js (versão otimizada)
     const brain = (function() {
         function NeuralNetwork(config) {
-            this.inputSize = config.inputSize || 14;
-            this.hiddenSizes = config.hiddenLayers || [15];
+            this.inputSize = config.inputSize || 20; // Aumentado para janela de 10
+            this.hiddenSizes = config.hiddenLayers || [20, 10]; // Duas camadas ocultas
             this.outputSize = config.outputSize || 3;
             this.weightsIH = [];
+            this.weightsHH = [];
             this.weightsHO = [];
             this.biasH = [];
+            this.biasH2 = [];
             this.biasO = [];
             this.learningRate = config.learningRate || 0.05;
             this.l2Lambda = config.l2Lambda || 0.01;
@@ -31,10 +33,14 @@
             this.weightsIH = Array(this.hiddenSizes[0]).fill().map(() =>
                 Array(this.inputSize).fill().map(() => (Math.random() - 0.5) * 0.1)
             );
-            this.weightsHO = Array(this.outputSize).fill().map(() =>
+            this.weightsHH = Array(this.hiddenSizes[1]).fill().map(() =>
                 Array(this.hiddenSizes[0]).fill().map(() => (Math.random() - 0.5) * 0.1)
             );
+            this.weightsHO = Array(this.outputSize).fill().map(() =>
+                Array(this.hiddenSizes[1]).fill().map(() => (Math.random() - 0.5) * 0.1)
+            );
             this.biasH = Array(this.hiddenSizes[0]).fill(0);
+            this.biasH2 = Array(this.hiddenSizes[1]).fill(0);
             this.biasO = Array(this.outputSize).fill(0);
             console.log('Pesos iniciais da rede:', { weightsIH: this.weightsIH, weightsHO: this.weightsHO });
         };
@@ -57,11 +63,20 @@
                 hidden[i] = this.leakyRelu(sum);
             }
 
+            let hidden2 = [];
+            for (let i = 0; i < this.hiddenSizes[1]; i++) {
+                let sum = this.biasH2[i];
+                for (let j = 0; j < this.hiddenSizes[0]; j++) {
+                    sum += hidden[j] * this.weightsHH[i][j];
+                }
+                hidden2[i] = this.leakyRelu(sum);
+            }
+
             let output = [];
             for (let i = 0; i < this.outputSize; i++) {
                 let sum = this.biasO[i];
-                for (let j = 0; j < this.hiddenSizes[0]; j++) {
-                    sum += hidden[j] * this.weightsHO[i][j];
+                for (let j = 0; j < this.hiddenSizes[1]; j++) {
+                    sum += hidden2[j] * this.weightsHO[i][j];
                 }
                 output[i] = this.leakyRelu(sum);
             }
@@ -91,12 +106,23 @@
                         hidden[j] = this.leakyRelu(sum);
                     }
 
+                    let hidden2 = [];
+                    let hidden2Inputs = [];
+                    for (let j = 0; j < this.hiddenSizes[1]; j++) {
+                        let sum = this.biasH2[j];
+                        for (let k = 0; k < this.hiddenSizes[0]; k++) {
+                            sum += hidden[k] * this.weightsHH[j][k];
+                        }
+                        hidden2Inputs[j] = sum;
+                        hidden2[j] = this.leakyRelu(sum);
+                    }
+
                     let output = [];
                     let outputInputs = [];
                     for (let j = 0; j < this.outputSize; j++) {
                         let sum = this.biasO[j];
-                        for (let k = 0; k < this.hiddenSizes[0]; k++) {
-                            sum += hidden[k] * this.weightsHO[j][k];
+                        for (let k = 0; k < this.hiddenSizes[1]; k++) {
+                            sum += hidden2[k] * this.weightsHO[j][k];
                         }
                         outputInputs[j] = sum;
                         output[j] = this.leakyRelu(sum);
@@ -108,18 +134,33 @@
                         errorSum += Math.abs(outputErrors[j]);
                     }
 
+                    let hidden2Errors = Array(this.hiddenSizes[1]).fill(0);
+                    for (let j = 0; j < this.hiddenSizes[1]; j++) {
+                        for (let k = 0; k < this.outputSize; k++) {
+                            hidden2Errors[j] += outputErrors[k] * this.weightsHO[k][j];
+                        }
+                    }
+
                     let hiddenErrors = Array(this.hiddenSizes[0]).fill(0);
                     for (let j = 0; j < this.hiddenSizes[0]; j++) {
-                        for (let k = 0; k < this.outputSize; k++) {
-                            hiddenErrors[j] += outputErrors[k] * this.weightsHO[k][j];
+                        for (let k = 0; k < this.hiddenSizes[1]; k++) {
+                            hiddenErrors[j] += hidden2Errors[k] * this.weightsHH[k][j];
                         }
                     }
 
                     for (let j = 0; j < this.outputSize; j++) {
                         this.biasO[j] += lr * outputErrors[j];
-                        for (let k = 0; k < this.hiddenSizes[0]; k++) {
-                            this.weightsHO[j][k] += lr * outputErrors[j] * hidden[k];
+                        for (let k = 0; k < this.hiddenSizes[1]; k++) {
+                            this.weightsHO[j][k] += lr * outputErrors[j] * hidden2[k];
                             this.weightsHO[j][k] -= lr * this.l2Lambda * this.weightsHO[j][k];
+                        }
+                    }
+
+                    for (let j = 0; j < this.hiddenSizes[1]; j++) {
+                        this.biasH2[j] += lr * hidden2Errors[j] * this.leakyReluDerivative(hidden2Inputs[j]);
+                        for (let k = 0; k < this.hiddenSizes[0]; k++) {
+                            this.weightsHH[j][k] += lr * hidden2Errors[j] * this.leakyReluDerivative(hidden2Inputs[j]) * hidden[k];
+                            this.weightsHH[j][k] -= lr * this.l2Lambda * this.weightsHH[j][k];
                         }
                     }
 
@@ -194,6 +235,7 @@
             this.predictionHistory = [];
             this.lastPrediction = null;
             this.consistencyCount = 0;
+            this.methodAccuracy = { ai: 0, mk: 0, tm: 0, wb: 0 }; // Rastrear acurácia por método
             this.initMonitorInterface();
         }
         injectGlobalStyles() {
@@ -241,7 +283,6 @@
             console.log('Bubble criado e anexado ao DOM:', this.bubble);
         }
         initMonitorInterface() {
-            // Garantir que o DOM esteja pronto
             if (!document.body || !document.head) {
                 console.warn('DOM não está pronto. Aguardando...');
                 setTimeout(() => this.initMonitorInterface(), 100);
@@ -300,6 +341,7 @@
             this.predictionHistory = [];
             this.lastPrediction = null;
             this.consistencyCount = 0;
+            this.methodAccuracy = { ai: 0, mk: 0, tm: 0, wb: 0 };
             this.ws = new BlazeWebSocket();
             this.ws.doubleTick((d) => this.updateResults(d));
         }
@@ -309,38 +351,16 @@
                 this.initMonitorInterface();
             }
         }
-        predictNextColor() {
-            const cv = crossValidate();
-            console.log('crossValidate retornou:', cv);
-            if (cv === null) {
-                console.warn('crossValidate retornou null, usando fallback aleatório.');
-                return {
-                    color: Math.floor(Math.random() * 3),
-                    colorName: ['Branco', 'Vermelho', 'Preto'][Math.floor(Math.random() * 3)],
-                    isWaiting: Boolean(this.results.find(r => r.status === 'waiting'))
-                };
-            }
-            const cvNum = Number(cv);
-            const colorName = cvNum === 0 ? 'Branco' : cvNum === 1 ? 'Vermelho' : 'Preto';
-            console.log('Mapeamento de cor:', { cv: cvNum, colorName });
-            const waiting = this.results.find(r => r.status === 'waiting');
-            this.predictionHistory.push({ color: cvNum, time: new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }) });
-            if (this.predictionHistory.length > 50) this.predictionHistory.shift();
-            const predDist = { 0: 0, 1: 0, 2: 0 };
-            this.predictionHistory.forEach(p => predDist[p.color]++);
-            console.log('Distribuição de previsões (últimas 50):', predDist);
-            return {
-                color: cvNum,
-                colorName: colorName,
-                isWaiting: Boolean(waiting)
-            };
-        }
         updatePredictionStats(cur) {
             if (this.results.length < 2 || cur.status !== 'complete') return;
             const prev = this.results.filter(r => r.status === 'complete')[0];
             if (!prev) return;
             this.totalPredictions++;
             if (prev.color === cur.color) this.correctPredictions++;
+            // Atualizar acurácia por método
+            const predMethod = this.predictionHistory[this.predictionHistory.length - 1]?.method || 'unknown';
+            if (predMethod !== 'unknown') this.methodAccuracy[predMethod] = (this.methodAccuracy[predMethod] * (this.totalPredictions - 1) + (prev.color === cur.color ? 1 : 0)) / this.totalPredictions;
+            console.log('Acurácia por método:', this.methodAccuracy);
         }
         updateResults(d) {
             this.ensureOverlay();
@@ -456,9 +476,9 @@
         }
     }
 
-    const INPUT_SIZE = 7;
+    const INPUT_SIZE = 10; // Aumentado para 10
     let aiHistory = [];
-    for (let i = 0; i < 21; i++) {
+    for (let i = 0; i < 30; i++) { // Aumentado para 30
         aiHistory.push({ color: i % 3, roll: Math.floor(Math.random() * 15), time: new Date().toTimeString().slice(0, 5) });
     }
     console.log('Histórico inicial balanceado:', aiHistory);
@@ -467,8 +487,8 @@
     function initializeNetwork() {
         if (!aiNetwork) {
             aiNetwork = new brain.NeuralNetwork({
-                inputSize: 70,
-                hiddenLayers: [15],
+                inputSize: 100, // Ajustado para 10 * (1 + 1 + 8)
+                hiddenLayers: [20, 10],
                 outputSize: 3,
                 learningRate: 0.05,
                 l2Lambda: 0.01
@@ -540,7 +560,7 @@
         const output = aiNetwork.run(input);
         const idx = output.indexOf(Math.max(...output));
         console.log('Saída bruta da IA:', output, 'Previsão da IA (detalhada):', { color: idx, score: output[idx], output: output });
-        return { color: idx, score: output[idx] };
+        return { color: idx, score: output[idx], method: 'ai' };
     }
 
     const markov = { 0: {}, 1: {}, 2: {} };
@@ -573,7 +593,7 @@
         const map = markov[last] || {};
         let best = [0, 0];
         for (const c in map) if (map[c] > best[1]) best = [+c, map[c]];
-        const result = best[1] > 0 ? { color: best[0], score: best[1] } : null;
+        const result = best[1] > 0 ? { color: best[0], score: best[1], method: 'mk' } : null;
         console.log('Previsão Markov:', result);
         return result;
     }
@@ -620,7 +640,7 @@
             const prob = stats[c] / total;
             if (prob > best[1]) best = [+c, prob];
         }
-        const result = best[1] > 0 ? { color: best[0], score: best[1] } : null;
+        const result = best[1] > 0 ? { color: best[0], score: best[1], method: 'tm' } : null;
         console.log('Previsão Temporal:', result);
         return result;
     }
@@ -628,21 +648,44 @@
     let whiteGap = 0;
     function updateWhiteGap(color) { whiteGap = (color === 0 ? 0 : whiteGap + 1); }
     function predictWhite() {
-        const result = whiteGap >= 10 ? { color: 0, score: 0.9 } : null;
+        const result = whiteGap >= 15 ? { color: 0, score: 0.7, method: 'wb' } : null; // Ajustado para 15 e score 0.7
         console.log('Previsão Padrão Branco:', result);
+        return result;
+    }
+
+    // Novo método: Média Móvel Simples (SMA)
+    function predictSMA() {
+        if (aiHistory.length < 10) return null;
+        const last10 = aiHistory.slice(-10).map(h => h.color);
+        const avg = last10.reduce((sum, c) => sum + c, 0) / last10.length;
+        const result = { 
+            color: Math.round(avg), 
+            score: 0.6 + (1 - Math.abs(avg - Math.round(avg)) * 0.4), // Score baseado na proximidade da média
+            method: 'sma'
+        };
+        console.log('Previsão SMA:', result);
         return result;
     }
 
     function crossValidate() {
         const ai = predictAI();
-        const mk = predictMarkov(), tm = predictTime(), wb = predictWhite();
+        const mk = predictMarkov(), tm = predictTime(), wb = predictWhite(), sma = predictSMA();
         const votes = {};
-        const weights = { ai: 0.4, mk: 0.3, tm: 0.2, wb: 0.1 };
+        const baseWeights = { ai: 0.3, mk: 0.2, tm: 0.2, wb: 0.1, sma: 0.2 };
+        const accuracyWeights = { ...this.methodAccuracy }; // Copia a acurácia atual
+        for (let method in accuracyWeights) accuracyWeights[method] = accuracyWeights[method] || 0.1; // Padrão 0.1 se não houver dados
+        const totalAccuracy = Object.values(accuracyWeights).reduce((sum, v) => sum + v, 0);
+        const dynamicWeights = {};
+        for (let method in baseWeights) {
+            dynamicWeights[method] = baseWeights[method] * (accuracyWeights[method] / totalAccuracy) * 2; // Pondera com acurácia
+            if (dynamicWeights[method] > 0.5) dynamicWeights[method] = 0.5; // Limite máximo
+        }
         const predictions = [
-            { pred: ai, weight: weights.ai },
-            { pred: mk, weight: weights.mk },
-            { pred: tm, weight: weights.tm },
-            { pred: wb, weight: weights.wb }
+            { pred: ai, weight: dynamicWeights.ai },
+            { pred: mk, weight: dynamicWeights.mk },
+            { pred: tm, weight: dynamicWeights.tm },
+            { pred: wb, weight: dynamicWeights.wb },
+            { pred: sma, weight: dynamicWeights.sma }
         ];
         predictions.forEach(({ pred, weight }) => {
             if (pred) {
@@ -662,7 +705,10 @@
             result = Math.floor(Math.random() * 3);
             console.log('Aleatoriedade aplicada devido a diferença pequena:', { best: best[1], secondBest, result });
         }
-        console.log('Votação cruzada detalhada:', { ai, mk, tm, wb, sha, votes, result });
+        // Registrar o método dominante
+        const winningMethod = predictions.find(p => p.pred && p.pred.color === result)?.pred.method || 'unknown';
+        this.predictionHistory[this.predictionHistory.length - 1] = { ...this.predictionHistory[this.predictionHistory.length - 1], method: winningMethod };
+        console.log('Votação cruzada detalhada:', { ai, mk, tm, wb, sma, sha, votes, result, dynamicWeights });
         return result;
     }
 
