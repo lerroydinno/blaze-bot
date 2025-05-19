@@ -5,7 +5,7 @@
     const brain = (function() {
         function NeuralNetwork(config) {
             this.inputSize = config.inputSize || 20;
-            this.hiddenSizes = config.hiddenLayers || [20, 10];
+            this.hiddenSizes = config.hiddenLayers || [10, 5]; // Reduzido para diminuir carga
             this.outputSize = config.outputSize || 3;
             this.weightsIH = [];
             this.weightsHH = [];
@@ -32,7 +32,7 @@
             this.biasH = Array(this.hiddenSizes[0]).fill(0);
             this.biasH2 = Array(this.hiddenSizes[1]).fill(0);
             this.biasO = Array(this.outputSize).fill(0);
-            console.log('Pesos iniciais da rede:', { weightsIH: this.weightsIH, weightsHO: this.weightsHO });
+            console.log('Pesos iniciais da rede às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
         };
 
         NeuralNetwork.prototype.leakyRelu = function(x) {
@@ -75,13 +75,13 @@
 
         NeuralNetwork.prototype.train = function(trainingData, options) {
             options = options || {};
-            const iterations = options.iterations || 500;
+            const iterations = options.iterations || 100; // Reduzido para 100
             const errorThresh = options.errorThresh || 0.005;
             let lr = this.learningRate;
 
             for (let i = 0; i < iterations; i++) {
                 let errorSum = 0;
-                for (let data of trainingData) {
+                for (let data of trainingData.slice(0, 50)) { // Limitar a 50 exemplos por iteração
                     const input = data.input;
                     const target = data.output;
 
@@ -163,8 +163,8 @@
                     }
                 }
                 lr = this.learningRate * (1 / (1 + 0.001 * i));
-                if (errorSum / trainingData.length < errorThresh) break;
-                if (options.log && i % options.logPeriod === 0) console.log(`Iteração ${i}, Erro: ${errorSum / trainingData.length}, LR: ${lr}`);
+                if (errorSum / Math.min(trainingData.length, 50) < errorThresh) break;
+                if (options.log && i % options.logPeriod === 0) console.log(`Iteração ${i}, Erro: ${errorSum / Math.min(trainingData.length, 50)}, LR: ${lr}`);
             }
         };
 
@@ -180,14 +180,23 @@
             this.ws = null;
             this.pingInterval = null;
             this.onDoubleTickCallback = null;
+            this.reconnectTimeout = null;
         }
         doubleTick(cb) {
             this.onDoubleTickCallback = cb;
+            this.connect();
+        }
+        connect() {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
             this.ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
             this.ws.onopen = () => {
-                console.log('Conectado ao servidor WebSocket');
+                console.log('Conectado ao servidor WebSocket às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
                 this.ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
-                this.pingInterval = setInterval(() => this.ws.send('2'), 25000);
+                if (this.pingInterval) clearInterval(this.pingInterval);
+                this.pingInterval = setInterval(() => {
+                    if (this.ws.readyState === WebSocket.OPEN) this.ws.send('2');
+                }, 25000);
+                if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
             };
             this.ws.onmessage = (e) => {
                 try {
@@ -209,9 +218,14 @@
                 } catch (err) { console.error('Erro ao processar mensagem:', err); }
             };
             this.ws.onerror = (e) => console.error('WebSocket error:', e);
-            this.ws.onclose = () => { console.log('WS fechado'); clearInterval(this.pingInterval); };
+            this.ws.onclose = () => {
+                console.log('WS fechado às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
+                clearInterval(this.pingInterval);
+                if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
+                this.reconnectTimeout = setTimeout(() => this.connect(), 5000); // Reconnect após 5 segundos
+            };
         }
-        close() { this.ws?.close(); }
+        close() { if (this.ws) this.ws.close(); }
     }
 
     class BlazeInterface {
@@ -229,6 +243,7 @@
             this.overlay = null;
             this.bubble = null;
             this.monitorBox = null;
+            this.lastUpdate = 0;
             this.initMonitorInterface();
         }
 
@@ -270,11 +285,10 @@
             const style = document.createElement('style');
             style.textContent = css;
             document.head.appendChild(style);
-            console.log('Estilos injetados no documento com sucesso.');
+            console.log('Estilos injetados no documento às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
         }
 
         initMonitorInterface() {
-            // Garantir que o DOM esteja pronto
             if (!document.body || !document.head) {
                 console.warn('DOM não está pronto. Aguardando...');
                 setTimeout(() => this.initMonitorInterface(), 100);
@@ -283,10 +297,9 @@
 
             this.injectGlobalStyles();
 
-            // Criar e anexar o overlay
             this.overlay = document.createElement('div');
             this.overlay.className = 'blaze-overlay';
-            this.overlay.style.display = 'none'; // Inicialmente oculto
+            this.overlay.style.display = 'none';
             this.overlay.innerHTML = `
                 <div id="blazeMonitorBox" class="blaze-monitor">
                     <h3>App SHA256</h3>
@@ -306,25 +319,20 @@
                 </div>
             `;
             document.body.appendChild(this.overlay);
-            console.log('Overlay criado e anexado ao DOM:', this.overlay);
 
-            // Criar e anexar o bubble
             this.bubble = document.createElement('div');
             this.bubble.className = 'blaze-bubble';
-            this.bubble.style.display = 'block'; // Inicialmente visível
+            this.bubble.style.display = 'block';
             document.body.appendChild(this.bubble);
-            console.log('Bubble criado e anexado ao DOM:', this.bubble);
 
-            // Referência ao monitorBox
             this.monitorBox = document.getElementById('blazeMonitorBox');
 
-            // Adicionar eventos
             const minBtn = document.getElementById('blazeMinBtn');
             if (minBtn) {
                 minBtn.addEventListener('click', () => {
                     this.overlay.style.display = 'none';
                     this.bubble.style.display = 'block';
-                    console.log('Botão minimizar clicado, overlay oculto, bubble exibido.');
+                    console.log('Botão minimizar clicado, overlay oculto, bubble exibido às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
                 });
             } else {
                 console.error('Botão de minimizar (blazeMinBtn) não encontrado no DOM.');
@@ -334,16 +342,14 @@
                 this.bubble.addEventListener('click', () => {
                     this.bubble.style.display = 'none';
                     this.overlay.style.display = 'block';
-                    if (this.monitorBox) {
-                        this.monitorBox.style.display = 'block';
-                    }
-                    console.log('Bubble clicado, overlay exibido, bubble oculto.');
+                    if (this.monitorBox) this.monitorBox.style.display = 'block';
+                    console.log('Bubble clicado, overlay exibido, bubble oculto às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
                 });
             } else {
                 console.error('Bubble não encontrado no DOM.');
             }
 
-            console.log('Eventos de clique configurados.');
+            console.log('Eventos de clique configurados às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
             this.results = [];
             this.processedIds = new Set();
             this.notifiedIds = new Set();
@@ -364,18 +370,11 @@
             }
         }
 
-        updatePredictionStats(cur) {
-            if (this.results.length < 2 || cur.status !== 'complete') return;
-            const prev = this.results.filter(r => r.status === 'complete')[0];
-            if (!prev) return;
-            this.totalPredictions++;
-            if (prev.color === cur.color) this.correctPredictions++;
-            const predMethod = this.predictionHistory[this.predictionHistory.length - 1]?.method || 'unknown';
-            if (predMethod !== 'unknown') this.methodAccuracy[predMethod] = (this.methodAccuracy[predMethod] * (this.totalPredictions - 1) + (prev.color === cur.color ? 1 : 0)) / this.totalPredictions;
-            console.log('Acurácia por método:', this.methodAccuracy);
-        }
-
         updateResults(d) {
+            const now = Date.now();
+            if (now - this.lastUpdate < 1000) return; // Limitar atualizações a 1 por segundo
+            this.lastUpdate = now;
+
             this.ensureOverlay();
 
             const id = d.id || `tmp-${Date.now()}-${d.color}-${d.roll}`;
@@ -386,7 +385,7 @@
                 this.results.unshift({ ...d, tmp: id });
                 if (d.status === 'complete') this.updatePredictionStats(d);
             }
-            console.log('Resultados atualizados:', this.results);
+            console.log('Resultados atualizados às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }), ':', this.results);
 
             const r = this.results[0];
             const rDiv = document.getElementById('blazeResults');
@@ -414,11 +413,11 @@
             let stabilizedColor = pred.color;
             if (this.consistencyCount >= 3 && Math.random() < 0.8) {
                 stabilizedColor = this.lastPrediction;
-                console.log('Previsão estabilizada por consistência:', stabilizedColor);
+                console.log('Previsão estabilizada por consistência às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }), ':', stabilizedColor);
             }
             pred.color = stabilizedColor;
             pred.colorName = stabilizedColor === 0 ? 'Branco' : stabilizedColor === 1 ? 'Vermelho' : 'Preto';
-            console.log('Previsão gerada (detalhada e estabilizada):', { color: pred.color, colorName: pred.colorName, isWaiting: pred.isWaiting });
+            console.log('Previsão gerada (detalhada e estabilizada) às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }), ':', { color: pred.color, colorName: pred.colorName, isWaiting: pred.isWaiting });
             const pDiv = document.getElementById('blazePrediction');
             if (pDiv && pred) {
                 const acc = this.totalPredictions ? Math.round((this.correctPredictions / this.totalPredictions) * 100) : 0;
@@ -431,7 +430,7 @@
                     <div class="prediction-accuracy">Taxa de acerto: ${acc}% (${this.correctPredictions}/${this.totalPredictions})</div>
                 `;
                 this.nextPredColor = pred.color;
-                console.log('Campo de previsão atualizado:', { color: pred.color, colorName: pred.colorName });
+                console.log('Campo de previsão atualizado às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }), ':', { color: pred.color, colorName: pred.colorName });
             } else {
                 console.error('blazePrediction não encontrado no DOM ou pred é null:', { pDiv, pred });
             }
@@ -444,28 +443,29 @@
             }
             this.analyzePatterns();
             if (d.status === 'complete') {
-                aiHistory.unshift({ color: d.color, roll: d.roll ?? 0, time: new Date().toTimeString().slice(0, 5) });
-                if (aiHistory.length > 2) {
-                    const prevColor = aiHistory[1].color;
-                    const currColor = d.color;
-                    if (Math.abs(prevColor - currColor) > 1 && Math.random() < 0.7) {
-                        aiHistory[0].color = prevColor;
-                        console.log('Outlier detectado e suavizado:', { prevColor, currColor, newColor: prevColor });
+                setTimeout(() => {
+                    aiHistory.unshift({ color: d.color, roll: d.roll ?? 0, time: new Date().toTimeString().slice(0, 5) });
+                    if (aiHistory.length > 2) {
+                        const prevColor = aiHistory[1].color;
+                        const currColor = d.color;
+                        if (Math.abs(prevColor - currColor) > 1 && Math.random() < 0.7) {
+                            aiHistory[0].color = prevColor;
+                            console.log('Outlier detectado e suavizado às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }), ':', { prevColor, currColor, newColor: prevColor });
+                        }
                     }
-                }
-                const colorDist = { 0: 0, 1: 0, 2: 0 };
-                aiHistory.forEach(h => colorDist[h.color]++);
-                console.log('aiHistory atualizado:', aiHistory.length, 'Histórico completo:', aiHistory, 'Distribuição de cores:', colorDist);
-                console.log('window.latestHash:', window.latestHash);
-                if (window.latestHash) {
-                    console.log('Registrando hash:', window.latestHash.slice(0, 8), 'com cor:', d.color);
-                    registerSHA(window.latestHash, d.color);
-                    save('shaMap', shaMap);
-                }
-                trainAI();
-                updateMarkov();
-                updateTimeStats({ color: d.color, time: new Date().toTimeString().slice(0, 5) });
-                updateWhiteGap(d.color);
+                    const colorDist = { 0: 0, 1: 0, 2: 0 };
+                    aiHistory.forEach(h => colorDist[h.color]++);
+                    console.log('aiHistory atualizado às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }), ':', aiHistory.length, 'Histórico completo:', aiHistory, 'Distribuição de cores:', colorDist);
+                    if (window.latestHash) {
+                        console.log('Registrando hash às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }), ':', window.latestHash.slice(0, 8), 'com cor:', d.color);
+                        registerSHA(window.latestHash, d.color);
+                        save('shaMap', shaMap);
+                    }
+                    if (aiHistory.length % 10 === 0) trainAI(); // Treinar apenas a cada 10 novos dados
+                    updateMarkov();
+                    updateTimeStats({ color: d.color, time: new Date().toTimeString().slice(0, 5) });
+                    updateWhiteGap(d.color);
+                }, 0); // Usar setTimeout para não bloquear a thread principal
             }
         }
 
@@ -482,12 +482,14 @@
         analyzePatterns() {
             const history = this.results.filter(r => r.status === 'complete');
             if (history.length < 10) return;
-            const lastColors = history.slice(0, 10).map(r => r.color);
-            const brancoFreq = lastColors.filter(c => c === 0).length;
-            const vermelhoFreq = lastColors.filter(c => c === 1).length;
-            const pretoFreq = lastColors.filter(c => c === 2).length;
-            console.log('[Análise] Últimos 10 resultados:', lastColors);
-            console.log(`[Análise] Frequência - Branco: ${brancoFreq}, Vermelho: ${vermelhoFreq}, Preto: ${pretoFreq}`);
+            setTimeout(() => {
+                const lastColors = history.slice(0, 10).map(r => r.color);
+                const brancoFreq = lastColors.filter(c => c === 0).length;
+                const vermelhoFreq = lastColors.filter(c => c === 1).length;
+                const pretoFreq = lastColors.filter(c => c === 2).length;
+                console.log('[Análise] Últimos 10 resultados às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }), ':', lastColors);
+                console.log(`[Análise] Frequência - Branco: ${brancoFreq}, Vermelho: ${vermelhoFreq}, Preto: ${pretoFreq}`);
+            }, 0);
         }
 
         predictNextColor() {
@@ -510,19 +512,19 @@
     for (let i = 0; i < 30; i++) {
         aiHistory.push({ color: i % 3, roll: Math.floor(Math.random() * 15), time: new Date().toTimeString().slice(0, 5) });
     }
-    console.log('Histórico inicial balanceado:', aiHistory);
+    console.log('Histórico inicial balanceado às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }), ':', aiHistory);
     let aiNetwork = null;
 
     function initializeNetwork() {
         if (!aiNetwork) {
             aiNetwork = new brain.NeuralNetwork({
                 inputSize: 100,
-                hiddenLayers: [20, 10],
+                hiddenLayers: [10, 5], // Reduzido
                 outputSize: 3,
                 learningRate: 0.05,
                 l2Lambda: 0.01
             });
-            console.log('Rede neural brain.js inicializada com sucesso embutida às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
+            console.log('Rede neural brain.js inicializada com sucesso às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
             return true;
         }
         return true;
@@ -532,7 +534,6 @@
 
     function encodeInput(item) {
         const input = [item.color / 2, (item.roll ?? 0) / 14].concat(Array(8).fill(0));
-        console.log('Entrada codificada:', input);
         return input;
     }
     function encodeOutput(c) {
@@ -540,16 +541,15 @@
     }
     function trainAI() {
         if (!aiNetwork) {
-            console.warn('Tentando inicializar rede neural antes do treinamento...');
             if (!initializeNetwork()) return;
         }
         const hist = aiHistory;
         if (hist.length <= INPUT_SIZE) {
-            console.log('Histórico insuficiente para treinar a IA:', hist.length);
+            console.log('Histórico insuficiente para treinar a IA às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }), ':', hist.length);
             return;
         }
         const trainingData = [];
-        for (let i = 0; i < hist.length - INPUT_SIZE; i++) {
+        for (let i = 0; i < Math.min(hist.length - INPUT_SIZE, 50); i++) { // Limitar a 50 sequências
             const seq = hist.slice(i, i + INPUT_SIZE).map(encodeInput);
             const input = [].concat(...seq);
             trainingData.push({
@@ -557,14 +557,9 @@
                 output: encodeOutput(hist[i + INPUT_SIZE].color)
             });
         }
-        const targetDist = { 0: 0, 1: 0, 2: 0 };
-        trainingData.forEach(d => {
-            const idx = d.output.indexOf(1);
-            targetDist[idx]++;
-        });
-        console.log('Dados de treinamento:', trainingData.length, 'Distribuição de alvos:', targetDist);
+        if (trainingData.length === 0) return;
         aiNetwork.train(trainingData, {
-            iterations: 500,
+            iterations: 100,
             errorThresh: 0.005,
             log: true,
             logPeriod: 50
@@ -573,72 +568,56 @@
     }
     function predictAI() {
         if (!aiNetwork) {
-            console.error('IA não inicializada para previsão. Tentando inicializar...');
             if (!initializeNetwork()) {
-                console.warn('Não foi possível inicializar a IA. Usando previsão aleatória.');
+                console.warn('Não foi possível inicializar a IA. Usando previsão aleatória às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
                 return { color: Math.floor(Math.random() * 3), score: 0 };
             }
         }
         if (aiHistory.length < INPUT_SIZE) {
-            console.log('Histórico insuficiente para previsão:', aiHistory.length);
+            console.log('Histórico insuficiente para previsão às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }), ':', aiHistory.length);
             return null;
         }
         const seq = aiHistory.slice(-INPUT_SIZE).map(encodeInput);
         const input = [].concat(...seq);
-        console.log('Sequência de entrada para IA:', input);
         const output = aiNetwork.run(input);
         const idx = output.indexOf(Math.max(...output));
-        console.log('Saída bruta da IA:', output, 'Previsão da IA (detalhada):', { color: idx, score: output[idx], output: output });
         return { color: idx, score: output[idx], method: 'ai' };
     }
 
     const markov = { 0: {}, 1: {}, 2: {} };
     function updateMarkov() {
-        for (let i = 0; i < aiHistory.length - 1; i++) {
+        for (let i = 0; i < Math.min(aiHistory.length - 1, 50); i++) {
             const current = aiHistory[i];
             const next = aiHistory[i + 1];
-            if (!current || !next || typeof current.color === 'undefined' || typeof next.color === 'undefined') {
-                continue;
-            }
+            if (!current || !next || typeof current.color === 'undefined' || typeof next.color === 'undefined') continue;
             const a = current.color;
             const b = next.color;
             markov[a][b] = (markov[a][b] || 0) + 1;
         }
         for (let a in markov) {
             const total = Object.values(markov[a]).reduce((sum, v) => sum + v, 0);
-            if (total > 0) {
-                for (let b in markov[a]) {
-                    markov[a][b] /= total;
-                }
-            }
+            if (total > 0) for (let b in markov[a]) markov[a][b] /= total;
         }
-        console.log('Markov atualizado (normalizado):', markov);
+        console.log('Markov atualizado às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }), ':', markov);
     }
     function predictMarkov() {
         const last = aiHistory[aiHistory.length - 1]?.color;
-        if (typeof last === 'undefined' || last < 0 || last > 2) {
-            return null;
-        }
+        if (typeof last === 'undefined' || last < 0 || last > 2) return null;
         const map = markov[last] || {};
         let best = [0, 0];
         for (const c in map) if (map[c] > best[1]) best = [+c, map[c]];
-        const result = best[1] > 0 ? { color: best[0], score: best[1], method: 'mk' } : null;
-        console.log('Previsão Markov:', result);
-        return result;
+        return best[1] > 0 ? { color: best[0], score: best[1], method: 'mk' } : null;
     }
 
     let shaMap = load('shaMap') || {};
-    console.log('shaMap carregado do localStorage:', shaMap);
+    console.log('shaMap carregado do localStorage às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }), ':', shaMap);
     function registerSHA(hash, color) {
         const key = hash.slice(0, 8);
         shaMap[key] = color;
-        console.log('SHA registrado:', { key, color });
     }
     function predictSHA(hash) {
         const key = hash.slice(0, 8);
-        const result = shaMap[key] ?? null;
-        console.log('Previsão SHA-256:', { key, result });
-        return result;
+        return shaMap[key] ?? null;
     }
 
     let externalData = [];
@@ -657,7 +636,6 @@
             timeStats[key] = timeStats[key] || { 0: 0, 1: 0, 2: 0 };
             timeStats[key][item.color]++;
         }
-        console.log('TimeStats atualizado:', timeStats);
     }
     function predictTime() {
         const h = String(new Date().getHours()).padStart(2, "0");
@@ -669,30 +647,24 @@
             const prob = stats[c] / total;
             if (prob > best[1]) best = [+c, prob];
         }
-        const result = best[1] > 0 ? { color: best[0], score: best[1], method: 'tm' } : null;
-        console.log('Previsão Temporal:', result);
-        return result;
+        return best[1] > 0 ? { color: best[0], score: best[1], method: 'tm' } : null;
     }
 
     let whiteGap = 0;
     function updateWhiteGap(color) { whiteGap = (color === 0 ? 0 : whiteGap + 1); }
     function predictWhite() {
-        const result = whiteGap >= 15 ? { color: 0, score: 0.7, method: 'wb' } : null;
-        console.log('Previsão Padrão Branco:', result);
-        return result;
+        return whiteGap >= 15 ? { color: 0, score: 0.7, method: 'wb' } : null;
     }
 
     function predictSMA() {
         if (aiHistory.length < 10) return null;
         const last10 = aiHistory.slice(-10).map(h => h.color);
         const avg = last10.reduce((sum, c) => sum + c, 0) / last10.length;
-        const result = { 
+        return { 
             color: Math.round(avg), 
             score: 0.6 + (1 - Math.abs(avg - Math.round(avg)) * 0.4),
             method: 'sma'
         };
-        console.log('Previsão SMA:', result);
-        return result;
     }
 
     function crossValidate() {
@@ -721,7 +693,6 @@
                 votes[pred.color] = (votes[pred.color] || 0) + (normalizedScore * weight);
             }
         });
-        console.log('window.latestHash antes de predictSHA:', window.latestHash);
         const sha = window.latestHash ? predictSHA(window.latestHash) : null;
         if (sha !== null) votes[sha] = (votes[sha] || 0) + 0.2;
         let best = [null, 0];
@@ -731,11 +702,9 @@
             (curr[1] > prev[1] && curr[1] < best[1]) ? curr : prev, [null, -1])[1];
         if (Math.random() < 0.05 && (best[1] - secondBest) < 0.1) {
             result = Math.floor(Math.random() * 3);
-            console.log('Aleatoriedade aplicada devido a diferença pequena:', { best: best[1], secondBest, result });
         }
         const winningMethod = predictions.find(p => p.pred && p.pred.color === result)?.pred.method || 'unknown';
         this.predictionHistory[this.predictionHistory.length - 1] = { ...this.predictionHistory[this.predictionHistory.length - 1], method: winningMethod };
-        console.log('Votação cruzada detalhada:', { ai, mk, tm, wb, sma, sha, votes, result, dynamicWeights });
         return result;
     }
 
