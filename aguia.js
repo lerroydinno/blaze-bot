@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Blaze Bot com Importação de CSV para Treinamento
+// @name         Blaze Bot com Previsões Otimizadas e Novo Método SMA
 // @namespace    http://tampermonkey.net/
-// @version      5.0
-// @description  Bot de previsão Blaze com importação de CSV para treinamento inicial
+// @version      4.9
+// @description  Bot de previsão Blaze com previsões otimizadas, novo método SMA, e overlay corrigido
 // @author       Você
 // @match        https://blaze.com/pt/games/double
 // @grant        none
@@ -14,8 +14,8 @@
     // Embutindo brain.js (versão otimizada)
     const brain = (function() {
         function NeuralNetwork(config) {
-            this.inputSize = config.inputSize || 20;
-            this.hiddenSizes = config.hiddenLayers || [20, 10];
+            this.inputSize = config.inputSize || 20; // Aumentado para janela de 10
+            this.hiddenSizes = config.hiddenLayers || [20, 10]; // Duas camadas ocultas
             this.outputSize = config.outputSize || 3;
             this.weightsIH = [];
             this.weightsHH = [];
@@ -235,9 +235,8 @@
             this.predictionHistory = [];
             this.lastPrediction = null;
             this.consistencyCount = 0;
-            this.methodAccuracy = { ai: 0, mk: 0, tm: 0, wb: 0, sma: 0 };
+            this.methodAccuracy = { ai: 0, mk: 0, tm: 0, wb: 0 }; // Rastrear acurácia por método
             this.initMonitorInterface();
-            this.loadCSVData(); // Carregar CSV ao iniciar
         }
         injectGlobalStyles() {
             const css = `
@@ -342,7 +341,7 @@
             this.predictionHistory = [];
             this.lastPrediction = null;
             this.consistencyCount = 0;
-            this.methodAccuracy = { ai: 0, mk: 0, tm: 0, wb: 0, sma: 0 };
+            this.methodAccuracy = { ai: 0, mk: 0, tm: 0, wb: 0 };
             this.ws = new BlazeWebSocket();
             this.ws.doubleTick((d) => this.updateResults(d));
         }
@@ -352,41 +351,13 @@
                 this.initMonitorInterface();
             }
         }
-        loadCSVData() {
-            // Exemplo: Substitua pelo conteúdo real do CSV enviado
-            const csvContent = `id,color,roll,time
-1,0,5.2,12:00
-2,1,7.8,12:01
-3,2,3.4,12:02
-4,0,9.1,12:03
-...`; // Substitua por seu CSV real
-            if (csvContent) {
-                importCSV(csvContent);
-                console.log('CSV importado com sucesso. Dados:', externalData);
-                // Substituir aiHistory pelos dados do CSV
-                aiHistory = externalData.slice(-30); // Limita a 30 entradas
-                const colorDist = { 0: 0, 1: 0, 2: 0 };
-                aiHistory.forEach(h => colorDist[h.color]++);
-                console.log('aiHistory atualizado com CSV:', aiHistory, 'Distribuição de cores:', colorDist);
-                // Treinar a IA com os dados do CSV
-                trainAI();
-                updateMarkov();
-                updateTimeStats(aiHistory[aiHistory.length - 1]); // Atualizar timeStats com o último dado
-                updateWhiteGap(aiHistory[aiHistory.length - 1].color);
-            } else {
-                console.warn('Nenhum CSV fornecido. Usando histórico inicial aleatório.');
-                for (let i = 0; i < 30; i++) {
-                    aiHistory.push({ color: i % 3, roll: Math.floor(Math.random() * 15), time: new Date().toTimeString().slice(0, 5) });
-                }
-                console.log('Histórico inicial aleatório:', aiHistory);
-            }
-        }
         updatePredictionStats(cur) {
             if (this.results.length < 2 || cur.status !== 'complete') return;
             const prev = this.results.filter(r => r.status === 'complete')[0];
             if (!prev) return;
             this.totalPredictions++;
             if (prev.color === cur.color) this.correctPredictions++;
+            // Atualizar acurácia por método
             const predMethod = this.predictionHistory[this.predictionHistory.length - 1]?.method || 'unknown';
             if (predMethod !== 'unknown') this.methodAccuracy[predMethod] = (this.methodAccuracy[predMethod] * (this.totalPredictions - 1) + (prev.color === cur.color ? 1 : 0)) / this.totalPredictions;
             console.log('Acurácia por método:', this.methodAccuracy);
@@ -505,14 +476,18 @@
         }
     }
 
-    const INPUT_SIZE = 10;
+    const INPUT_SIZE = 10; // Aumentado para 10
     let aiHistory = [];
+    for (let i = 0; i < 30; i++) { // Aumentado para 30
+        aiHistory.push({ color: i % 3, roll: Math.floor(Math.random() * 15), time: new Date().toTimeString().slice(0, 5) });
+    }
+    console.log('Histórico inicial balanceado:', aiHistory);
     let aiNetwork = null;
 
     function initializeNetwork() {
         if (!aiNetwork) {
             aiNetwork = new brain.NeuralNetwork({
-                inputSize: 100,
+                inputSize: 100, // Ajustado para 10 * (1 + 1 + 8)
                 hiddenLayers: [20, 10],
                 outputSize: 3,
                 learningRate: 0.05,
@@ -639,22 +614,10 @@
 
     let externalData = [];
     function importCSV(text) {
-        const lines = text.trim().split("\n");
-        if (lines.length <= 1) {
-            console.warn('CSV vazio ou com apenas cabeçalho.');
-            return;
-        }
-        externalData = lines.slice(1).map(l => {
+        externalData = text.trim().split("\n").slice(1).map(l => {
             const [id, color, roll, time] = l.split(",");
-            const c = parseInt(color);
-            const r = parseFloat(roll);
-            if (isNaN(c) || c < 0 || c > 2 || isNaN(r)) {
-                console.warn('Dado inválido ignorado:', l);
-                return null;
-            }
-            return { id: id || `tmp-${Date.now()}`, color: c, roll: r, time: time || new Date().toTimeString().slice(0, 5) };
-        }).filter(d => d !== null);
-        console.log('Dados importados do CSV:', externalData);
+            return { color: +color, roll: +roll, time };
+        });
     }
 
     const timeStats = {};
@@ -685,18 +648,19 @@
     let whiteGap = 0;
     function updateWhiteGap(color) { whiteGap = (color === 0 ? 0 : whiteGap + 1); }
     function predictWhite() {
-        const result = whiteGap >= 15 ? { color: 0, score: 0.7, method: 'wb' } : null;
+        const result = whiteGap >= 15 ? { color: 0, score: 0.7, method: 'wb' } : null; // Ajustado para 15 e score 0.7
         console.log('Previsão Padrão Branco:', result);
         return result;
     }
 
+    // Novo método: Média Móvel Simples (SMA)
     function predictSMA() {
         if (aiHistory.length < 10) return null;
         const last10 = aiHistory.slice(-10).map(h => h.color);
         const avg = last10.reduce((sum, c) => sum + c, 0) / last10.length;
         const result = { 
             color: Math.round(avg), 
-            score: 0.6 + (1 - Math.abs(avg - Math.round(avg)) * 0.4),
+            score: 0.6 + (1 - Math.abs(avg - Math.round(avg)) * 0.4), // Score baseado na proximidade da média
             method: 'sma'
         };
         console.log('Previsão SMA:', result);
@@ -708,13 +672,13 @@
         const mk = predictMarkov(), tm = predictTime(), wb = predictWhite(), sma = predictSMA();
         const votes = {};
         const baseWeights = { ai: 0.3, mk: 0.2, tm: 0.2, wb: 0.1, sma: 0.2 };
-        const accuracyWeights = { ...this.methodAccuracy };
-        for (let method in accuracyWeights) accuracyWeights[method] = accuracyWeights[method] || 0.1;
+        const accuracyWeights = { ...this.methodAccuracy }; // Copia a acurácia atual
+        for (let method in accuracyWeights) accuracyWeights[method] = accuracyWeights[method] || 0.1; // Padrão 0.1 se não houver dados
         const totalAccuracy = Object.values(accuracyWeights).reduce((sum, v) => sum + v, 0);
         const dynamicWeights = {};
         for (let method in baseWeights) {
-            dynamicWeights[method] = baseWeights[method] * (accuracyWeights[method] / totalAccuracy) * 2;
-            if (dynamicWeights[method] > 0.5) dynamicWeights[method] = 0.5;
+            dynamicWeights[method] = baseWeights[method] * (accuracyWeights[method] / totalAccuracy) * 2; // Pondera com acurácia
+            if (dynamicWeights[method] > 0.5) dynamicWeights[method] = 0.5; // Limite máximo
         }
         const predictions = [
             { pred: ai, weight: dynamicWeights.ai },
@@ -741,6 +705,7 @@
             result = Math.floor(Math.random() * 3);
             console.log('Aleatoriedade aplicada devido a diferença pequena:', { best: best[1], secondBest, result });
         }
+        // Registrar o método dominante
         const winningMethod = predictions.find(p => p.pred && p.pred.color === result)?.pred.method || 'unknown';
         this.predictionHistory[this.predictionHistory.length - 1] = { ...this.predictionHistory[this.predictionHistory.length - 1], method: winningMethod };
         console.log('Votação cruzada detalhada:', { ai, mk, tm, wb, sma, sha, votes, result, dynamicWeights });
