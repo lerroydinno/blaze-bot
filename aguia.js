@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Blaze Bot com IA Otimizada e Previsões Balanceadas
+// @name         Blaze Bot com Previsões Estabilizadas
 // @namespace    http://tampermonkey.net/
-// @version      4.6
-// @description  Bot de previsão Blaze com IA otimizada, previsões balanceadas e depuração avançada
+// @version      4.7
+// @description  Bot de previsão Blaze com previsões estabilizadas e depuração avançada
 // @author       Você
 // @match        https://blaze.com/pt/games/double
 // @grant        none
@@ -14,15 +14,15 @@
     // Embutindo brain.js (versão otimizada)
     const brain = (function() {
         function NeuralNetwork(config) {
-            this.inputSize = config.inputSize || 10;
-            this.hiddenSizes = config.hiddenLayers || [5];
+            this.inputSize = config.inputSize || 14; // Ajustado para janela de 7
+            this.hiddenSizes = config.hiddenLayers || [15];
             this.outputSize = config.outputSize || 3;
             this.weightsIH = [];
             this.weightsHO = [];
             this.biasH = [];
             this.biasO = [];
             this.learningRate = config.learningRate || 0.05;
-            this.l2Lambda = config.l2Lambda || 0.01; // Regularização L2
+            this.l2Lambda = config.l2Lambda || 0.01;
 
             this.initialize();
         }
@@ -40,7 +40,7 @@
         };
 
         NeuralNetwork.prototype.leakyRelu = function(x) {
-            return x > 0 ? x : x * 0.01; // Leaky ReLU
+            return x > 0 ? x : x * 0.01;
         };
 
         NeuralNetwork.prototype.leakyReluDerivative = function(x) {
@@ -119,7 +119,7 @@
                         this.biasO[j] += lr * outputErrors[j];
                         for (let k = 0; k < this.hiddenSizes[0]; k++) {
                             this.weightsHO[j][k] += lr * outputErrors[j] * hidden[k];
-                            this.weightsHO[j][k] -= lr * this.l2Lambda * this.weightsHO[j][k]; // Regularização L2
+                            this.weightsHO[j][k] -= lr * this.l2Lambda * this.weightsHO[j][k];
                         }
                     }
 
@@ -127,11 +127,10 @@
                         this.biasH[j] += lr * hiddenErrors[j] * this.leakyReluDerivative(hiddenInputs[j]);
                         for (let k = 0; k < this.inputSize; k++) {
                             this.weightsIH[j][k] += lr * hiddenErrors[j] * this.leakyReluDerivative(hiddenInputs[j]) * input[k];
-                            this.weightsIH[j][k] -= lr * this.l2Lambda * this.weightsIH[j][k]; // Regularização L2
+                            this.weightsIH[j][k] -= lr * this.l2Lambda * this.weightsIH[j][k];
                         }
                     }
                 }
-                // Decaimento da taxa de aprendizado
                 lr = this.learningRate * (1 / (1 + 0.001 * i));
                 if (errorSum / trainingData.length < errorThresh) break;
                 if (options.log && i % options.logPeriod === 0) console.log(`Iteração ${i}, Erro: ${errorSum / trainingData.length}, LR: ${lr}`);
@@ -192,7 +191,9 @@
             this.notifiedIds = new Set();
             this.correctPredictions = 0;
             this.totalPredictions = 0;
-            this.predictionHistory = []; // Rastrear histórico de previsões
+            this.predictionHistory = [];
+            this.lastPrediction = null;
+            this.consistencyCount = 0;
             this.initMonitorInterface();
         }
         injectGlobalStyles() {
@@ -289,6 +290,8 @@
             this.correctPredictions = 0;
             this.totalPredictions = 0;
             this.predictionHistory = [];
+            this.lastPrediction = null;
+            this.consistencyCount = 0;
             this.ws = new BlazeWebSocket();
             this.ws.doubleTick((d) => this.updateResults(d));
         }
@@ -361,7 +364,21 @@
             }
 
             const pred = this.predictNextColor();
-            console.log('Previsão gerada (detalhada):', { color: pred.color, colorName: pred.colorName, isWaiting: pred.isWaiting });
+            // Suavização com base na consistência
+            if (this.lastPrediction === pred.color) {
+                this.consistencyCount++;
+            } else {
+                this.consistencyCount = 0;
+            }
+            this.lastPrediction = pred.color;
+            let stabilizedColor = pred.color;
+            if (this.consistencyCount >= 3 && Math.random() < 0.8) {
+                stabilizedColor = this.lastPrediction; // Mantém a cor se consistente por 3 rodadas
+                console.log('Previsão estabilizada por consistência:', stabilizedColor);
+            }
+            pred.color = stabilizedColor;
+            pred.colorName = stabilizedColor === 0 ? 'Branco' : stabilizedColor === 1 ? 'Vermelho' : 'Preto';
+            console.log('Previsão gerada (detalhada e estabilizada):', { color: pred.color, colorName: pred.colorName, isWaiting: pred.isWaiting });
             const pDiv = document.getElementById('blazePrediction');
             if (pDiv && pred) {
                 const acc = this.totalPredictions ? Math.round((this.correctPredictions / this.totalPredictions) * 100) : 0;
@@ -388,6 +405,15 @@
             this.analyzePatterns();
             if (d.status === 'complete') {
                 aiHistory.unshift({ color: d.color, roll: d.roll ?? 0, time: new Date().toTimeString().slice(0, 5) });
+                // Filtrar outliers (ex.: mudança abrupta de cor)
+                if (aiHistory.length > 2) {
+                    const prevColor = aiHistory[1].color;
+                    const currColor = d.color;
+                    if (Math.abs(prevColor - currColor) > 1 && Math.random() < 0.7) {
+                        aiHistory[0].color = prevColor; // Suaviza a mudança
+                        console.log('Outlier detectado e suavizado:', { prevColor, currColor, newColor: prevColor });
+                    }
+                }
                 const colorDist = { 0: 0, 1: 0, 2: 0 };
                 aiHistory.forEach(h => colorDist[h.color]++);
                 console.log('aiHistory atualizado:', aiHistory.length, 'Histórico completo:', aiHistory, 'Distribuição de cores:', colorDist);
@@ -424,10 +450,9 @@
         }
     }
 
-    const INPUT_SIZE = 5;
+    const INPUT_SIZE = 7; // Aumentado para 7 para mais contexto
     let aiHistory = [];
-    // Inicializar o histórico com dados sintéticos para balancear
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 21; i++) { // Aumentado para 21 para cobrir a nova janela
         aiHistory.push({ color: i % 3, roll: Math.floor(Math.random() * 15), time: new Date().toTimeString().slice(0, 5) });
     }
     console.log('Histórico inicial balanceado:', aiHistory);
@@ -436,7 +461,7 @@
     function initializeNetwork() {
         if (!aiNetwork) {
             aiNetwork = new brain.NeuralNetwork({
-                inputSize: 50,
+                inputSize: 70, // Ajustado para 7 * (1 + 1 + 8)
                 hiddenLayers: [15],
                 outputSize: 3,
                 learningRate: 0.05,
@@ -524,7 +549,6 @@
             const b = next.color;
             markov[a][b] = (markov[a][b] || 0) + 1;
         }
-        // Normalizar transições
         for (let a in markov) {
             const total = Object.values(markov[a]).reduce((sum, v) => sum + v, 0);
             if (total > 0) {
@@ -626,8 +650,13 @@
         let best = [null, 0];
         for (const c in votes) if (votes[c] > best[1]) best = [c, votes[c]];
         let result = best[0] !== null ? best[0] : Math.floor(Math.random() * 3);
-        // Adicionar aleatoriedade para evitar estagnação
-        if (Math.random() < 0.1) result = Math.floor(Math.random() * 3);
+        // Reduzir aleatoriedade e condicionar a diferença pequena
+        const secondBest = Object.entries(votes).reduce((prev, curr) => 
+            (curr[1] > prev[1] && curr[1] < best[1]) ? curr : prev, [null, -1])[1];
+        if (Math.random() < 0.05 && (best[1] - secondBest) < 0.1) {
+            result = Math.floor(Math.random() * 3);
+            console.log('Aleatoriedade aplicada devido a diferença pequena:', { best: best[1], secondBest, result });
+        }
         console.log('Votação cruzada detalhada:', { ai, mk, tm, wb, sha, votes, result });
         return result;
     }
