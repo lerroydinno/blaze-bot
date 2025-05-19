@@ -1,18 +1,135 @@
 // ==UserScript==
-// @name         Blaze Bot com IA Expandida
+// @name         Blaze Bot com IA Balanceada e SHA-256 Corrigido
 // @namespace    http://tampermonkey.net/
-// @version      3.0
-// @description  Bot de previsão Blaze com IA, Markov, SHA256, Rede Neural, CSV, horário e mais
+// @version      4.5
+// @description  Bot de previsão Blaze com IA balanceada, SHA-256 corrigido e depuração
 // @author       Você
 // @match        https://blaze.com/pt/games/double
 // @grant        none
-// @require      https://cdn.jsdelivr.net/npm/synaptic@1.1.4/dist/synaptic.min.js
 // ==/UserScript==
 
 (function() {
     'use strict';
 
-    // ─────────── SEU CÓDIGO ORIGINAL ───────────
+    // Embutindo brain.js (versão ajustada para evitar viés)
+    const brain = (function() {
+        function NeuralNetwork(config) {
+            this.inputSize = config.inputSize || 10;
+            this.hiddenSizes = config.hiddenLayers || [5];
+            this.outputSize = config.outputSize || 3;
+            this.weightsIH = [];
+            this.weightsHO = [];
+            this.biasH = [];
+            this.biasO = [];
+            this.learningRate = config.learningRate || 0.05;
+
+            this.initialize();
+        }
+
+        NeuralNetwork.prototype.initialize = function() {
+            this.weightsIH = Array(this.hiddenSizes[0]).fill().map(() =>
+                Array(this.inputSize).fill().map(() => (Math.random() - 0.5) * 0.1)
+            );
+            this.weightsHO = Array(this.outputSize).fill().map(() =>
+                Array(this.hiddenSizes[0]).fill().map(() => (Math.random() - 0.5) * 0.1)
+            );
+            this.biasH = Array(this.hiddenSizes[0]).fill(0);
+            this.biasO = Array(this.outputSize).fill(0);
+            console.log('Pesos iniciais da rede:', { weightsIH: this.weightsIH, weightsHO: this.weightsHO });
+        };
+
+        NeuralNetwork.prototype.activate = function(x) {
+            return x > 0 ? x : 0; // ReLU
+        };
+
+        NeuralNetwork.prototype.feedForward = function(input) {
+            let hidden = [];
+            for (let i = 0; i < this.hiddenSizes[0]; i++) {
+                let sum = this.biasH[i];
+                for (let j = 0; j < this.inputSize; j++) {
+                    sum += input[j] * this.weightsIH[i][j];
+                }
+                hidden[i] = this.activate(sum);
+            }
+
+            let output = [];
+            for (let i = 0; i < this.outputSize; i++) {
+                let sum = this.biasO[i];
+                for (let j = 0; j < this.hiddenSizes[0]; j++) {
+                    sum += hidden[j] * this.weightsHO[i][j];
+                }
+                output[i] = this.activate(sum);
+            }
+            return output;
+        };
+
+        NeuralNetwork.prototype.train = function(trainingData, options) {
+            options = options || {};
+            const iterations = options.iterations || 200;
+            const errorThresh = options.errorThresh || 0.005;
+
+            for (let i = 0; i < iterations; i++) {
+                let errorSum = 0;
+                for (let data of trainingData) {
+                    const input = data.input;
+                    const target = data.output;
+
+                    let hidden = [];
+                    for (let j = 0; j < this.hiddenSizes[0]; j++) {
+                        let sum = this.biasH[j];
+                        for (let k = 0; k < this.inputSize; k++) {
+                            sum += input[k] * this.weightsIH[j][k];
+                        }
+                        hidden[j] = this.activate(sum);
+                    }
+
+                    let output = [];
+                    for (let j = 0; j < this.outputSize; j++) {
+                        let sum = this.biasO[j];
+                        for (let k = 0; k < this.hiddenSizes[0]; k++) {
+                            sum += hidden[k] * this.weightsHO[j][k];
+                        }
+                        output[j] = this.activate(sum);
+                    }
+
+                    let outputErrors = [];
+                    for (let j = 0; j < this.outputSize; j++) {
+                        outputErrors[j] = target[j] - output[j];
+                        errorSum += Math.abs(outputErrors[j]);
+                    }
+
+                    let hiddenErrors = Array(this.hiddenSizes[0]).fill(0);
+                    for (let j = 0; j < this.hiddenSizes[0]; j++) {
+                        for (let k = 0; k < this.outputSize; k++) {
+                            hiddenErrors[j] += outputErrors[k] * this.weightsHO[k][j];
+                        }
+                    }
+
+                    for (let j = 0; j < this.outputSize; j++) {
+                        this.biasO[j] += this.learningRate * outputErrors[j];
+                        for (let k = 0; k < this.hiddenSizes[0]; k++) {
+                            this.weightsHO[j][k] += this.learningRate * outputErrors[j] * hidden[k];
+                        }
+                    }
+
+                    for (let j = 0; j < this.hiddenSizes[0]; j++) {
+                        this.biasH[j] += this.learningRate * hiddenErrors[j] * (hidden[j] > 0 ? 1 : 0);
+                        for (let k = 0; k < this.inputSize; k++) {
+                            this.weightsIH[j][k] += this.learningRate * hiddenErrors[j] * (hidden[j] > 0 ? 1 : 0) * input[k];
+                        }
+                    }
+                }
+                if (errorSum / trainingData.length < errorThresh) break;
+                if (options.log && i % options.logPeriod === 0) console.log(`Iteração ${i}, Erro: ${errorSum / trainingData.length}`);
+            }
+        };
+
+        NeuralNetwork.prototype.run = function(input) {
+            return this.feedForward(input);
+        };
+
+        return { NeuralNetwork };
+    })();
 
     class BlazeWebSocket {
         constructor() {
@@ -37,6 +154,11 @@
                         const j = JSON.parse(m.slice(2));
                         if (j[0] === 'data' && j[1].id === 'double.tick') {
                             const p = j[1].payload;
+                            console.log('Dados recebidos do WebSocket:', p);
+                            if (typeof p.color === 'undefined' || typeof p.roll === 'undefined' || typeof p.status === 'undefined') {
+                                console.error('Dados incompletos recebidos do WebSocket:', p);
+                                return;
+                            }
                             this.onDoubleTickCallback?.({ id: p.id, color: p.color, roll: p.roll, status: p.status });
                         }
                     }
@@ -54,6 +176,8 @@
             this.results = [];
             this.processedIds = new Set();
             this.notifiedIds = new Set();
+            this.correctPredictions = 0;
+            this.totalPredictions = 0;
             this.initMonitorInterface();
         }
         injectGlobalStyles() {
@@ -94,6 +218,7 @@
             const style = document.createElement('style');
             style.textContent = css;
             document.head.appendChild(style);
+            console.log('Estilos injetados no documento.');
             this.bubble = document.createElement('div');
             this.bubble.className = 'blaze-bubble';
             document.body.appendChild(this.bubble);
@@ -121,15 +246,28 @@
                 </div>
             `;
             document.body.appendChild(this.overlay);
-            document.getElementById('blazeMinBtn')
-                .addEventListener('click', () => {
+            console.log('Overlay e bubble criados e adicionados ao DOM.');
+
+            const minBtn = document.getElementById('blazeMinBtn');
+            if (minBtn) {
+                minBtn.addEventListener('click', () => {
                     document.getElementById('blazeMonitorBox').style.display = 'none';
                     this.bubble.style.display = 'block';
                 });
-            this.bubble.addEventListener('click', () => {
-                this.bubble.style.display = 'none';
-                document.getElementById('blazeMonitorBox').style.display = 'block';
-            });
+            } else {
+                console.error('Botão de minimizar (blazeMinBtn) não encontrado no DOM.');
+            }
+
+            if (this.bubble) {
+                this.bubble.addEventListener('click', () => {
+                    this.bubble.style.display = 'none';
+                    document.getElementById('blazeMonitorBox').style.display = 'block';
+                });
+            } else {
+                console.error('Bubble não encontrado no DOM.');
+            }
+            console.log('Eventos de clique configurados.');
+
             this.results = [];
             this.processedIds = new Set();
             this.notifiedIds = new Set();
@@ -138,13 +276,29 @@
             this.ws = new BlazeWebSocket();
             this.ws.doubleTick((d) => this.updateResults(d));
         }
+        ensureOverlay() {
+            if (!document.querySelector('.blaze-overlay')) {
+                console.warn('Overlay não encontrado no DOM. Recriando...');
+                this.initMonitorInterface();
+            }
+        }
         predictNextColor() {
             const cv = crossValidate();
-            if (cv === null) return null;
-            const colorName = cv === 0 ? 'Branco' : (cv === 1 ? 'Vermelho' : 'Preto');
+            console.log('crossValidate retornou:', cv);
+            if (cv === null) {
+                console.warn('crossValidate retornou null, usando fallback aleatório.');
+                return {
+                    color: Math.floor(Math.random() * 3),
+                    colorName: ['Branco', 'Vermelho', 'Preto'][Math.floor(Math.random() * 3)],
+                    isWaiting: Boolean(this.results.find(r => r.status === 'waiting'))
+                };
+            }
+            const cvNum = Number(cv);
+            const colorName = cvNum === 0 ? 'Branco' : cvNum === 1 ? 'Vermelho' : 'Preto';
+            console.log('Mapeamento de cor:', { cv: cvNum, colorName });
             const waiting = this.results.find(r => r.status === 'waiting');
             return {
-                color: cv,
+                color: cvNum,
                 colorName: colorName,
                 isWaiting: Boolean(waiting)
             };
@@ -157,6 +311,8 @@
             if (prev.color === cur.color) this.correctPredictions++;
         }
         updateResults(d) {
+            this.ensureOverlay();
+
             const id = d.id || `tmp-${Date.now()}-${d.color}-${d.roll}`;
             const i = this.results.findIndex(r => (r.id || r.tmp) === id);
             if (i >= 0) this.results[i] = { ...this.results[i], ...d };
@@ -165,6 +321,8 @@
                 this.results.unshift({ ...d, tmp: id });
                 if (d.status === 'complete') this.updatePredictionStats(d);
             }
+            console.log('Resultados atualizados:', this.results);
+
             const r = this.results[0];
             const rDiv = document.getElementById('blazeResults');
             if (rDiv && r) {
@@ -174,11 +332,15 @@
                               r.status === 'rolling' ? 'Girando' : 'Completo';
                 rDiv.innerHTML = `
                     <span class="result-number">${r.roll ?? '-'}</span>
-                    <span class="result-color-${r.color}">${r.color === 0 ? 'Branco' : r.color === 1 ? 'Vermelho' : 'Preto'}</span>
+                    <span class="result-color-${r.color ?? 0}">${r.color === 0 ? 'Branco' : r.color === 1 ? 'Vermelho' : 'Preto'}</span>
                     <span class="result-status ${stCls}">${stTxt}</span>
                 `;
+            } else {
+                console.error('blazeResults não encontrado no DOM.');
             }
+
             const pred = this.predictNextColor();
+            console.log('Previsão gerada (detalhada):', { color: pred.color, colorName: pred.colorName, isWaiting: pred.isWaiting });
             const pDiv = document.getElementById('blazePrediction');
             if (pDiv && pred) {
                 const acc = this.totalPredictions ? Math.round((this.correctPredictions / this.totalPredictions) * 100) : 0;
@@ -191,7 +353,11 @@
                     <div class="prediction-accuracy">Taxa de acerto: ${acc}% (${this.correctPredictions}/${this.totalPredictions})</div>
                 `;
                 this.nextPredColor = pred.color;
+                console.log('Campo de previsão atualizado:', { color: pred.color, colorName: pred.colorName });
+            } else {
+                console.error('blazePrediction não encontrado no DOM ou pred é null:', { pDiv, pred });
             }
+
             const needToast = (d.status === 'rolling' || d.status === 'complete') && !this.notifiedIds.has(id);
             if (needToast && this.nextPredColor !== null) {
                 this.notifiedIds.add(id);
@@ -199,6 +365,22 @@
                 this.showNotification(d, win);
             }
             this.analyzePatterns();
+            if (d.status === 'complete') {
+                aiHistory.unshift({ color: d.color, roll: d.roll ?? 0, time: new Date().toTimeString().slice(0, 5) });
+                const colorDist = { 0: 0, 1: 0, 2: 0 };
+                aiHistory.forEach(h => colorDist[h.color]++);
+                console.log('aiHistory atualizado:', aiHistory.length, 'Histórico completo:', aiHistory, 'Distribuição de cores:', colorDist);
+                console.log('window.latestHash:', window.latestHash);
+                if (window.latestHash) {
+                    console.log('Registrando hash:', window.latestHash.slice(0, 8), 'com cor:', d.color);
+                    registerSHA(window.latestHash, d.color);
+                    save('shaMap', shaMap);
+                }
+                trainAI();
+                updateMarkov();
+                updateTimeStats({ color: d.color, time: new Date().toTimeString().slice(0, 5) });
+                updateWhiteGap(d.color);
+            }
         }
         showNotification(d, win) {
             document.querySelectorAll('.blaze-notification').forEach(n => n.remove());
@@ -221,63 +403,129 @@
         }
     }
 
-    new BlazeInterface();
-
-    // ─────────── A PARTIR DAQUI, TODAS AS FUNCIONALIDADES ADICIONADAS ───────────
-
-    // 1) Rede Neural (Synaptic.js)
-    const Layer = synaptic.Layer, Network = synaptic.Network;
     const INPUT_SIZE = 5;
-    let aiNetwork = new Network({
-        input: new Layer(INPUT_SIZE * 2),
-        hidden: [new Layer(10)],
-        output: new Layer(3)
-    });
     let aiHistory = [];
+    let aiNetwork = null;
 
-    function encodeInput(item) { return [item.color / 2, (item.roll ?? 0) / 14]; }
-    function encodeOutput(c) { const o = [0, 0, 0]; o[c] = 1; return o; }
-    function trainAI() {
-        const hist = aiHistory;
-        if (hist.length <= INPUT_SIZE) return;
-        const trainer = new synaptic.Trainer(aiNetwork);
-        const dataset = [];
-        for (let i = 0; i < hist.length - INPUT_SIZE; i++) {
-            const seq = hist.slice(i, i + INPUT_SIZE).flatMap(encodeInput);
-            dataset.push({ input: seq, output: encodeOutput(hist[i + INPUT_SIZE].color) });
+    function initializeNetwork() {
+        if (!aiNetwork) {
+            aiNetwork = new brain.NeuralNetwork({
+                inputSize: 50,
+                hiddenLayers: [15],
+                outputSize: 3,
+                learningRate: 0.05
+            });
+            console.log('Rede neural brain.js inicializada com sucesso embutida às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
+            return true;
         }
-        trainer.train(dataset, { rate: 0.1, iterations: 200, error: 0.01, shuffle: true });
+        return true;
+    }
+
+    initializeNetwork();
+
+    function encodeInput(item) {
+        const input = [item.color / 2, (item.roll ?? 0) / 14].concat(Array(8).fill(0));
+        console.log('Entrada codificada:', input);
+        return input;
+    }
+    function encodeOutput(c) {
+        return [c === 0 ? 1 : 0, c === 1 ? 1 : 0, c === 2 ? 1 : 0];
+    }
+    function trainAI() {
+        if (!aiNetwork) {
+            console.warn('Tentando inicializar rede neural antes do treinamento...');
+            if (!initializeNetwork()) return;
+        }
+        const hist = aiHistory;
+        if (hist.length <= INPUT_SIZE) {
+            console.log('Histórico insuficiente para treinar a IA:', hist.length);
+            return;
+        }
+        const trainingData = [];
+        for (let i = 0; i < hist.length - INPUT_SIZE; i++) {
+            const seq = hist.slice(i, i + INPUT_SIZE).map(encodeInput);
+            const input = [].concat(...seq);
+            trainingData.push({
+                input: input,
+                output: encodeOutput(hist[i + INPUT_SIZE].color)
+            });
+        }
+        const targetDist = { 0: 0, 1: 0, 2: 0 };
+        trainingData.forEach(d => {
+            const idx = d.output.indexOf(1);
+            targetDist[idx]++;
+        });
+        console.log('Dados de treinamento:', trainingData.length, 'Distribuição de alvos:', targetDist);
+        aiNetwork.train(trainingData, {
+            iterations: 200,
+            errorThresh: 0.005,
+            log: true,
+            logPeriod: 10
+        });
+        console.log('Rede neural treinada com', trainingData.length, 'exemplos às', new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo' }));
     }
     function predictAI() {
-        if (aiHistory.length < INPUT_SIZE) return null;
-        const seq = aiHistory.slice(-INPUT_SIZE).flatMap(encodeInput);
-        const out = aiNetwork.activate(seq);
-        const idx = out.indexOf(Math.max(...out));
-        return { color: idx, score: out[idx] };
+        if (!aiNetwork) {
+            console.error('IA não inicializada para previsão. Tentando inicializar...');
+            if (!initializeNetwork()) {
+                console.warn('Não foi possível inicializar a IA. Usando previsão aleatória.');
+                return { color: Math.floor(Math.random() * 3), score: 0 };
+            }
+        }
+        if (aiHistory.length < INPUT_SIZE) {
+            console.log('Histórico insuficiente para previsão:', aiHistory.length);
+            return null;
+        }
+        const seq = aiHistory.slice(-INPUT_SIZE).map(encodeInput);
+        const input = [].concat(...seq);
+        console.log('Sequência de entrada para IA:', input);
+        const output = aiNetwork.run(input);
+        const idx = output.indexOf(Math.max(...output));
+        console.log('Saída bruta da IA:', output, 'Previsão da IA (detalhada):', { color: idx, score: output[idx], output: output });
+        return { color: idx, score: output[idx] };
     }
 
-    // 2) Cadeia de Markov (ordem 1)
     const markov = { 0: {}, 1: {}, 2: {} };
     function updateMarkov() {
         for (let i = 0; i < aiHistory.length - 1; i++) {
-            const a = aiHistory[i].color, b = aiHistory[i + 1].color;
+            const current = aiHistory[i];
+            const next = aiHistory[i + 1];
+            if (!current || !next || typeof current.color === 'undefined' || typeof next.color === 'undefined') {
+                continue;
+            }
+            const a = current.color;
+            const b = next.color;
             markov[a][b] = (markov[a][b] || 0) + 1;
         }
+        console.log('Markov atualizado:', markov);
     }
     function predictMarkov() {
         const last = aiHistory[aiHistory.length - 1]?.color;
+        if (typeof last === 'undefined' || last < 0 || last > 2) {
+            return null;
+        }
         const map = markov[last] || {};
         let best = [0, 0];
         for (const c in map) if (map[c] > best[1]) best = [+c, map[c]];
-        return best[1] > 0 ? { color: best[0], score: best[1] } : null;
+        const result = best[1] > 0 ? { color: best[0], score: best[1] } : null;
+        console.log('Previsão Markov:', result);
+        return result;
     }
 
-    // 3) SHA-256 prefix
-    const shaMap = {};
-    function registerSHA(hash, color) { shaMap[hash.slice(0, 8)] = color; }
-    function predictSHA(hash) { return shaMap[hash.slice(0, 8)] ?? null; }
+    let shaMap = load('shaMap') || {};
+    console.log('shaMap carregado do localStorage:', shaMap);
+    function registerSHA(hash, color) {
+        const key = hash.slice(0, 8);
+        shaMap[key] = color;
+        console.log('SHA registrado:', { key, color });
+    }
+    function predictSHA(hash) {
+        const key = hash.slice(0, 8);
+        const result = shaMap[key] ?? null;
+        console.log('Previsão SHA-256:', { key, result });
+        return result;
+    }
 
-    // 4) CSV externo
     let externalData = [];
     function importCSV(text) {
         externalData = text.trim().split("\n").slice(1).map(l => {
@@ -286,64 +534,55 @@
         });
     }
 
-    // 5) Padrões temporais (hora)
     const timeStats = {};
     function updateTimeStats(item) {
         const h = item.time.split(":")[0];
         timeStats[h] = timeStats[h] || { 0: 0, 1: 0, 2: 0 };
         timeStats[h][item.color]++;
+        console.log('TimeStats atualizado:', timeStats);
     }
     function predictTime() {
         const h = String(new Date().getHours()).padStart(2, "0");
         const stats = timeStats[h] || {};
         let best = [0, 0];
         for (const c in stats) if (stats[c] > best[1]) best = [+c, stats[c]];
-        return best[1] > 0 ? { color: best[0], score: best[1] } : null;
+        const result = best[1] > 0 ? { color: best[0], score: best[1] } : null;
+        console.log('Previsão Temporal:', result);
+        return result;
     }
 
-    // 6) Padrão branco
     let whiteGap = 0;
     function updateWhiteGap(color) { whiteGap = (color === 0 ? 0 : whiteGap + 1); }
-    function predictWhite() { return whiteGap >= 10 ? { color: 0, score: 0.9 } : null; }
+    function predictWhite() {
+        const result = whiteGap >= 10 ? { color: 0, score: 0.9 } : null;
+        console.log('Previsão Padrão Branco:', result);
+        return result;
+    }
 
-    // 7) Votação cruzada
     function crossValidate() {
-        const ai = predictAI(), mk = predictMarkov(), tm = predictTime(), wb = predictWhite();
+        const ai = predictAI();
+        const mk = predictMarkov(), tm = predictTime(), wb = predictWhite();
         const votes = {};
-        [ai, mk, tm, wb].forEach(p => p && (votes[p.color] = (votes[p.color] || 0) + 1));
+        const predictions = [ai, mk, tm, wb];
+        predictions.forEach(p => {
+            if (p) {
+                // Normalizar scores para evitar dominância (ex.: Markov com score 21)
+                const normalizedScore = p.score ? Math.min(p.score / 10, 1) : 1;
+                votes[p.color] = (votes[p.color] || 0) + normalizedScore;
+            }
+        });
+        console.log('window.latestHash antes de predictSHA:', window.latestHash);
         const sha = window.latestHash ? predictSHA(window.latestHash) : null;
         if (sha !== null) votes[sha] = (votes[sha] || 0) + 1;
         let best = [null, 0];
         for (const c in votes) if (votes[c] > best[1]) best = [c, votes[c]];
-        return best[0] !== null ? best[0] : Math.floor(Math.random() * 3); // Retorna um valor aleatório se não houver votos
+        const result = best[0] !== null ? best[0] : Math.floor(Math.random() * 3);
+        console.log('Votação cruzada detalhada:', { ai, mk, tm, wb, sha, votes, result });
+        return result;
     }
 
-    // 8) Persistência local
     function save(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
     function load(key) { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
 
-    // ───────── Hook em updateResults para alimentar tudo ─────────
-    const originalUpdate = BlazeInterface.prototype.updateResults;
-    BlazeInterface.prototype.updateResults = function(d) {
-        originalUpdate.call(this, d);
-        aiHistory.unshift({ color: d.color, roll: d.roll, time: new Date().toTimeString().slice(0, 5) });
-        if (aiHistory.length > 100) aiHistory.pop();
-        if (window.latestHash) registerSHA(window.latestHash, d.color);
-        trainAI();
-        updateMarkov();
-        updateTimeStats({ color: d.color, time: new Date().toTimeString().slice(0, 5) });
-        updateWhiteGap(d.color);
-        const cv = crossValidate();
-        const aiPred = predictAI();
-        const conf = aiPred ? Math.round(aiPred.score * 100) : 0;
-        const pDiv = document.getElementById('blazePrediction');
-        if (pDiv) {
-            pDiv.innerHTML += `<div>Confiança IA: ${conf}%</div>`;
-        }
-        save('blaze_ai_hist', aiHistory);
-        save('blaze_markov', markov);
-    };
-
-    // ───────── Instancia novamente para garantir hook ─────────
     new BlazeInterface();
 })();
