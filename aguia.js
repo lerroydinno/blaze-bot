@@ -54,9 +54,10 @@ class BlazeInterface {
     // Padrões
     this.patternRules = [
       { pattern: [1, 1, 1], suggest: 2, name: 'Três Vermelhos -> Preto' },
-      { pattern: [2, 2, 2], suggest: 1, name: 'Três Pretos -> Vermelho' }, // Nova regra
+      { pattern: [2, 2, 2], suggest: 1, name: 'Três Pretos -> Vermelho' },
       { pattern: [0], suggest: 1, name: 'Branco -> Vermelho' },
-      { pattern: [1, 2, 1], suggest: 2, name: 'Vermelho-Preto-Vermelho -> Preto' } // Nova regra para alternâncias
+      { pattern: [1, 2, 1], suggest: 2, name: 'Vermelho-Preto-Vermelho -> Preto' },
+      { pattern: [2, 1, 2], suggest: 1, name: 'Preto-Vermelho-Preto -> Vermelho' } // Nova regra
     ];
 
     // Entropia
@@ -66,13 +67,14 @@ class BlazeInterface {
     this.qTable = {};
     this.alpha = 0.1;
     this.gamma = 0.9;
-    this.epsilon = 0.2; // Aumentado para mais exploração
+    this.epsilon = 0.1; // Reduzido para menos exploração
+    this.epsilonDecay = 0.995; // Decaimento gradual
 
     // Frequência Condicional
     this.conditionalFreq = {
-      'after_two_whites': { 0: 0, 1: 0, 2: 0 },
-      'after_black_streak': { 0: 0, 1: 0, 2: 0 },
-      'after_two_darks': { 0: 0, 1: 0, 2: 0 } // Nova condição
+      'after_two_whites': { 0: 1, 1: 1, 2: 1 }, // Inicializado com valores uniformes
+      'after_black_streak': { 0: 1, 1: 1, 2: 1 },
+      'after_two_darks': { 0: 1, 1: 1, 2: 1 }
     };
 
     this.initMonitorInterface();
@@ -159,8 +161,8 @@ class BlazeInterface {
     const lastThree = history.slice(0, 3).map(r => r.color).join(',');
     const nextColor = history[0].color;
     if (!this.markovMatrix[lastThree]) {
-      this.markovMatrix[lastThree] = { 0: 1/3, 1: 1/3, 2: 1/3 }; // Inicializar com probabilidades uniformes
-      this.markovCounts[lastThree] = { 0: 1, 1: 1, 2: 1 }; // Evitar divisão por zero
+      this.markovMatrix[lastThree] = { 0: 1/3, 1: 1/3, 2: 1/3 };
+      this.markovCounts[lastThree] = { 0: 1, 1: 1, 2: 1 };
     }
     this.markovCounts[lastThree][nextColor]++;
     const total = Object.values(this.markovCounts[lastThree]).reduce((a, b) => a + b, 0);
@@ -178,10 +180,11 @@ class BlazeInterface {
     const probs = this.markovMatrix[lastThree] || { 0: 1/3, 1: 1/3, 2: 1/3 };
     const maxProb = Math.max(...Object.values(probs));
     const predictedColor = parseInt(Object.keys(probs).find(k => probs[k] === maxProb));
+    const weight = this.results.length > 20 ? 1.2 : 1.0; // Maior peso com histórico longo
     return {
       color: predictedColor,
       colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
-      confidence: Math.min(maxProb, 0.8).toFixed(2), // Limitar confiança para evitar dominância
+      confidence: (maxProb * weight).toFixed(2),
       method: 'Markov'
     };
   }
@@ -235,11 +238,10 @@ class BlazeInterface {
   }
 
   predictEntropy() {
-    const history = this.results.filter(r => r.status === 'complete').slice(0, 10);
+    const history = this.results.filter(r => r.status === 'complete').slice(0, 15); // Janela maior
     if (history.length < 3) return null;
     const entropy = this.calculateEntropy(history);
-    const confidence = Math.min((1 - entropy / 1.585), 0.9).toFixed(2);
-    // Usar frequência em vez de última cor
+    const confidence = Math.min((1 - entropy / 1.585), 0.8).toFixed(2); // Limitar confiança
     const counts = { 0: 0, 1: 0, 2: 0 };
     history.forEach(r => counts[r.color]++);
     const maxCount = Math.max(...Object.values(counts));
@@ -279,12 +281,13 @@ class BlazeInterface {
     } else {
       action = actions.reduce((a, b) => this.getQValue(state, a) > this.getQValue(state, b) ? a : b);
     }
+    this.epsilon *= this.epsilonDecay; // Decaimento do epsilon
     if (action === 'wait') return null;
     const qValue = this.getQValue(state, action);
     return {
       color: parseInt(action),
       colorName: action === 0 ? 'Branco' : action === 1 ? 'Vermelho' : 'Preto',
-      confidence: Math.min((qValue / (1 + Math.abs(qValue))), 0.8).toFixed(2), // Limitar confiança
+      confidence: Math.min((qValue / (1 + Math.abs(qValue))), 0.7).toFixed(2), // Menor peso
       method: 'Q-Learning'
     };
   }
@@ -303,7 +306,7 @@ class BlazeInterface {
     if (streakCount >= 3) {
       this.conditionalFreq['after_black_streak'][history[0].color]++;
     }
-    if (history[1].color !== 0 && history[2].color !== 0) { // Após duas cores escuras
+    if (history[1].color !== 0 && history[2].color !== 0) {
       this.conditionalFreq['after_two_darks'][history[0].color]++;
     }
   }
@@ -326,17 +329,18 @@ class BlazeInterface {
       const probs = { 0: freq[0] / total, 1: freq[1] / total, 2: freq[2] / total };
       const maxProb = Math.max(...Object.values(probs));
       const predictedColor = parseInt(Object.keys(probs).find(k => probs[k] === maxProb));
+      const weight = this.results.length > 20 ? 1.2 : 1.0; // Maior peso com histórico longo
       return {
         color: predictedColor,
         colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
-        confidence: Math.min(maxProb, 0.8).toFixed(2), // Limitar confiança
+        confidence: (maxProb * weight).toFixed(2),
         method: 'Conditional'
       };
     }
     return null;
   }
 
-  // Combine Predictions with Anti-Repetition Logic
+  // Combine Predictions with Stability Logic
   combinePredictions() {
     const predictions = [
       this.predictMarkov(),
@@ -348,24 +352,33 @@ class BlazeInterface {
 
     if (!predictions.length) return null;
 
-    // Votação ponderada com penalização por repetição
+    // Votação ponderada com bônus de estabilidade
     const votes = { 0: 0, 1: 0, 2: 0 };
     predictions.forEach(p => {
       let weight = parseFloat(p.confidence);
-      if (this.consecutivePredictions.color === p.color && this.consecutivePredictions.count >= 3) {
-        weight *= 0.5; // Penalizar cor repetida após 3 rodadas
+      if (this.consecutivePredictions.color === p.color && this.consecutivePredictions.count >= 5) {
+        weight *= 0.7; // Penalização mais suave após 5 rodadas
       }
       votes[p.color] += weight;
     });
 
-    // Escolher a cor com maior votação
+    // Adicionar bônus de estabilidade para a cor anterior
+    if (this.nextPredColor !== null) {
+      votes[this.nextPredColor] += 0.2; // Bônus para manter a cor anterior
+    }
+
+    // Escolher a cor com maior votação, mas só mudar se a diferença for significativa
     const maxVote = Math.max(...Object.values(votes));
-    let finalColor = parseInt(Object.keys(votes).find(k => votes[k] === maxVote));
-    
-    // Forçar alternância se a mesma cor foi prevista por 7 rodadas
-    if (this.consecutivePredictions.color === finalColor && this.consecutivePredictions.count >= 7) {
-      const otherColors = [0, 1, 2].filter(c => c !== finalColor);
-      finalColor = otherColors[Math.floor(Math.random() * otherColors.length)];
+    const finalColor = parseInt(Object.keys(votes).find(k => votes[k] === maxVote));
+    const secondMaxVote = Math.max(...Object.values(votes).filter(v => v !== maxVote));
+    if (this.nextPredColor !== null && votes[this.nextPredColor] >= maxVote - 0.3) {
+      // Manter a cor anterior se a diferença for pequena
+      return {
+        color: this.nextPredColor,
+        colorName: this.nextPredColor === 0 ? 'Branco' : this.nextPredColor === 1 ? 'Vermelho' : 'Preto',
+        confidence: (predictions.reduce((sum, p) => sum + parseFloat(p.confidence), 0) / predictions.length).toFixed(2),
+        details: predictions
+      };
     }
 
     // Atualizar contador de previsões consecutivas
