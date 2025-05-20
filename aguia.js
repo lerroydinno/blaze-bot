@@ -57,7 +57,8 @@ class BlazeInterface {
       { pattern: [2, 2, 2], suggest: 1, name: 'Três Pretos -> Vermelho' },
       { pattern: [0], suggest: 1, name: 'Branco -> Vermelho' },
       { pattern: [1, 2, 1], suggest: 2, name: 'Vermelho-Preto-Vermelho -> Preto' },
-      { pattern: [2, 1, 2], suggest: 1, name: 'Preto-Vermelho-Preto -> Vermelho' } // Nova regra
+      { pattern: [2, 1, 2], suggest: 1, name: 'Preto-Vermelho-Preto -> Vermelho' },
+      { pattern: [1, 2], suggest: 0, name: 'Vermelho-Preto -> Branco' } // Nova regra
     ];
 
     // Entropia
@@ -67,14 +68,15 @@ class BlazeInterface {
     this.qTable = {};
     this.alpha = 0.1;
     this.gamma = 0.9;
-    this.epsilon = 0.1; // Reduzido para menos exploração
-    this.epsilonDecay = 0.995; // Decaimento gradual
+    this.epsilon = 0.15; // Aumentado para mais exploração
+    this.epsilonDecay = 0.999; // Decaimento mais lento
 
     // Frequência Condicional
     this.conditionalFreq = {
-      'after_two_whites': { 0: 1, 1: 1, 2: 1 }, // Inicializado com valores uniformes
+      'after_two_whites': { 0: 1, 1: 1, 2: 1 },
       'after_black_streak': { 0: 1, 1: 1, 2: 1 },
-      'after_two_darks': { 0: 1, 1: 1, 2: 1 }
+      'after_two_darks': { 0: 1, 1: 1, 2: 1 },
+      'after_red_black': { 0: 1, 1: 1, 2: 1 } // Nova condição
     };
 
     this.initMonitorInterface();
@@ -103,7 +105,7 @@ class BlazeInterface {
       .result-status-complete{background:#4caf50;color:#fff}
       @keyframes pulse{0%{opacity:1}50%{opacity:.5}100%{opacity:1}}
       .blaze-notification{position:fixed;top:80px;right:20px;padding:15px;border-radius:5px;
-        color:#fff;font-weight:bold;opacity:0;transform:translateY(-20px);
+        color:#fff;font-weight:bold;opacity:0;transform:translateY as -20px;
         transition:all .3s ease;z-index:10000}
       .blaze-notification.show{opacity:1;transform:translateY(0)}
       .notification-win{background:#4caf50}.notification-loss{background:#f44336}
@@ -155,6 +157,13 @@ class BlazeInterface {
     this.ws.doubleTick((d) => this.updateResults(d));
   }
 
+  // Função auxiliar para escolher aleatoriamente em caso de empate
+  chooseRandomlyFromTies(values, keys) {
+    const maxValue = Math.max(...Object.values(values));
+    const tiedKeys = Object.keys(values).filter(k => values[k] === maxValue);
+    return parseInt(tiedKeys[Math.floor(Math.random() * tiedKeys.length)]);
+  }
+
   // Markov Analysis
   updateMarkovMatrix(history) {
     if (history.length < 3) return;
@@ -178,9 +187,9 @@ class BlazeInterface {
     if (history.length < 3) return null;
     const lastThree = history.map(r => r.color).join(',');
     const probs = this.markovMatrix[lastThree] || { 0: 1/3, 1: 1/3, 2: 1/3 };
-    const maxProb = Math.max(...Object.values(probs));
-    const predictedColor = parseInt(Object.keys(probs).find(k => probs[k] === maxProb));
-    const weight = this.results.length > 20 ? 1.2 : 1.0; // Maior peso com histórico longo
+    const predictedColor = this.chooseRandomlyFromTies(probs, [0, 1, 2]);
+    const maxProb = probs[predictedColor];
+    const weight = this.results.length > 20 ? 1.1 : 1.0; // Peso reduzido
     return {
       color: predictedColor,
       colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
@@ -238,14 +247,13 @@ class BlazeInterface {
   }
 
   predictEntropy() {
-    const history = this.results.filter(r => r.status === 'complete').slice(0, 15); // Janela maior
+    const history = this.results.filter(r => r.status === 'complete').slice(0, 15);
     if (history.length < 3) return null;
     const entropy = this.calculateEntropy(history);
-    const confidence = Math.min((1 - entropy / 1.585), 0.8).toFixed(2); // Limitar confiança
+    const confidence = Math.min((1 - entropy / 1.585), 0.8).toFixed(2);
     const counts = { 0: 0, 1: 0, 2: 0 };
     history.forEach(r => counts[r.color]++);
-    const maxCount = Math.max(...Object.values(counts));
-    const predictedColor = parseInt(Object.keys(counts).find(k => counts[k] === maxCount));
+    const predictedColor = this.chooseRandomlyFromTies(counts, [0, 1, 2]);
     return {
       color: predictedColor,
       colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
@@ -281,13 +289,13 @@ class BlazeInterface {
     } else {
       action = actions.reduce((a, b) => this.getQValue(state, a) > this.getQValue(state, b) ? a : b);
     }
-    this.epsilon *= this.epsilonDecay; // Decaimento do epsilon
+    this.epsilon *= this.epsilonDecay;
     if (action === 'wait') return null;
     const qValue = this.getQValue(state, action);
     return {
       color: parseInt(action),
       colorName: action === 0 ? 'Branco' : action === 1 ? 'Vermelho' : 'Preto',
-      confidence: Math.min((qValue / (1 + Math.abs(qValue))), 0.7).toFixed(2), // Menor peso
+      confidence: Math.min((qValue / (1 + Math.abs(qValue))), 0.8).toFixed(2),
       method: 'Q-Learning'
     };
   }
@@ -309,6 +317,9 @@ class BlazeInterface {
     if (history[1].color !== 0 && history[2].color !== 0) {
       this.conditionalFreq['after_two_darks'][history[0].color]++;
     }
+    if (history[1].color === 1 && history[2].color === 2) {
+      this.conditionalFreq['after_red_black'][history[0].color]++;
+    }
   }
 
   predictConditional() {
@@ -321,15 +332,17 @@ class BlazeInterface {
       condition = 'after_black_streak';
     } else if (history[0].color !== 0 && history[1].color !== 0) {
       condition = 'after_two_darks';
+    } else if (history[0].color === 1 && history[1].color === 2) {
+      condition = 'after_red_black';
     }
     if (condition) {
       const freq = this.conditionalFreq[condition];
       const total = Object.values(freq).reduce((a, b) => a + b, 0);
       if (total === 0) return null;
-      const probs = { 0: freq[0] / total, 1: freq[1] / total, 2: freq[2] / total };
-      const maxProb = Math.max(...Object.values(probs));
-      const predictedColor = parseInt(Object.keys(probs).find(k => probs[k] === maxProb));
-      const weight = this.results.length > 20 ? 1.2 : 1.0; // Maior peso com histórico longo
+      const probs = { 0: freq[0] / type, 1: freq[1] / total, 2: freq[2] / total };
+      const predictedColor = this.chooseRandomlyFromTies(probs, [0, 1, 2]);
+      const maxProb = probs[predictedColor];
+      const weight = this.results.length > 20 ? 1.1 : 1.0;
       return {
         color: predictedColor,
         colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
@@ -340,7 +353,7 @@ class BlazeInterface {
     return null;
   }
 
-  // Combine Predictions with Stability Logic
+  // Combine Predictions with Fixed Voting Logic
   combinePredictions() {
     const predictions = [
       this.predictMarkov(),
@@ -352,34 +365,27 @@ class BlazeInterface {
 
     if (!predictions.length) return null;
 
-    // Votação ponderada com bônus de estabilidade
+    // Votação ponderada com penalização ajustada
     const votes = { 0: 0, 1: 0, 2: 0 };
     predictions.forEach(p => {
       let weight = parseFloat(p.confidence);
-      if (this.consecutivePredictions.color === p.color && this.consecutivePredictions.count >= 5) {
-        weight *= 0.7; // Penalização mais suave após 5 rodadas
+      if (this.consecutivePredictions.color === p.color && this.consecutivePredictions.count >= 4) {
+        weight *= 0.5; // Penalização mais forte após 4 rodadas
       }
       votes[p.color] += weight;
     });
 
-    // Adicionar bônus de estabilidade para a cor anterior
+    // Bônus reduzido para a cor anterior
     if (this.nextPredColor !== null) {
-      votes[this.nextPredColor] += 0.2; // Bônus para manter a cor anterior
+      votes[this.nextPredColor] += 0.1; // Bônus menor
     }
 
-    // Escolher a cor com maior votação, mas só mudar se a diferença for significativa
+    // Escolher a cor com maior votação
     const maxVote = Math.max(...Object.values(votes));
-    const finalColor = parseInt(Object.keys(votes).find(k => votes[k] === maxVote));
-    const secondMaxVote = Math.max(...Object.values(votes).filter(v => v !== maxVote));
-    if (this.nextPredColor !== null && votes[this.nextPredColor] >= maxVote - 0.3) {
-      // Manter a cor anterior se a diferença for pequena
-      return {
-        color: this.nextPredColor,
-        colorName: this.nextPredColor === 0 ? 'Branco' : this.nextPredColor === 1 ? 'Vermelho' : 'Preto',
-        confidence: (predictions.reduce((sum, p) => sum + parseFloat(p.confidence), 0) / predictions.length).toFixed(2),
-        details: predictions
-      };
-    }
+    const finalColor = this.chooseRandomlyFromTies(votes, [0, 1, 2]);
+
+    // Log para debug
+    console.log('Votação:', votes, 'Cor escolhida:', finalColor);
 
     // Atualizar contador de previsões consecutivas
     if (this.consecutivePredictions.color === finalColor) {
