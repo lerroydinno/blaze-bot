@@ -71,21 +71,35 @@ class BlazeInterface {
       'after_black_streak': { 0: 0, 1: 0, 2: 0 }
     };
 
-    this.initMonitorInterface();
+    // Inicializar interface com atraso para garantir DOM pronto
+    document.addEventListener('DOMContentLoaded', () => this.initMonitorInterface());
+    // Fallback caso DOMContentLoaded já tenha ocorrido
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      setTimeout(() => this.initMonitorInterface(), 100);
+    }
   }
 
   injectGlobalStyles() {
+    // Tentar injetar CSS como <link> para evitar CSP (hospedar externamente)
+    const cssUrl = 'https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPOSITORIO/main/blaze.css'; // Substitua pelo URL real do CSS no GitHub
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = cssUrl;
+    document.head.appendChild(link);
+    console.log('Tentando injetar CSS externo:', cssUrl);
+
+    // CSS inline como fallback (pode ser bloqueado por CSP)
     const css = `
       .blaze-min-btn{background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;padding:0 8px}
       .blaze-min-btn:hover{opacity:.75}
       .blaze-bubble{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;
         background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);
-        box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10001;display:none;} /* z-index aumentado */
+        box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:999999;display:none !important;} /* z-index elevado */
       .blaze-overlay{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-        z-index:10000;font-family:'Arial',sans-serif;display:block;} /* z-index aumentado, display explícito */
+        z-index:999999;font-family:'Arial',sans-serif;display:block !important;opacity:1 !important;} /* Forçar visibilidade */
       .blaze-monitor{background:rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;
         background-blend-mode:overlay;border-radius:10px;padding:15px;
-        box-shadow:0 5px 15px rgba(0,0,0,.5);color:#fff;width:350px}
+        box-shadow:0 5px 15px rgba(0,0,0,.5);color:#fff;width:350px;display:block !important;}
       .result-card{background:#4448;border-radius:5px;padding:10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
       .result-number{font-size:24px;font-weight:bold}
       .result-color-0{color:#fff;background:linear-gradient(45deg,#fff,#ddd);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
@@ -97,7 +111,7 @@ class BlazeInterface {
       @keyframes pulse{0%{opacity:1}50%{opacity:.5}100%{opacity:1}}
       .blaze-notification{position:fixed;top:80px;right:20px;padding:15px;border-radius:5px;
         color:#fff;font-weight:bold;opacity:0;transform:translateY(-20px);
-        transition:all .3s ease;z-index:10002} /* z-index aumentado */
+        transition:all .3s ease;z-index:999999} /* z-index elevado */
       .notification-win{background:#4caf50}.notification-loss{background:#f44336}
       .prediction-card{background:#4448;border-radius:5px;padding:15px;margin-bottom:15px;text-align:center;font-weight:bold}
       .prediction-title{font-size:14px;opacity:.8;margin-bottom:5px}
@@ -111,10 +125,12 @@ class BlazeInterface {
     const style = document.createElement('style');
     style.textContent = css;
     document.head.appendChild(style);
+    console.log('CSS inline injetado como fallback');
 
     this.bubble = document.createElement('div');
     this.bubble.className = 'blaze-bubble';
     document.body.appendChild(this.bubble);
+    console.log('Bolha adicionada ao DOM');
   }
 
   initMonitorInterface() {
@@ -131,11 +147,12 @@ class BlazeInterface {
       </div>
     `;
     document.body.appendChild(this.overlay);
+    console.log('Painel blaze-overlay adicionado ao DOM');
 
-    // Adicionar event listeners com verificação de elementos e logs de debug
+    // Verificar e registrar event listeners
     const minBtn = document.getElementById('blazeMinBtn');
     const monitorBox = document.getElementById('blazeMonitorBox');
-    
+
     if (!minBtn || !monitorBox) {
       console.error('Erro: Elementos blazeMinBtn ou blazeMonitorBox não encontrados no DOM');
       return;
@@ -150,12 +167,25 @@ class BlazeInterface {
     this.bubble.addEventListener('click', () => {
       console.log('Bolha clicada');
       this.bubble.style.display = 'none';
-      monitorBox.style.display = ''; // Restaurar estilo padrão
+      monitorBox.style.display = 'block'; // Usar block explicitamente
     });
 
-    // Inicializar visibilidade
-    monitorBox.style.display = ''; // Garantir que o painel esteja visível inicialmente
-    this.bubble.style.display = 'none'; // Garantir que a bolha esteja oculta inicialmente
+    // Forçar visibilidade inicial
+    monitorBox.style.display = 'block';
+    monitorBox.style.opacity = '1';
+    this.overlay.style.display = 'block';
+    this.overlay.style.opacity = '1';
+    this.bubble.style.display = 'none';
+    console.log('Visibilidade inicial configurada: painel visível, bolha oculta');
+
+    // Reaplicar visibilidade após 500ms para contornar manipulações externas
+    setTimeout(() => {
+      monitorBox.style.display = 'block';
+      monitorBox.style.opacity = '1';
+      this.overlay.style.display = 'block';
+      this.overlay.style.opacity = '1';
+      console.log('Visibilidade reaplicada após 500ms');
+    }, 500);
 
     this.ws = new BlazeWebSocket();
     this.ws.doubleTick((d) => this.updateResults(d));
@@ -208,7 +238,6 @@ class BlazeInterface {
       }
     });
 
-    // Streak analysis
     let streakColor = history[0].color, streakCount = 1;
     for (let i = 1; i < history.length; i++) {
       if (history[i].color === streakColor) streakCount++;
@@ -424,7 +453,7 @@ class BlazeInterface {
         <div class="analysis-detail">
           ${pred.details.map(d => `<div>${d.method}: ${d.colorName} (${d.confidence * 100}%)</div>`).join('')}
         </div>
-      estaban;
+      `;
       this.nextPredColor = pred.color;
     }
 
