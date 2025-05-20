@@ -45,7 +45,6 @@ class BlazeInterface {
     this.notifiedIds = new Set();
     this.correctPredictions = 0;
     this.totalPredictions = 0;
-    this.consecutivePredictions = { color: null, count: 0 }; // Rastrear previsões consecutivas
 
     // Markov
     this.markovMatrix = {};
@@ -54,11 +53,7 @@ class BlazeInterface {
     // Padrões
     this.patternRules = [
       { pattern: [1, 1, 1], suggest: 2, name: 'Três Vermelhos -> Preto' },
-      { pattern: [2, 2, 2], suggest: 1, name: 'Três Pretos -> Vermelho' },
-      { pattern: [0], suggest: 1, name: 'Branco -> Vermelho' },
-      { pattern: [1, 2, 1], suggest: 2, name: 'Vermelho-Preto-Vermelho -> Preto' },
-      { pattern: [2, 1, 2], suggest: 1, name: 'Preto-Vermelho-Preto -> Vermelho' },
-      { pattern: [1, 2], suggest: 0, name: 'Vermelho-Preto -> Branco' } // Nova regra
+      { pattern: [0], suggest: 1, name: 'Branco -> Vermelho' }
     ];
 
     // Entropia
@@ -68,15 +63,12 @@ class BlazeInterface {
     this.qTable = {};
     this.alpha = 0.1;
     this.gamma = 0.9;
-    this.epsilon = 0.15; // Aumentado para mais exploração
-    this.epsilonDecay = 0.999; // Decaimento mais lento
+    this.epsilon = 0.1;
 
     // Frequência Condicional
     this.conditionalFreq = {
-      'after_two_whites': { 0: 1, 1: 1, 2: 1 },
-      'after_black_streak': { 0: 1, 1: 1, 2: 1 },
-      'after_two_darks': { 0: 1, 1: 1, 2: 1 },
-      'after_red_black': { 0: 1, 1: 1, 2: 1 } // Nova condição
+      'after_two_whites': { 0: 0, 1: 0, 2: 0 },
+      'after_black_streak': { 0: 0, 1: 0, 2: 0 }
     };
 
     this.initMonitorInterface();
@@ -88,13 +80,12 @@ class BlazeInterface {
       .blaze-min-btn:hover{opacity:.75}
       .blaze-bubble{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;
         background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);
-        box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:none;}
+        box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10001;display:none;} /* z-index aumentado */
       .blaze-overlay{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-        z-index:9999;font-family:'Arial',sans-serif;}
+        z-index:10000;font-family:'Arial',sans-serif;display:block;} /* z-index aumentado, display explícito */
       .blaze-monitor{background:rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;
         background-blend-mode:overlay;border-radius:10px;padding:15px;
         box-shadow:0 5px 15px rgba(0,0,0,.5);color:#fff;width:350px}
-      .blaze-monitor h3{margin:0 0 10px;text-align:center;font-size:18px}
       .result-card{background:#4448;border-radius:5px;padding:10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
       .result-number{font-size:24px;font-weight:bold}
       .result-color-0{color:#fff;background:linear-gradient(45deg,#fff,#ddd);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
@@ -105,9 +96,8 @@ class BlazeInterface {
       .result-status-complete{background:#4caf50;color:#fff}
       @keyframes pulse{0%{opacity:1}50%{opacity:.5}100%{opacity:1}}
       .blaze-notification{position:fixed;top:80px;right:20px;padding:15px;border-radius:5px;
-        color:#fff;font-weight:bold;opacity:0;transform:translateY as -20px;
-        transition:all .3s ease;z-index:10000}
-      .blaze-notification.show{opacity:1;transform:translateY(0)}
+        color:#fff;font-weight:bold;opacity:0;transform:translateY(-20px);
+        transition:all .3s ease;z-index:10002} /* z-index aumentado */
       .notification-win{background:#4caf50}.notification-loss{background:#f44336}
       .prediction-card{background:#4448;border-radius:5px;padding:15px;margin-bottom:15px;text-align:center;font-weight:bold}
       .prediction-title{font-size:14px;opacity:.8;margin-bottom:5px}
@@ -142,26 +132,33 @@ class BlazeInterface {
     `;
     document.body.appendChild(this.overlay);
 
-    document.getElementById('blazeMinBtn')
-      .addEventListener('click', () => {
-        document.getElementById('blazeMonitorBox').style.display = 'none';
-        this.bubble.style.display = 'block';
-      });
+    // Adicionar event listeners com verificação de elementos e logs de debug
+    const minBtn = document.getElementById('blazeMinBtn');
+    const monitorBox = document.getElementById('blazeMonitorBox');
+    
+    if (!minBtn || !monitorBox) {
+      console.error('Erro: Elementos blazeMinBtn ou blazeMonitorBox não encontrados no DOM');
+      return;
+    }
+
+    minBtn.addEventListener('click', () => {
+      console.log('Botão Minimizar clicado');
+      monitorBox.style.display = 'none';
+      this.bubble.style.display = 'block';
+    });
 
     this.bubble.addEventListener('click', () => {
+      console.log('Bolha clicada');
       this.bubble.style.display = 'none';
-      document.getElementById('blazeMonitorBox').style.display = 'block';
+      monitorBox.style.display = ''; // Restaurar estilo padrão
     });
+
+    // Inicializar visibilidade
+    monitorBox.style.display = ''; // Garantir que o painel esteja visível inicialmente
+    this.bubble.style.display = 'none'; // Garantir que a bolha esteja oculta inicialmente
 
     this.ws = new BlazeWebSocket();
     this.ws.doubleTick((d) => this.updateResults(d));
-  }
-
-  // Função auxiliar para escolher aleatoriamente em caso de empate
-  chooseRandomlyFromTies(values, keys) {
-    const maxValue = Math.max(...Object.values(values));
-    const tiedKeys = Object.keys(values).filter(k => values[k] === maxValue);
-    return parseInt(tiedKeys[Math.floor(Math.random() * tiedKeys.length)]);
   }
 
   // Markov Analysis
@@ -170,8 +167,8 @@ class BlazeInterface {
     const lastThree = history.slice(0, 3).map(r => r.color).join(',');
     const nextColor = history[0].color;
     if (!this.markovMatrix[lastThree]) {
-      this.markovMatrix[lastThree] = { 0: 1/3, 1: 1/3, 2: 1/3 };
-      this.markovCounts[lastThree] = { 0: 1, 1: 1, 2: 1 };
+      this.markovMatrix[lastThree] = { 0: 0, 1: 0, 2: 0 };
+      this.markovCounts[lastThree] = { 0: 0, 1: 0, 2: 0 };
     }
     this.markovCounts[lastThree][nextColor]++;
     const total = Object.values(this.markovCounts[lastThree]).reduce((a, b) => a + b, 0);
@@ -187,13 +184,12 @@ class BlazeInterface {
     if (history.length < 3) return null;
     const lastThree = history.map(r => r.color).join(',');
     const probs = this.markovMatrix[lastThree] || { 0: 1/3, 1: 1/3, 2: 1/3 };
-    const predictedColor = this.chooseRandomlyFromTies(probs, [0, 1, 2]);
-    const maxProb = probs[predictedColor];
-    const weight = this.results.length > 20 ? 1.1 : 1.0; // Peso reduzido
+    const maxProb = Math.max(...Object.values(probs));
+    const predictedColor = parseInt(Object.keys(probs).find(k => probs[k] === maxProb));
     return {
       color: predictedColor,
       colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
-      confidence: (maxProb * weight).toFixed(2),
+      confidence: maxProb.toFixed(2),
       method: 'Markov'
     };
   }
@@ -247,16 +243,14 @@ class BlazeInterface {
   }
 
   predictEntropy() {
-    const history = this.results.filter(r => r.status === 'complete').slice(0, 15);
+    const history = this.results.filter(r => r.status === 'complete').slice(0, 10);
     if (history.length < 3) return null;
     const entropy = this.calculateEntropy(history);
-    const confidence = Math.min((1 - entropy / 1.585), 0.8).toFixed(2);
-    const counts = { 0: 0, 1: 0, 2: 0 };
-    history.forEach(r => counts[r.color]++);
-    const predictedColor = this.chooseRandomlyFromTies(counts, [0, 1, 2]);
+    const confidence = Math.min((1 - entropy / 1.585), 0.9).toFixed(2);
+    const lastColor = history[0].color;
     return {
-      color: predictedColor,
-      colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
+      color: lastColor,
+      colorName: lastColor === 0 ? 'Branco' : lastColor === 1 ? 'Vermelho' : 'Preto',
       confidence: confidence,
       method: 'Entropy'
     };
@@ -289,13 +283,12 @@ class BlazeInterface {
     } else {
       action = actions.reduce((a, b) => this.getQValue(state, a) > this.getQValue(state, b) ? a : b);
     }
-    this.epsilon *= this.epsilonDecay;
     if (action === 'wait') return null;
     const qValue = this.getQValue(state, action);
     return {
       color: parseInt(action),
       colorName: action === 0 ? 'Branco' : action === 1 ? 'Vermelho' : 'Preto',
-      confidence: Math.min((qValue / (1 + Math.abs(qValue))), 0.8).toFixed(2),
+      confidence: (qValue / (1 + Math.abs(qValue))).toFixed(2),
       method: 'Q-Learning'
     };
   }
@@ -314,12 +307,6 @@ class BlazeInterface {
     if (streakCount >= 3) {
       this.conditionalFreq['after_black_streak'][history[0].color]++;
     }
-    if (history[1].color !== 0 && history[2].color !== 0) {
-      this.conditionalFreq['after_two_darks'][history[0].color]++;
-    }
-    if (history[1].color === 1 && history[2].color === 2) {
-      this.conditionalFreq['after_red_black'][history[0].color]++;
-    }
   }
 
   predictConditional() {
@@ -330,30 +317,25 @@ class BlazeInterface {
       condition = 'after_two_whites';
     } else if (history.slice(1, 4).every(r => r.color === 2)) {
       condition = 'after_black_streak';
-    } else if (history[0].color !== 0 && history[1].color !== 0) {
-      condition = 'after_two_darks';
-    } else if (history[0].color === 1 && history[1].color === 2) {
-      condition = 'after_red_black';
     }
     if (condition) {
       const freq = this.conditionalFreq[condition];
       const total = Object.values(freq).reduce((a, b) => a + b, 0);
       if (total === 0) return null;
-      const probs = { 0: freq[0] / type, 1: freq[1] / total, 2: freq[2] / total };
-      const predictedColor = this.chooseRandomlyFromTies(probs, [0, 1, 2]);
-      const maxProb = probs[predictedColor];
-      const weight = this.results.length > 20 ? 1.1 : 1.0;
+      const probs = { 0: freq[0] / total, 1: freq[1] / total, 2: freq[2] / total };
+      const maxProb = Math.max(...Object.values(probs));
+      const predictedColor = parseInt(Object.keys(probs).find(k => probs[k] === maxProb));
       return {
         color: predictedColor,
         colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
-        confidence: (maxProb * weight).toFixed(2),
+        confidence: maxProb.toFixed(2),
         method: 'Conditional'
       };
     }
     return null;
   }
 
-  // Combine Predictions with Fixed Voting Logic
+  // Combine Predictions
   combinePredictions() {
     const predictions = [
       this.predictMarkov(),
@@ -365,36 +347,12 @@ class BlazeInterface {
 
     if (!predictions.length) return null;
 
-    // Votação ponderada com penalização ajustada
     const votes = { 0: 0, 1: 0, 2: 0 };
     predictions.forEach(p => {
-      let weight = parseFloat(p.confidence);
-      if (this.consecutivePredictions.color === p.color && this.consecutivePredictions.count >= 4) {
-        weight *= 0.5; // Penalização mais forte após 4 rodadas
-      }
-      votes[p.color] += weight;
+      votes[p.color] += parseFloat(p.confidence);
     });
-
-    // Bônus reduzido para a cor anterior
-    if (this.nextPredColor !== null) {
-      votes[this.nextPredColor] += 0.1; // Bônus menor
-    }
-
-    // Escolher a cor com maior votação
     const maxVote = Math.max(...Object.values(votes));
-    const finalColor = this.chooseRandomlyFromTies(votes, [0, 1, 2]);
-
-    // Log para debug
-    console.log('Votação:', votes, 'Cor escolhida:', finalColor);
-
-    // Atualizar contador de previsões consecutivas
-    if (this.consecutivePredictions.color === finalColor) {
-      this.consecutivePredictions.count++;
-    } else {
-      this.consecutivePredictions.color = finalColor;
-      this.consecutivePredictions.count = 1;
-    }
-
+    const finalColor = parseInt(Object.keys(votes).find(k => votes[k] === maxVote));
     const avgConfidence = (predictions.reduce((sum, p) => sum + parseFloat(p.confidence), 0) / predictions.length).toFixed(2);
 
     return {
@@ -410,7 +368,7 @@ class BlazeInterface {
     const prev = this.results.filter(r => r.status === 'complete')[1];
     if (!prev) return;
     this.totalPredictions++;
-    if (prev.color === this.nextPredColor) this.correctPredictions++;
+    if (prev.color === cur.color) this.correctPredictions++;
   }
 
   updateResults(d) {
@@ -466,7 +424,7 @@ class BlazeInterface {
         <div class="analysis-detail">
           ${pred.details.map(d => `<div>${d.method}: ${d.colorName} (${d.confidence * 100}%)</div>`).join('')}
         </div>
-      `;
+      estaban;
       this.nextPredColor = pred.color;
     }
 
