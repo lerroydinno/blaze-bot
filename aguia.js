@@ -108,11 +108,11 @@ class BlazeInterface {
         width: 60px;
         height: 60px;
         border-radius: 50%;
-        background: url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);
+        background: url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg') center/cover no-repeat, rgba(34,34,34,.7);
         box-shadow: 0 4px 12px rgba(0,0,0,.5);
         cursor: pointer;
         z-index: 999999;
-        display: none; /* Removido !important para permitir manipulação via JS */
+        display: none;
       }
       .blaze-overlay {
         position: fixed;
@@ -121,24 +121,24 @@ class BlazeInterface {
         transform: translate(-50%,-50%);
         z-index: 999999;
         font-family: 'Arial', sans-serif;
-        display: block; /* Removido !important */
+        display: block;
         opacity: 1;
       }
       .blaze-monitor {
-        background: rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;
+        background: rgba(34,34,34,.7) url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg') center/contain no-repeat;
         background-blend-mode: overlay;
         border-radius: 10px;
         padding: 15px;
         box-shadow: 0 5px 15px rgba(0,0,0,.5);
         color: #fff;
         width: 350px;
-        display: block; /* Removido !important */
+        display: block;
       }
       .hidden {
-        display: none !important; /* Classe para ocultar elementos */
+        display: none !important;
       }
       .visible {
-        display: block !important; /* Classe para exibir elementos */
+        display: block !important;
       }
       .result-card {
         background: #4448;
@@ -300,9 +300,9 @@ class BlazeInterface {
 
     minBtn.addEventListener('click', () => {
       console.log('Botão Minimizar clicado');
-      monitorBox.classList.add('hidden'); // Usar classe para ocultar
+      monitorBox.classList.add('hidden');
       monitorBox.classList.remove('visible');
-      this.bubble.classList.add('visible'); // Usar classe para exibir
+      this.bubble.classList.add('visible');
       this.bubble.classList.remove('hidden');
     });
 
