@@ -49,26 +49,51 @@ class BlazeInterface {
     // Markov
     this.markovMatrix = {};
     this.markovCounts = {};
+    this.markovOrder = 4; // Aumentado para capturar padrões mais longos
 
     // Padrões
     this.patternRules = [
-      { pattern: [1, 1, 1], suggest: 2, name: 'Três Vermelhos -> Preto' },
-      { pattern: [0], suggest: 1, name: 'Branco -> Vermelho' }
+      { pattern: [1, 1, 1], suggest: 2, name: 'Três Vermelhos -> Preto', weight: 0.7 },
+      { pattern: [0], suggest: 1, name: 'Branco -> Vermelho', weight: 0.6 },
+      { pattern: [2, 2, 2, 2], suggest: 1, name: 'Quatro Pretos -> Vermelho', weight: 0.8 },
+      { pattern: [1, 2, 1], suggest: 2, name: 'Vermelho-Preto-Vermelho -> Preto', weight: 0.65 }
     ];
+    this.patternStats = {}; // Para rastrear desempenho de padrões
 
     // Entropia
     this.entropyHistory = [];
+    this.conditionalEntropy = { 0: {}, 1: {}, 2: {} }; // Entropia condicional por cor
 
     // Q-Learning
     this.qTable = {};
     this.alpha = 0.1;
     this.gamma = 0.9;
-    this.epsilon = 0.1;
+    this.epsilon = 0.2; // Aumentado inicialmente
+    this.epsilonDecay = 0.995; // Decaimento para reduzir exploração
+    this.minEpsilon = 0.01;
 
     // Frequência Condicional
     this.conditionalFreq = {
       'after_two_whites': { 0: 0, 1: 0, 2: 0 },
-      'after_black_streak': { 0: 0, 1: 0, 2: 0 }
+      'after_black_streak': { 0: 0, 1: 0, 2: 0 },
+      'after_red_streak': { 0: 0, 1: 0, 2: 0 },
+      'after_alternate': { 0: 0, 1: 0, 2: 0 } // Após padrão alternado (ex.: 1,2,1)
+    };
+
+    // Pesos dinâmicos para combinação
+    this.methodWeights = {
+      'Markov': 1.0,
+      'Patterns': 1.0,
+      'Entropy': 0.8,
+      'Q-Learning': 1.0,
+      'Conditional': 0.9
+    };
+    this.methodPerformance = {
+      'Markov': { correct: 0, total: 0 },
+      'Patterns': { correct: 0, total: 0 },
+      'Entropy': { correct: 0, total: 0 },
+      'Q-Learning': { correct: 0, total: 0 },
+      'Conditional': { correct: 0, total: 0 }
     };
 
     // Inicializar interface com atraso para garantir DOM pronto
@@ -335,27 +360,27 @@ class BlazeInterface {
 
   // Markov Analysis
   updateMarkovMatrix(history) {
-    if (history.length < 3) return;
-    const lastThree = history.slice(0, 3).map(r => r.color).join(',');
+    if (history.length < this.markovOrder + 1) return;
+    const lastN = history.slice(0, this.markovOrder).map(r => r.color).join(',');
     const nextColor = history[0].color;
-    if (!this.markovMatrix[lastThree]) {
-      this.markovMatrix[lastThree] = { 0: 0, 1: 0, 2: 0 };
-      this.markovCounts[lastThree] = { 0: 0, 1: 0, 2: 0 };
+    if (!this.markovMatrix[lastN]) {
+      this.markovMatrix[lastN] = { 0: 0, 1: 0, 2: 0 };
+      this.markovCounts[lastN] = { 0: 0, 1: 0, 2: 0 };
     }
-    this.markovCounts[lastThree][nextColor]++;
-    const total = Object.values(this.markovCounts[lastThree]).reduce((a, b) => a + b, 0);
-    this.markovMatrix[lastThree] = {
-      0: this.markovCounts[lastThree][0] / total,
-      1: this.markovCounts[lastThree][1] / total,
-      2: this.markovCounts[lastThree][2] / total
+    this.markovCounts[lastN][nextColor]++;
+    const total = Object.values(this.markovCounts[lastN]).reduce((a, b) => a + b, 0);
+    // Suavização de Laplace
+    this.markovMatrix[lastN] = {
+      0: (this.markovCounts[lastN][0] + 1) / (total + 3),
+      1: (this.markovCounts[lastN][1] + 1) / (total + 3වැට, this.markovMatrix[lastN][2] = (this.markovCounts[lastN][2] + 1) / (total + 3)
     };
   }
 
   predictMarkov() {
-    const history = this.results.filter(r => r.status === 'complete').slice(0, 3);
-    if (history.length < 3) return null;
-    const lastThree = history.map(r => r.color).join(',');
-    const probs = this.markovMatrix[lastThree] || { 0: 1/3, 1: 1/3, 2: 1/3 };
+    const history = this.results.filter(r => r.status === 'complete').slice(0, this.markovOrder);
+    if (history.length < this.markovOrder) return null;
+    const lastN = history.map(r => r.color).join(',');
+    const probs = this.markovMatrix[lastN] || { 0: 1/3, 1: 1/3, 2: 1/3 };
     const maxProb = Math.max(...Object.values(probs));
     const predictedColor = parseInt(Object.keys(probs).find(k => probs[k] === maxProb));
     return {
@@ -369,45 +394,73 @@ class BlazeInterface {
   // Temporal Patterns Analysis
   analyzePatterns() {
     const history = this.results.filter(r => r.status === 'complete').slice(0, 20);
-    if (history.length < 3) return null;
+    if (history.length < 4) return null;
 
-    let predictedColor = null;
+    let bestPrediction = null;
+    let highestWeight = 0;
+
+    // Aplicar regras predefinidas
     this.patternRules.forEach(rule => {
       const patternLength = rule.pattern.length;
       const recent = history.slice(0, patternLength).map(r => r.color);
       if (recent.join(',') === rule.pattern.join(',')) {
-        predictedColor = rule.suggest;
+        if (rule.weight > highestWeight) {
+          highestWeight = rule.weight;
+          bestPrediction = {
+            color: rule.suggest,
+            colorName: rule.suggest === 0 ? 'Branco' : rule.suggest === 1 ? 'Vermelho' : 'Preto',
+            confidence: rule.weight,
+            method: 'Patterns'
+          };
+        }
       }
     });
 
+    // Detectar streaks dinâmicos
     let streakColor = history[0].color, streakCount = 1;
     for (let i = 1; i < history.length; i++) {
       if (history[i].color === streakColor) streakCount++;
       else break;
     }
-    if (streakCount >= 3 && !predictedColor) {
-      predictedColor = streakColor === 0 ? 1 : (streakColor === 1 ? 2 : 1);
-    }
-
-    if (predictedColor !== null) {
-      return {
-        color: predictedColor,
-        colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
-        confidence: streakCount >= 3 ? 0.7 : 0.6,
+    if (streakCount >= 4 && !bestPrediction) {
+      const suggest = streakColor === 0 ? 1 : (streakColor === 1 ? 2 : 1);
+      bestPrediction = {
+        color: suggest,
+        colorName: suggest === 0 ? 'Branco' : suggest === 1 ? 'Vermelho' : 'Preto',
+        confidence: 0.75,
         method: 'Patterns'
       };
     }
-    return null;
+
+    // Detectar padrões alternados (ex.: 1,2,1,2)
+    if (history.length >= 4) {
+      const recent4 = history.slice(0, 4).map(r => r.color);
+      if (recent4[0] === recent4[2] && recent4[1] === recent4[3] && recent4[0] !== recent4[1]) {
+        const suggest = recent4[1]; // Continuar o padrão alternado
+        bestPrediction = {
+          color: suggest,
+          colorName: suggest === 0 ? 'Branco' : suggest === 1 ? 'Vermelho' : 'Preto',
+          confidence: 0.7,
+          method: 'Patterns'
+        };
+      }
+    }
+
+    return bestPrediction;
   }
 
   // Entropy Analysis
-  calculateEntropy(history) {
+  calculateEntropy(history, prevColor = null) {
     const counts = { 0: 0, 1: 0, 2: 0 };
-    history.forEach(r => counts[r.color]++);
-    const total = history.length;
+    history.forEach(r => {
+      if (prevColor === null || history[history.indexOf(r) + 1]?.color === prevColor) {
+        counts[r.color]++;
+      }
+    });
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
     let entropy = 0;
     for (let c in counts) {
-      const p = counts[c] / total;
+      const p = total > 0 ? counts[c] / total : 0;
       if (p > 0) entropy -= p * Math.log2(p);
     }
     return entropy;
@@ -415,13 +468,30 @@ class BlazeInterface {
 
   predictEntropy() {
     const history = this.results.filter(r => r.status === 'complete').slice(0, 10);
-    if (history.length < 3) return null;
-    const entropy = this.calculateEntropy(history);
-    const confidence = Math.min((1 - entropy / 1.585), 0.9).toFixed(2);
+    if (history.length < 4) return null;
+
+    // Calcular entropia condicional por cor
     const lastColor = history[0].color;
+    if (!this.conditionalEntropy[lastColor]) {
+      this.conditionalEntropy[lastColor] = {};
+    }
+    const entropy = this.calculateEntropy(history, lastColor);
+    this.conditionalEntropy[lastColor][history[1]?.color || -1] = entropy;
+
+    // Encontrar a cor com menor entropia condicional
+    let minEntropy = Infinity;
+    let predictedColor = lastColor;
+    for (let c in this.conditionalEntropy[lastColor]) {
+      if (this.conditionalEntropy[lastColor][c] < minEntropy) {
+        minEntropy = this.conditionalEntropy[lastColor][c];
+        predictedColor = parseInt(c);
+      }
+    }
+
+    const confidence = Math.min((1 - minEntropy / 1.585), 0.9).toFixed(2);
     return {
-      color: lastColor,
-      colorName: lastColor === 0 ? 'Branco' : lastColor === 1 ? 'Vermelho' : 'Preto',
+      color: predictedColor >= 0 ? predictedColor : lastColor,
+      colorName: predictedColor >= 0 ? (predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto') : (lastColor === 0 ? 'Branco' : lastColor === 1 ? 'Vermelho' : 'Preto'),
       confidence: confidence,
       method: 'Entropy'
     };
@@ -429,7 +499,12 @@ class BlazeInterface {
 
   // Q-Learning
   getState(history) {
-    return history.slice(0, 3).map(r => r.color).join(',');
+    const recent = history.slice(0, 4).map(r => r.color);
+    const streak = history.reduce((acc, r, i) => {
+      if (i === 0 || r.color !== history[i-1].color) return acc;
+      return acc + 1;
+    }, 1);
+    return `${recent.join(',')}|streak:${streak}`;
   }
 
   getQValue(state, action) {
@@ -441,11 +516,12 @@ class BlazeInterface {
     const currentQ = this.getQValue(state, action);
     const maxNextQ = Math.max(...Object.values(this.qTable[nextState] || { 0: 0, 1: 0, 2: 0, wait: 0 }));
     this.qTable[state][action] = currentQ + this.alpha * (reward + this.gamma * maxNextQ - currentQ);
+    this.epsilon = Math.max(this.minEpsilon, this.epsilon * this.epsilonDecay);
   }
 
   predictQLearning() {
     const history = this.results.filter(r => r.status === 'complete').slice(0, 10);
-    if (history.length < 3) return null;
+    if (history.length < 4) return null;
     const state = this.getState(history);
     const actions = [0, 1, 2, 'wait'];
     let action;
@@ -466,34 +542,66 @@ class BlazeInterface {
 
   // Conditional Frequency
   updateConditionalFreq(history) {
-    if (history.length < 3) return;
+    if (history.length < 4) return;
+
+    // Após duas brancas
     if (history[1].color === 0 && history[2].color === 0) {
       this.conditionalFreq['after_two_whites'][history[0].color]++;
     }
-    let streakCount = 0;
+
+    // Após sequência de pretas
+    let blackStreak = 0;
     for (let i = 1; i < history.length; i++) {
-      if (history[i].color === 2) streakCount++;
+      if (history[i].color === 2) blackStreak++;
       else break;
     }
-    if (streakCount >= 3) {
+    if (blackStreak >= 3) {
       this.conditionalFreq['after_black_streak'][history[0].color]++;
+    }
+
+    // Após sequência de vermelhas
+    let redStreak = 0;
+    for (let i = 1; i < history.length; i++) {
+      if (history[i].color === 1) redStreak++;
+      else break;
+    }
+    if (redStreak >= 3) {
+      this.conditionalFreq['after_red_streak'][history[0].color]++;
+    }
+
+    // Após padrão alternado
+    if (history.length >= 4) {
+      const recent4 = history.slice(0, 4).map(r => r.color);
+      if (recent4[0] === recent4[2] && recent4[1] === recent4[3] && recent4[0] !== recent4[1]) {
+        this.conditionalFreq['after_alternate'][history[0].color]++;
+      }
     }
   }
 
   predictConditional() {
     const history = this.results.filter(r => r.status === 'complete').slice(0, 10);
-    if (history.length < 3) return null;
+    if (history.length < 4) return null;
+
     let condition = null;
     if (history[0].color === 0 && history[1].color === 0) {
       condition = 'after_two_whites';
     } else if (history.slice(1, 4).every(r => r.color === 2)) {
       condition = 'after_black_streak';
+    } else if (history.slice(1, 4).every(r => r.color === 1)) {
+      condition = 'after_red_streak';
+    } else if (history.slice(0, 4).map(r => r.color).join(',') === `${history[0].color},${history[1].color},${history[0].color},${history[1].color}`) {
+      condition = 'after_alternate';
     }
+
     if (condition) {
       const freq = this.conditionalFreq[condition];
       const total = Object.values(freq).reduce((a, b) => a + b, 0);
       if (total === 0) return null;
-      const probs = { 0: freq[0] / total, 1: freq[1] / total, 2: freq[2] / total };
+      const probs = {
+        0: (freq[0] + 1) / (total + 3), // Suavização de Laplace
+        1: (freq[1] + 1) / (total + 3),
+        2: (freq[2] + 1) / (total + 3)
+      };
       const maxProb = Math.max(...Object.values(probs));
       const predictedColor = parseInt(Object.keys(probs).find(k => probs[k] === maxProb));
       return {
@@ -520,8 +628,10 @@ class BlazeInterface {
 
     const votes = { 0: 0, 1: 0, 2: 0 };
     predictions.forEach(p => {
-      votes[p.color] += parseFloat(p.confidence);
+      const weight = this.methodWeights[p.method] * p.confidence;
+      votes[p.color] += weight;
     });
+
     const maxVote = Math.max(...Object.values(votes));
     const finalColor = parseInt(Object.keys(votes).find(k => votes[k] === maxVote));
     const avgConfidence = (predictions.reduce((sum, p) => sum + parseFloat(p.confidence), 0) / predictions.length).toFixed(2);
@@ -540,6 +650,27 @@ class BlazeInterface {
     if (!prev) return;
     this.totalPredictions++;
     if (prev.color === cur.color) this.correctPredictions++;
+
+    // Atualizar desempenho dos métodos
+    const predictions = [
+      this.predictMarkov(),
+      this.analyzePatterns(),
+      this.predictEntropy(),
+      this.predictQLearning(),
+      this.predictConditional()
+    ].filter(p => p !== null);
+
+    predictions.forEach(p => {
+      this.methodPerformance[p.method].total++;
+      if (p.color === cur.color) {
+        this.methodPerformance[p.method].correct++;
+      }
+      // Atualizar pesos dinâmicos
+      const accuracy = this.methodPerformance[p.method].total > 0
+        ? this.methodPerformance[p.method].correct / this.methodPerformance[p.method].total
+        : 0.5;
+      this.methodWeights[p.method] = 0.5 + accuracy * 0.5; // Peso entre 0.5 e 1.0
+    });
   }
 
   updateResults(d) {
@@ -554,11 +685,11 @@ class BlazeInterface {
         this.updateMarkovMatrix(this.results.filter(r => r.status === 'complete'));
         this.updateConditionalFreq(this.results.filter(r => r.status === 'complete'));
         if (this.results.length > 1) {
-          const prevState = this.getState(this.results.filter(r => r.status === 'complete').slice(1, 4));
+          const prevState = this.getState(this.results.filter(r => r.status === 'complete').slice(1, 5));
           const action = this.nextPredColor;
           if (action !== null) {
             const reward = d.color === action ? 1 : -1;
-            const nextState = this.getState(this.results.filter(r => r.status === 'complete').slice(0, 3));
+            const nextState = this.getState(this.results.filter(r => r.status === 'complete').slice(0, 4));
             this.updateQTable(prevState, action, reward, nextState);
           }
         }
