@@ -90,37 +90,177 @@ class BlazeInterface {
 
     // CSS inline como fallback (pode ser bloqueado por CSP)
     const css = `
-      .blaze-min-btn{background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;padding:0 8px}
-      .blaze-min-btn:hover{opacity:.75}
-      .blaze-bubble{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;
-        background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);
-        box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:999999;display:none !important;} /* z-index elevado */
-      .blaze-overlay{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-        z-index:999999;font-family:'Arial',sans-serif;display:block !important;opacity:1 !important;} /* Forçar visibilidade */
-      .blaze-monitor{background:rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;
-        background-blend-mode:overlay;border-radius:10px;padding:15px;
-        box-shadow:0 5px 15px rgba(0,0,0,.5);color:#fff;width:350px;display:block !important;}
-      .result-card{background:#4448;border-radius:5px;padding:10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
-      .result-number{font-size:24px;font-weight:bold}
-      .result-color-0{color:#fff;background:linear-gradient(45deg,#fff,#ddd);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-      .result-color-1{color:#f44336}.result-color-2{color:#0F1923}
-      .result-status{padding:5px 10px;border-radius:3px;font-size:12px;font-weight:bold;text-transform:uppercase}
-      .result-status-waiting{background:#ffc107;color:#000}
-      .result-status-rolling{background:#ff9800;color:#000;animation:pulse 1s infinite}
-      .result-status-complete{background:#4caf50;color:#fff}
-      @keyframes pulse{0%{opacity:1}50%{opacity:.5}100%{opacity:1}}
-      .blaze-notification{position:fixed;top:80px;right:20px;padding:15px;border-radius:5px;
-        color:#fff;font-weight:bold;opacity:0;transform:translateY(-20px);
-        transition:all .3s ease;z-index:999999} /* z-index elevado */
-      .notification-win{background:#4caf50}.notification-loss{background:#f44336}
-      .prediction-card{background:#4448;border-radius:5px;padding:15px;margin-bottom:15px;text-align:center;font-weight:bold}
-      .prediction-title{font-size:14px;opacity:.8;margin-bottom:5px}
-      .prediction-value{font-size:18px;font-weight:bold;display:flex;align-items:center;justify-content:center}
-      .color-dot{width:24px;height:24px;border-radius:50%;display:inline-block;margin-right:10px}
-      .color-dot-0{background:#fff;border:1px solid #777}.color-dot-1{background:#f44336}.color-dot-2{background:#212121}
-      .prediction-accuracy{font-size:12px;margin-top:5px;opacity:.7}
-      .prediction-waiting{color:#00e676;text-shadow:0 0 5px rgba(0,230,118,.7)}
-      .analysis-detail{font-size:12px;margin-top:10px;border-top:1px solid #666;padding-top:5px}
+      .blaze-min-btn {
+        background: transparent;
+        border: none;
+        color: #fff;
+        font-size: 20px;
+        cursor: pointer;
+        padding: 0 8px;
+      }
+      .blaze-min-btn:hover {
+        opacity: .75;
+      }
+      .blaze-bubble {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);
+        box-shadow: 0 4px 12px rgba(0,0,0,.5);
+        cursor: pointer;
+        z-index: 999999;
+        display: none; /* Removido !important para permitir manipulação via JS */
+      }
+      .blaze-overlay {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%,-50%);
+        z-index: 999999;
+        font-family: 'Arial', sans-serif;
+        display: block; /* Removido !important */
+        opacity: 1;
+      }
+      .blaze-monitor {
+        background: rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;
+        background-blend-mode: overlay;
+        border-radius: 10px;
+        padding: 15px;
+        box-shadow: 0 5px 15px rgba(0,0,0,.5);
+        color: #fff;
+        width: 350px;
+        display: block; /* Removido !important */
+      }
+      .hidden {
+        display: none !important; /* Classe para ocultar elementos */
+      }
+      .visible {
+        display: block !important; /* Classe para exibir elementos */
+      }
+      .result-card {
+        background: #4448;
+        border-radius: 5px;
+        padding: 10px;
+        margin-bottom: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .result-number {
+        font-size: 24px;
+        font-weight: bold;
+      }
+      .result-color-0 {
+        color: #fff;
+        background: linear-gradient(45deg,#fff,#ddd);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .result-color-1 {
+        color: #f44336;
+      }
+      .result-color-2 {
+        color: #0F1923;
+      }
+      .result-status {
+        padding: 5px 10px;
+        border-radius: 3px;
+        font-size: 12px;
+        font-weight: bold;
+        text-transform: uppercase;
+      }
+      .result-status-waiting {
+        background: #ffc107;
+        color: #000;
+      }
+      .result-status-rolling {
+        background: #ff9800;
+        color: #000;
+        animation: pulse 1s infinite;
+      }
+      .result-status-complete {
+        background: #4caf50;
+        color: #fff;
+      }
+      @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: .5; }
+        100% { opacity: 1; }
+      }
+      .blaze-notification {
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        padding: 15px;
+        border-radius: 5px;
+        color: #fff;
+        font-weight: bold;
+        opacity: 0;
+        transform: translateY(-20px);
+        transition: all .3s ease;
+        z-index: 999999;
+      }
+      .notification-win {
+        background: #4caf50;
+      }
+      .notification-loss {
+        background: #f44336;
+      }
+      .prediction-card {
+        background: #4448;
+        border-radius: 5px;
+        padding: 15px;
+        margin-bottom: 15px;
+        text-align: center;
+        font-weight: bold;
+      }
+      .prediction-title {
+        font-size: 14px;
+        opacity: .8;
+        margin-bottom: 5px;
+      }
+      .prediction-value {
+        font-size: 18px;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .color-dot {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 10px;
+      }
+      .color-dot-0 {
+        background: #fff;
+        border: 1px solid #777;
+      }
+      .color-dot-1 {
+        background: #f44336;
+      }
+      .color-dot-2 {
+        background: #212121;
+      }
+      .prediction-accuracy {
+        font-size: 12px;
+        margin-top: 5px;
+        opacity: .7;
+      }
+      .prediction-waiting {
+        color: #00e676;
+        text-shadow: 0 0 5px rgba(0,230,118,.7);
+      }
+      .analysis-detail {
+        font-size: 12px;
+        margin-top: 10px;
+        border-top: 1px solid #666;
+        padding-top: 5px;
+      }
     `;
     const style = document.createElement('style');
     style.textContent = css;
@@ -160,30 +300,32 @@ class BlazeInterface {
 
     minBtn.addEventListener('click', () => {
       console.log('Botão Minimizar clicado');
-      monitorBox.style.display = 'none';
-      this.bubble.style.display = 'block';
+      monitorBox.classList.add('hidden'); // Usar classe para ocultar
+      monitorBox.classList.remove('visible');
+      this.bubble.classList.add('visible'); // Usar classe para exibir
+      this.bubble.classList.remove('hidden');
     });
 
     this.bubble.addEventListener('click', () => {
       console.log('Bolha clicada');
-      this.bubble.style.display = 'none';
-      monitorBox.style.display = 'block'; // Usar block explicitamente
+      this.bubble.classList.add('hidden');
+      this.bubble.classList.remove('visible');
+      monitorBox.classList.add('visible');
+      monitorBox.classList.remove('hidden');
     });
 
     // Forçar visibilidade inicial
-    monitorBox.style.display = 'block';
-    monitorBox.style.opacity = '1';
-    this.overlay.style.display = 'block';
-    this.overlay.style.opacity = '1';
-    this.bubble.style.display = 'none';
+    monitorBox.classList.add('visible');
+    this.overlay.classList.add('visible');
+    this.bubble.classList.add('hidden');
     console.log('Visibilidade inicial configurada: painel visível, bolha oculta');
 
     // Reaplicar visibilidade após 500ms para contornar manipulações externas
     setTimeout(() => {
-      monitorBox.style.display = 'block';
-      monitorBox.style.opacity = '1';
-      this.overlay.style.display = 'block';
-      this.overlay.style.opacity = '1';
+      monitorBox.classList.add('visible');
+      monitorBox.classList.remove('hidden');
+      this.overlay.classList.add('visible');
+      this.overlay.classList.remove('hidden');
       console.log('Visibilidade reaplicada após 500ms');
     }, 500);
 
