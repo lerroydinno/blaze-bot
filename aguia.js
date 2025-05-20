@@ -45,11 +45,12 @@ class BlazeInterface {
     this.notifiedIds = new Set();
     this.correctPredictions = 0;
     this.totalPredictions = 0;
+    this.isMinimized = false; // Rastrear estado de minimização
 
     // Markov
     this.markovMatrix = {};
     this.markovCounts = {};
-    this.markovOrder = 4; // Aumentado para capturar padrões mais longos
+    this.markovOrder = 4;
 
     // Padrões
     this.patternRules = [
@@ -58,18 +59,18 @@ class BlazeInterface {
       { pattern: [2, 2, 2, 2], suggest: 1, name: 'Quatro Pretos -> Vermelho', weight: 0.8 },
       { pattern: [1, 2, 1], suggest: 2, name: 'Vermelho-Preto-Vermelho -> Preto', weight: 0.65 }
     ];
-    this.patternStats = {}; // Para rastrear desempenho de padrões
+    this.patternStats = {};
 
     // Entropia
     this.entropyHistory = [];
-    this.conditionalEntropy = { 0: {}, 1: {}, 2: {} }; // Entropia condicional por cor
+    this.conditionalEntropy = { 0: {}, 1: {}, 2: {} };
 
     // Q-Learning
     this.qTable = {};
     this.alpha = 0.1;
     this.gamma = 0.9;
-    this.epsilon = 0.2; // Aumentado inicialmente
-    this.epsilonDecay = 0.995; // Decaimento para reduzir exploração
+    this.epsilon = 0.2;
+    this.epsilonDecay = 0.995;
     this.minEpsilon = 0.01;
 
     // Frequência Condicional
@@ -77,7 +78,7 @@ class BlazeInterface {
       'after_two_whites': { 0: 0, 1: 0, 2: 0 },
       'after_black_streak': { 0: 0, 1: 0, 2: 0 },
       'after_red_streak': { 0: 0, 1: 0, 2: 0 },
-      'after_alternate': { 0: 0, 1: 0, 2: 0 } // Após padrão alternado (ex.: 1,2,1)
+      'after_alternate': { 0: 0, 1: 0, 2: 0 }
     };
 
     // Pesos dinâmicos para combinação
@@ -96,24 +97,23 @@ class BlazeInterface {
       'Conditional': { correct: 0, total: 0 }
     };
 
-    // Inicializar interface com atraso para garantir DOM pronto
+    // Inicializar interface com atraso maior
     document.addEventListener('DOMContentLoaded', () => this.initMonitorInterface());
-    // Fallback caso DOMContentLoaded já tenha ocorrido
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
-      setTimeout(() => this.initMonitorInterface(), 100);
+      setTimeout(() => this.initMonitorInterface(), 500); // Aumentado de 100ms para 500ms
     }
   }
 
   injectGlobalStyles() {
-    // Tentar injetar CSS como <link> para evitar CSP (hospedar externamente)
-    const cssUrl = 'https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPOSITORIO/main/blaze.css'; // Substitua pelo URL real do CSS no GitHub
+    // Tentar injetar CSS como <link> para evitar CSP
+    const cssUrl = 'https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPOSITORIO/main/blaze.css';
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = cssUrl;
     document.head.appendChild(link);
     console.log('Tentando injetar CSS externo:', cssUrl);
 
-    // CSS inline como fallback (pode ser bloqueado por CSP)
+    // CSS inline como fallback
     const css = `
       .blaze-min-btn {
         background: transparent;
@@ -303,6 +303,8 @@ class BlazeInterface {
 
     this.overlay = document.createElement('div');
     this.overlay.className = 'blaze-overlay';
+    this.overlay.style.display = 'block !important'; // Forçar visibilidade inicial
+    this.overlay.style.opacity = '1 !important';
     this.overlay.innerHTML = `
       <div class="blaze-monitor" id="blazeMonitorBox">
         <h3>App SHA256</h3>
@@ -314,45 +316,78 @@ class BlazeInterface {
     document.body.appendChild(this.overlay);
     console.log('Painel blaze-overlay adicionado ao DOM');
 
-    // Verificar e registrar event listeners
-    const minBtn = document.getElementById('blazeMinBtn');
-    const monitorBox = document.getElementById('blazeMonitorBox');
+    // Função para configurar eventos com retry
+    const setupEvents = (attempts = 5, delay = 500) => {
+      const minBtn = document.getElementById('blazeMinBtn');
+      const monitorBox = document.getElementById('blazeMonitorBox');
 
-    if (!minBtn || !monitorBox) {
-      console.error('Erro: Elementos blazeMinBtn ou blazeMonitorBox não encontrados no DOM');
-      return;
-    }
+      if (!minBtn || !monitorBox) {
+        console.warn(`Tentativa ${6 - attempts}: Elementos blazeMinBtn ou blazeMonitorBox não encontrados. Tentando novamente em ${delay}ms`);
+        if (attempts > 1) {
+          setTimeout(() => setupEvents(attempts - 1, delay * 1.5), delay);
+        } else {
+          console.error('Erro: Não foi possível encontrar blazeMinBtn ou blazeMonitorBox após várias tentativas');
+        }
+        return;
+      }
 
-    minBtn.addEventListener('click', () => {
-      console.log('Botão Minimizar clicado');
-      monitorBox.classList.add('hidden');
-      monitorBox.classList.remove('visible');
-      this.bubble.classList.add('visible');
-      this.bubble.classList.remove('hidden');
-    });
+      console.log('Elementos blazeMinBtn e blazeMonitorBox encontrados. Configurando eventos.');
 
-    this.bubble.addEventListener('click', () => {
-      console.log('Bolha clicada');
-      this.bubble.classList.add('hidden');
-      this.bubble.classList.remove('visible');
-      monitorBox.classList.add('visible');
-      monitorBox.classList.remove('hidden');
-    });
+      // Configurar eventos de minimização
+      minBtn.addEventListener('click', () => {
+        console.log('Botão Minimizar clicado');
+        this.isMinimized = true;
+        monitorBox.classList.add('hidden');
+        monitorBox.classList.remove('visible');
+        this.bubble.classList.add('visible');
+        this.bubble.classList.remove('hidden');
+      });
 
-    // Forçar visibilidade inicial
-    monitorBox.classList.add('visible');
-    this.overlay.classList.add('visible');
-    this.bubble.classList.add('hidden');
-    console.log('Visibilidade inicial configurada: painel visível, bolha oculta');
+      this.bubble.addEventListener('click', () => {
+        console.log('Bolha clicada');
+        this.isMinimized = false;
+        this.bubble.classList.add('hidden');
+        this.bubble.classList.remove('visible');
+        monitorBox.classList.add('visible');
+        monitorBox.classList.remove('hidden');
+      });
 
-    // Reaplicar visibilidade após 500ms para contornar manipulações externas
-    setTimeout(() => {
+      // Forçar visibilidade inicial
       monitorBox.classList.add('visible');
       monitorBox.classList.remove('hidden');
       this.overlay.classList.add('visible');
       this.overlay.classList.remove('hidden');
-      console.log('Visibilidade reaplicada após 500ms');
-    }, 500);
+      monitorBox.style.display = 'block !important';
+      this.overlay.style.display = 'block !important';
+      console.log('Visibilidade inicial configurada: painel visível, bolha oculta');
+    };
+
+    // Iniciar configuração com retry
+    setupEvents();
+
+    // Reaplicar visibilidade periodicamente
+    const visibilityInterval = setInterval(() => {
+      const monitorBox = document.getElementById('blazeMonitorBox');
+      if (monitorBox && !this.isMinimized) {
+        if (!monitorBox.classList.contains('visible')) {
+          console.log('Reaplicando visibilidade ao painel');
+          monitorBox.classList.add('visible');
+          monitorBox.classList.remove('hidden');
+          monitorBox.style.display = 'block !important';
+          this.overlay.classList.add('visible');
+          this.overlay.classList.remove('hidden');
+          this.overlay.style.display = 'block !important';
+        }
+      } else if (!monitorBox) {
+        console.warn('Painel blazeMonitorBox não encontrado no DOM. Possível remoção externa.');
+      }
+    }, 1000);
+
+    // Parar o interval após 30s ou quando minimizado
+    setTimeout(() => {
+      clearInterval(visibilityInterval);
+      console.log('Intervalo de reaplicação de visibilidade encerrado');
+    }, 30000);
 
     this.ws = new BlazeWebSocket();
     this.ws.doubleTick((d) => this.updateResults(d));
@@ -369,10 +404,10 @@ class BlazeInterface {
     }
     this.markovCounts[lastN][nextColor]++;
     const total = Object.values(this.markovCounts[lastN]).reduce((a, b) => a + b, 0);
-    // Suavização de Laplace
     this.markovMatrix[lastN] = {
       0: (this.markovCounts[lastN][0] + 1) / (total + 3),
-      1: (this.markovCounts[lastN][1] + 1) / (total + 3වැට, this.markovMatrix[lastN][2] = (this.markovCounts[lastN][2] + 1) / (total + 3)
+      1: (this.markovCounts[lastN][1] + 1) / (total + 3),
+      2: (this.markovCounts[lastN][2] + 1) / (total + 3)
     };
   }
 
@@ -399,7 +434,6 @@ class BlazeInterface {
     let bestPrediction = null;
     let highestWeight = 0;
 
-    // Aplicar regras predefinidas
     this.patternRules.forEach(rule => {
       const patternLength = rule.pattern.length;
       const recent = history.slice(0, patternLength).map(r => r.color);
@@ -416,7 +450,6 @@ class BlazeInterface {
       }
     });
 
-    // Detectar streaks dinâmicos
     let streakColor = history[0].color, streakCount = 1;
     for (let i = 1; i < history.length; i++) {
       if (history[i].color === streakColor) streakCount++;
@@ -432,11 +465,10 @@ class BlazeInterface {
       };
     }
 
-    // Detectar padrões alternados (ex.: 1,2,1,2)
     if (history.length >= 4) {
       const recent4 = history.slice(0, 4).map(r => r.color);
       if (recent4[0] === recent4[2] && recent4[1] === recent4[3] && recent4[0] !== recent4[1]) {
-        const suggest = recent4[1]; // Continuar o padrão alternado
+        const suggest = recent4[1];
         bestPrediction = {
           color: suggest,
           colorName: suggest === 0 ? 'Branco' : suggest === 1 ? 'Vermelho' : 'Preto',
@@ -470,7 +502,6 @@ class BlazeInterface {
     const history = this.results.filter(r => r.status === 'complete').slice(0, 10);
     if (history.length < 4) return null;
 
-    // Calcular entropia condicional por cor
     const lastColor = history[0].color;
     if (!this.conditionalEntropy[lastColor]) {
       this.conditionalEntropy[lastColor] = {};
@@ -478,7 +509,6 @@ class BlazeInterface {
     const entropy = this.calculateEntropy(history, lastColor);
     this.conditionalEntropy[lastColor][history[1]?.color || -1] = entropy;
 
-    // Encontrar a cor com menor entropia condicional
     let minEntropy = Infinity;
     let predictedColor = lastColor;
     for (let c in this.conditionalEntropy[lastColor]) {
@@ -544,12 +574,10 @@ class BlazeInterface {
   updateConditionalFreq(history) {
     if (history.length < 4) return;
 
-    // Após duas brancas
     if (history[1].color === 0 && history[2].color === 0) {
       this.conditionalFreq['after_two_whites'][history[0].color]++;
     }
 
-    // Após sequência de pretas
     let blackStreak = 0;
     for (let i = 1; i < history.length; i++) {
       if (history[i].color === 2) blackStreak++;
@@ -559,7 +587,6 @@ class BlazeInterface {
       this.conditionalFreq['after_black_streak'][history[0].color]++;
     }
 
-    // Após sequência de vermelhas
     let redStreak = 0;
     for (let i = 1; i < history.length; i++) {
       if (history[i].color === 1) redStreak++;
@@ -569,7 +596,6 @@ class BlazeInterface {
       this.conditionalFreq['after_red_streak'][history[0].color]++;
     }
 
-    // Após padrão alternado
     if (history.length >= 4) {
       const recent4 = history.slice(0, 4).map(r => r.color);
       if (recent4[0] === recent4[2] && recent4[1] === recent4[3] && recent4[0] !== recent4[1]) {
@@ -598,7 +624,7 @@ class BlazeInterface {
       const total = Object.values(freq).reduce((a, b) => a + b, 0);
       if (total === 0) return null;
       const probs = {
-        0: (freq[0] + 1) / (total + 3), // Suavização de Laplace
+        0: (freq[0] + 1) / (total + 3),
         1: (freq[1] + 1) / (total + 3),
         2: (freq[2] + 1) / (total + 3)
       };
@@ -651,7 +677,6 @@ class BlazeInterface {
     this.totalPredictions++;
     if (prev.color === cur.color) this.correctPredictions++;
 
-    // Atualizar desempenho dos métodos
     const predictions = [
       this.predictMarkov(),
       this.analyzePatterns(),
@@ -665,11 +690,10 @@ class BlazeInterface {
       if (p.color === cur.color) {
         this.methodPerformance[p.method].correct++;
       }
-      // Atualizar pesos dinâmicos
       const accuracy = this.methodPerformance[p.method].total > 0
         ? this.methodPerformance[p.method].correct / this.methodPerformance[p.method].total
         : 0.5;
-      this.methodWeights[p.method] = 0.5 + accuracy * 0.5; // Peso entre 0.5 e 1.0
+      this.methodWeights[p.method] = 0.5 + accuracy * 0.5;
     });
   }
 
