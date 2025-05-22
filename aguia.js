@@ -45,7 +45,7 @@ class BlazeInterface {
     this.notifiedIds = new Set();
     this.correctPredictions = 0;
     this.totalPredictions = 0;
-    this.isMinimized = false; // Rastrear estado de minimização
+    this.isMinimized = false;
 
     // Markov
     this.markovMatrix = {};
@@ -67,10 +67,10 @@ class BlazeInterface {
 
     // Q-Learning
     this.qTable = {};
-    this.alpha = 0.1;
+    this.alpha = 0.15; // Aumentado para aprendizado mais rápido
     this.gamma = 0.9;
     this.epsilon = 0.2;
-    this.epsilonDecay = 0.995;
+    this.epsilonDecay = 0.99; // Decaimento mais rápido
     this.minEpsilon = 0.01;
 
     // Frequência Condicional
@@ -97,15 +97,48 @@ class BlazeInterface {
       'Conditional': { correct: 0, total: 0 }
     };
 
-    // Inicializar interface com atraso maior
+    // Carregar estado salvo
+    this.loadState();
+
+    // Inicializar interface
     document.addEventListener('DOMContentLoaded', () => this.initMonitorInterface());
     if (document.readyState === 'complete' || document.readyState === 'interactive') {
-      setTimeout(() => this.initMonitorInterface(), 500); // Aumentado de 100ms para 500ms
+      setTimeout(() => this.initMonitorInterface(), 500);
+    }
+  }
+
+  // Persistência
+  saveState() {
+    try {
+      localStorage.setItem('blazeState', JSON.stringify({
+        markovMatrix: this.markovMatrix,
+        qTable: this.qTable,
+        conditionalFreq: this.conditionalFreq,
+        methodPerformance: this.methodPerformance
+      }));
+      console.log('Estado salvo no localStorage');
+    } catch (err) {
+      console.error('Erro ao salvar estado:', err);
+    }
+  }
+
+  loadState() {
+    try {
+      const state = localStorage.getItem('blazeState');
+      if (state) {
+        const parsed = JSON.parse(state);
+        this.markovMatrix = parsed.markovMatrix || {};
+        this.qTable = parsed.qTable || {};
+        this.conditionalFreq = parsed.conditionalFreq || this.conditionalFreq;
+        this.methodPerformance = parsed.methodPerformance || this.methodPerformance;
+        console.log('Estado carregado do localStorage');
+      }
+    } catch (err) {
+      console.error('Erro ao carregar estado:', err);
     }
   }
 
   injectGlobalStyles() {
-    // Tentar injetar CSS como <link> para evitar CSP
     const cssUrl = 'https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPOSITORIO/main/blaze.css';
     const link = document.createElement('link');
     link.rel = 'stylesheet';
@@ -113,7 +146,6 @@ class BlazeInterface {
     document.head.appendChild(link);
     console.log('Tentando injetar CSS externo:', cssUrl);
 
-    // CSS inline como fallback
     const css = `
       .blaze-min-btn {
         background: transparent;
@@ -303,7 +335,7 @@ class BlazeInterface {
 
     this.overlay = document.createElement('div');
     this.overlay.className = 'blaze-overlay';
-    this.overlay.style.display = 'block !important'; // Forçar visibilidade inicial
+    this.overlay.style.display = 'block !important';
     this.overlay.style.opacity = '1 !important';
     this.overlay.innerHTML = `
       <div class="blaze-monitor" id="blazeMonitorBox">
@@ -316,7 +348,6 @@ class BlazeInterface {
     document.body.appendChild(this.overlay);
     console.log('Painel blaze-overlay adicionado ao DOM');
 
-    // Função para configurar eventos com retry
     const setupEvents = (attempts = 5, delay = 500) => {
       const minBtn = document.getElementById('blazeMinBtn');
       const monitorBox = document.getElementById('blazeMonitorBox');
@@ -333,7 +364,6 @@ class BlazeInterface {
 
       console.log('Elementos blazeMinBtn e blazeMonitorBox encontrados. Configurando eventos.');
 
-      // Configurar eventos de minimização
       minBtn.addEventListener('click', () => {
         console.log('Botão Minimizar clicado');
         this.isMinimized = true;
@@ -352,7 +382,6 @@ class BlazeInterface {
         monitorBox.classList.remove('hidden');
       });
 
-      // Forçar visibilidade inicial
       monitorBox.classList.add('visible');
       monitorBox.classList.remove('hidden');
       this.overlay.classList.add('visible');
@@ -362,10 +391,8 @@ class BlazeInterface {
       console.log('Visibilidade inicial configurada: painel visível, bolha oculta');
     };
 
-    // Iniciar configuração com retry
     setupEvents();
 
-    // Reaplicar visibilidade periodicamente
     const visibilityInterval = setInterval(() => {
       const monitorBox = document.getElementById('blazeMonitorBox');
       if (monitorBox && !this.isMinimized) {
@@ -383,7 +410,6 @@ class BlazeInterface {
       }
     }, 1000);
 
-    // Parar o interval após 30s ou quando minimizado
     setTimeout(() => {
       clearInterval(visibilityInterval);
       console.log('Intervalo de reaplicação de visibilidade encerrado');
@@ -391,6 +417,54 @@ class BlazeInterface {
 
     this.ws = new BlazeWebSocket();
     this.ws.doubleTick((d) => this.updateResults(d));
+  }
+
+  // Aprendizado Dinâmico de Padrões
+  learnPatterns() {
+    const history = this.results.filter(r => r.status === 'complete').slice(0, 50);
+    if (history.length < 5) return;
+
+    const patternLength = 4;
+    const patternCounts = {};
+
+    // Contar sequências de 4 cores
+    for (let i = 0; i <= history.length - patternLength - 1; i++) {
+      const sequence = history.slice(i, i + patternLength).map(r => r.color);
+      const nextColor = history[i + patternLength].color;
+      const key = sequence.join(',');
+      if (!patternCounts[key]) {
+        patternCounts[key] = { 0: 0, 1: 0, 2: 0, total: 0 };
+      }
+      patternCounts[key][nextColor]++;
+      patternCounts[key].total++;
+    }
+
+    // Adicionar padrões frequentes
+    for (const key in patternCounts) {
+      const counts = patternCounts[key];
+      if (counts.total >= 3) { // Padrão apareceu pelo menos 3 vezes
+        const probs = {
+          0: counts[0] / counts.total,
+          1: counts[1] / counts.total,
+          2: counts[2] / counts.total
+        };
+        const maxProb = Math.max(...Object.values(probs));
+        const suggest = parseInt(Object.keys(probs).find(k => probs[k] === maxProb));
+        if (maxProb > 0.5) { // Requer probabilidade dominante
+          const pattern = key.split(',').map(Number);
+          const exists = this.patternRules.some(rule => rule.pattern.join(',') === key);
+          if (!exists) {
+            this.patternRules.push({
+              pattern,
+              suggest,
+              name: `Padrão Dinâmico ${key} -> ${suggest === 0 ? 'Branco' : suggest === 1 ? 'Vermelho' : 'Preto'}`,
+              weight: 0.6
+            });
+            console.log(`Novo padrão adicionado: ${key} -> ${suggest}`);
+          }
+        }
+      }
+    }
   }
 
   // Markov Analysis
@@ -428,7 +502,7 @@ class BlazeInterface {
 
   // Temporal Patterns Analysis
   analyzePatterns() {
-    const history = this.results.filter(r => r.status === 'complete').slice(0, 20);
+    const history = this.results.filter(r => r.status === 'complete').slice(0, 50);
     if (history.length < 4) return null;
 
     let bestPrediction = null;
@@ -436,16 +510,18 @@ class BlazeInterface {
 
     this.patternRules.forEach(rule => {
       const patternLength = rule.pattern.length;
-      const recent = history.slice(0, patternLength).map(r => r.color);
-      if (recent.join(',') === rule.pattern.join(',')) {
-        if (rule.weight > highestWeight) {
-          highestWeight = rule.weight;
-          bestPrediction = {
-            color: rule.suggest,
-            colorName: rule.suggest === 0 ? 'Branco' : rule.suggest === 1 ? 'Vermelho' : 'Preto',
-            confidence: rule.weight,
-            method: 'Patterns'
-          };
+      if (history.length >= patternLength) {
+        const recent = history.slice(0, patternLength).map(r => r.color);
+        if (recent.join(',') === rule.pattern.join(',')) {
+          if (rule.weight > highestWeight) {
+            highestWeight = rule.weight;
+            bestPrediction = {
+              color: rule.suggest,
+              colorName: rule.suggest === 0 ? 'Branco' : rule.suggest === 1 ? 'Vermelho' : 'Preto',
+              confidence: rule.weight,
+              method: 'Patterns'
+            };
+          }
         }
       }
     });
@@ -702,12 +778,13 @@ class BlazeInterface {
     const i = this.results.findIndex(r => (r.id || r.tmp) === id);
     if (i >= 0) this.results[i] = { ...this.results[i], ...d };
     else {
-      if (this.results.length > 20) this.results.pop();
+      if (this.results.length > 50) this.results.pop(); // Aumentado para 50
       this.results.unshift({ ...d, tmp: id });
       if (d.status === 'complete') {
         this.updatePredictionStats(d);
         this.updateMarkovMatrix(this.results.filter(r => r.status === 'complete'));
         this.updateConditionalFreq(this.results.filter(r => r.status === 'complete'));
+        this.learnPatterns(); // Aprender novos padrões
         if (this.results.length > 1) {
           const prevState = this.getState(this.results.filter(r => r.status === 'complete').slice(1, 5));
           const action = this.nextPredColor;
@@ -717,6 +794,7 @@ class BlazeInterface {
             this.updateQTable(prevState, action, reward, nextState);
           }
         }
+        this.saveState(); // Salvar estado após atualizações
       }
     }
 
@@ -748,7 +826,7 @@ class BlazeInterface {
         </div>
         <div class="prediction-accuracy">Confiança: ${pred.confidence * 100}% | Taxa de acerto: ${acc}% (${this.correctPredictions}/${this.totalPredictions})</div>
         <div class="analysis-detail">
-          ${pred.details.map(d => `<div>${d.method}: ${d.colorName} (${d.confidence * 100}%)</div>`).join('')}
+          ${pred.details.map(d => `<div>${d.method}: ${d.colorName} (${d.confidence * 100}%) [Acurácia: ${(this.methodPerformance[d.method].total > 0 ? this.methodPerformance[d.method].correct / this.methodPerformance[d.method].total * 100 : 0).toFixed(1)}%]</div>`).join('')}
         </div>
       `;
       this.nextPredColor = pred.color;
