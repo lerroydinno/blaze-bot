@@ -48,16 +48,16 @@ class BlazeInterface {
     this.isMinimized = false;
 
     // Markov
-    this.markovMatrix = {};
-    this.markovCounts = {};
+    this.markovMatrices = { 1: {}, 2: {}, 3: {}, 4: {} }; // Matrizes por ordem
+    this.markovCounts = { 1: {}, 2: {}, 3: {}, 4: {} };
     this.markovOrder = 4;
 
     // Padrões
     this.patternRules = [
-      { pattern: [1, 1, 1], suggest: 2, name: 'Três Vermelhos -> Preto', weight: 0.7 },
-      { pattern: [0], suggest: 1, name: 'Branco -> Vermelho', weight: 0.6 },
-      { pattern: [2, 2, 2, 2], suggest: 1, name: 'Quatro Pretos -> Vermelho', weight: 0.8 },
-      { pattern: [1, 2, 1], suggest: 2, name: 'Vermelho-Preto-Vermelho -> Preto', weight: 0.65 }
+      { pattern: [1, 1, 1], suggest: 2, name: 'Três Vermelhos -> Preto', weight: 0.7, correct: 0, total: 0 },
+      { pattern: [0], suggest: 1, name: 'Branco -> Vermelho', weight: 0.6, correct: 0, total: 0 },
+      { pattern: [2, 2, 2, 2], suggest: 1, name: 'Quatro Pretos -> Vermelho', weight: 0.8, correct: 0, total: 0 },
+      { pattern: [1, 2, 1], suggest: 2, name: 'Vermelho-Preto-Vermelho -> Preto', weight: 0.65, correct: 0, total: 0 }
     ];
     this.patternStats = {};
 
@@ -67,10 +67,11 @@ class BlazeInterface {
 
     // Q-Learning
     this.qTable = {};
-    this.alpha = 0.15; // Aumentado para aprendizado mais rápido
+    this.replayBuffer = []; // Buffer para replay
+    this.alpha = 0.15;
     this.gamma = 0.9;
     this.epsilon = 0.2;
-    this.epsilonDecay = 0.99; // Decaimento mais rápido
+    this.epsilonDecay = 0.99;
     this.minEpsilon = 0.01;
 
     // Frequência Condicional
@@ -81,7 +82,7 @@ class BlazeInterface {
       'after_alternate': { 0: 0, 1: 0, 2: 0 }
     };
 
-    // Pesos dinâmicos para combinação
+    // Pesos dinâmicos
     this.methodWeights = {
       'Markov': 1.0,
       'Patterns': 1.0,
@@ -90,14 +91,14 @@ class BlazeInterface {
       'Conditional': 0.9
     };
     this.methodPerformance = {
-      'Markov': { correct: 0, total: 0 },
-      'Patterns': { correct: 0, total: 0 },
-      'Entropy': { correct: 0, total: 0 },
-      'Q-Learning': { correct: 0, total: 0 },
-      'Conditional': { correct: 0, total: 0 }
+      'Markov': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0 },
+      'Patterns': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0 },
+      'Entropy': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0 },
+      'Q-Learning': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0 },
+      'Conditional': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0 }
     };
 
-    // Carregar estado salvo
+    // Carregar estado
     this.loadState();
 
     // Inicializar interface
@@ -111,10 +112,11 @@ class BlazeInterface {
   saveState() {
     try {
       localStorage.setItem('blazeState', JSON.stringify({
-        markovMatrix: this.markovMatrix,
+        markovMatrices: this.markovMatrices,
         qTable: this.qTable,
         conditionalFreq: this.conditionalFreq,
-        methodPerformance: this.methodPerformance
+        methodPerformance: this.methodPerformance,
+        patternRules: this.patternRules
       }));
       console.log('Estado salvo no localStorage');
     } catch (err) {
@@ -127,10 +129,11 @@ class BlazeInterface {
       const state = localStorage.getItem('blazeState');
       if (state) {
         const parsed = JSON.parse(state);
-        this.markovMatrix = parsed.markovMatrix || {};
+        this.markovMatrices = parsed.markovMatrices || this.markovMatrices;
         this.qTable = parsed.qTable || {};
         this.conditionalFreq = parsed.conditionalFreq || this.conditionalFreq;
         this.methodPerformance = parsed.methodPerformance || this.methodPerformance;
+        this.patternRules = parsed.patternRules || this.patternRules;
         console.log('Estado carregado do localStorage');
       }
     } catch (err) {
@@ -419,30 +422,73 @@ class BlazeInterface {
     this.ws.doubleTick((d) => this.updateResults(d));
   }
 
+  // Validação Cruzada
+  crossValidate(history) {
+    if (history.length < 10) return;
+
+    const methods = ['Markov', 'Patterns', 'Entropy', 'Q-Learning', 'Conditional'];
+    const scores = { Markov: 0, Patterns: 0, Entropy: 0, 'Q-Learning': 0, Conditional: 0 };
+
+    // Simular previsões em 5 folds
+    const foldSize = Math.floor(history.length / 5);
+    for (let i = 0; i < 5; i++) {
+      const testStart = i * foldSize;
+      const testEnd = (i + 1) * foldSize;
+      const testSet = history.slice(testStart, testEnd);
+      const trainSet = history.slice(0, testStart).concat(history.slice(testEnd));
+
+      methods.forEach(method => {
+        let correct = 0;
+        testSet.forEach((result, idx) => {
+          const subHistory = trainSet.concat(testSet.slice(0, idx));
+          let pred;
+          if (method === 'Markov') pred = this.predictMarkov(subHistory);
+          else if (method === 'Patterns') pred = this.analyzePatterns(subHistory);
+          else if (method === 'Entropy') pred = this.predictEntropy(subHistory);
+          else if (method === 'Q-Learning') pred = this.predictQLearning(subHistory);
+          else pred = this.predictConditional(subHistory);
+          if (pred && pred.color === result.color) correct++;
+        });
+        scores[method] += correct / testSet.length;
+      });
+    }
+
+    // Ajustar pesos com base em validação
+    methods.forEach(method => {
+      const score = scores[method] / 5; // Média dos folds
+      if (this.methodPerformance[method].total > 10) {
+        this.methodWeights[method] = 0.5 + score * 0.5;
+        console.log(`Peso ajustado para ${method}: ${this.methodWeights[method].toFixed(2)} (score: ${score.toFixed(2)})`);
+      }
+    });
+  }
+
   // Aprendizado Dinâmico de Padrões
   learnPatterns() {
     const history = this.results.filter(r => r.status === 'complete').slice(0, 50);
-    if (history.length < 5) return;
+    if (history.length < 6) return;
 
-    const patternLength = 4;
+    const maxPatternLength = 5;
     const patternCounts = {};
 
-    // Contar sequências de 4 cores
-    for (let i = 0; i <= history.length - patternLength - 1; i++) {
-      const sequence = history.slice(i, i + patternLength).map(r => r.color);
-      const nextColor = history[i + patternLength].color;
-      const key = sequence.join(',');
-      if (!patternCounts[key]) {
-        patternCounts[key] = { 0: 0, 1: 0, 2: 0, total: 0 };
+    // Contar sequências de 3 a 5 cores
+    for (let len = 3; len <= maxPatternLength; len++) {
+      for (let i = 0; i <= history.length - len - 1; i++) {
+        const sequence = history.slice(i, i + len).map(r => r.color);
+        const nextColor = history[i + len].color;
+        const key = sequence.join(',');
+        if (!patternCounts[key]) {
+          patternCounts[key] = { 0: 0, 1: 0, 2: 0, total: 0 };
+        }
+        patternCounts[key][nextColor]++;
+        patternCounts[key].total++;
       }
-      patternCounts[key][nextColor]++;
-      patternCounts[key].total++;
     }
 
     // Adicionar padrões frequentes
     for (const key in patternCounts) {
       const counts = patternCounts[key];
-      if (counts.total >= 3) { // Padrão apareceu pelo menos 3 vezes
+      if (counts.total >= 3) {
         const probs = {
           0: counts[0] / counts.total,
           1: counts[1] / counts.total,
@@ -450,7 +496,7 @@ class BlazeInterface {
         };
         const maxProb = Math.max(...Object.values(probs));
         const suggest = parseInt(Object.keys(probs).find(k => probs[k] === maxProb));
-        if (maxProb > 0.5) { // Requer probabilidade dominante
+        if (maxProb > 0.5) {
           const pattern = key.split(',').map(Number);
           const exists = this.patternRules.some(rule => rule.pattern.join(',') === key);
           if (!exists) {
@@ -458,52 +504,76 @@ class BlazeInterface {
               pattern,
               suggest,
               name: `Padrão Dinâmico ${key} -> ${suggest === 0 ? 'Branco' : suggest === 1 ? 'Vermelho' : 'Preto'}`,
-              weight: 0.6
+              weight: 0.6,
+              correct: 0,
+              total: 0
             });
             console.log(`Novo padrão adicionado: ${key} -> ${suggest}`);
           }
         }
       }
     }
+
+    // Esquecimento: Remover padrões com acurácia < 40% após 10 usos
+    this.patternRules = this.patternRules.filter(rule => {
+      if (rule.total >= 10 && rule.correct / rule.total < 0.4) {
+        console.log(`Padrão removido: ${rule.name} (acurácia: ${(rule.correct / rule.total * 100).toFixed(1)}%)`);
+        return false;
+      }
+      return true;
+    });
   }
 
   // Markov Analysis
   updateMarkovMatrix(history) {
-    if (history.length < this.markovOrder + 1) return;
-    const lastN = history.slice(0, this.markovOrder).map(r => r.color).join(',');
-    const nextColor = history[0].color;
-    if (!this.markovMatrix[lastN]) {
-      this.markovMatrix[lastN] = { 0: 0, 1: 0, 2: 0 };
-      this.markovCounts[lastN] = { 0: 0, 1: 0, 2: 0 };
+    for (let order = 1; order <= this.markovOrder; order++) {
+      if (history.length < order + 1) continue;
+      const lastN = history.slice(0, order).map(r => r.color).join(',');
+      const nextColor = history[0].color;
+      if (!this.markovMatrices[order][lastN]) {
+        this.markovMatrices[order][lastN] = { 0: 0, 1: 0, 2: 0 };
+        this.markovCounts[order][lastN] = { 0: 0, 1: 0, 2: 0 };
+      }
+      this.markovCounts[order][lastN][nextColor]++;
+      const total = Object.values(this.markovCounts[order][lastN]).reduce((a, b) => a + b, 0);
+      this.markovMatrices[order][lastN] = {
+        0: (this.markovCounts[order][lastN][0] + 1) / (total + 3),
+        1: (this.markovCounts[order][lastN][1] + 1) / (total + 3),
+        2: (this.markovCounts[order][lastN][2] + 1) / (total + 3)
+      };
     }
-    this.markovCounts[lastN][nextColor]++;
-    const total = Object.values(this.markovCounts[lastN]).reduce((a, b) => a + b, 0);
-    this.markovMatrix[lastN] = {
-      0: (this.markovCounts[lastN][0] + 1) / (total + 3),
-      1: (this.markovCounts[lastN][1] + 1) / (total + 3),
-      2: (this.markovCounts[lastN][2] + 1) / (total + 3)
-    };
   }
 
-  predictMarkov() {
-    const history = this.results.filter(r => r.status === 'complete').slice(0, this.markovOrder);
-    if (history.length < this.markovOrder) return null;
-    const lastN = history.map(r => r.color).join(',');
-    const probs = this.markovMatrix[lastN] || { 0: 1/3, 1: 1/3, 2: 1/3 };
-    const maxProb = Math.max(...Object.values(probs));
-    const predictedColor = parseInt(Object.keys(probs).find(k => probs[k] === maxProb));
-    return {
-      color: predictedColor,
-      colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
-      confidence: maxProb.toFixed(2),
-      method: 'Markov'
-    };
+  predictMarkov(history = this.results) {
+    history = history.filter(r => r.status === 'complete');
+    let bestPred = null;
+    let maxWeight = 0;
+
+    for (let order = 1; order <= this.markovOrder; order++) {
+      if (history.length < order) continue;
+      const lastN = history.slice(0, order).map(r => r.color).join(',');
+      const probs = this.markovMatrices[order][lastN] || { 0: 1/3, 1: 1/3, 2: 1/3 };
+      const total = this.markovCounts[order][lastN] ? Object.values(this.markovCounts[order][lastN]).reduce((a, b) => a + b, 0) : 0;
+      const weight = total > 0 ? Math.min(total / 10, 1) : 0.1; // Peso baseado em dados
+      const maxProb = Math.max(...Object.values(probs));
+      if (weight * maxProb > maxWeight) {
+        maxWeight = weight * maxProb;
+        const predictedColor = parseInt(Object.keys(probs).find(k => probs[k] === maxProb));
+        bestPred = {
+          color: predictedColor,
+          colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
+          confidence: (maxProb * weight).toFixed(2),
+          method: 'Markov'
+        };
+      }
+    }
+    return bestPred;
   }
 
   // Temporal Patterns Analysis
-  analyzePatterns() {
-    const history = this.results.filter(r => r.status === 'complete').slice(0, 50);
-    if (history.length < 4) return null;
+  analyzePatterns(history = this.results) {
+    history = history.filter(r => r.status === 'complete').slice(0, 50);
+    if (history.length < 3) return null;
 
     let bestPrediction = null;
     let highestWeight = 0;
@@ -513,12 +583,13 @@ class BlazeInterface {
       if (history.length >= patternLength) {
         const recent = history.slice(0, patternLength).map(r => r.color);
         if (recent.join(',') === rule.pattern.join(',')) {
-          if (rule.weight > highestWeight) {
-            highestWeight = rule.weight;
+          const weight = rule.weight * (rule.total > 0 ? Math.min(rule.correct / rule.total + 0.5, 1) : 1);
+          if (weight > highestWeight) {
+            highestWeight = weight;
             bestPrediction = {
               color: rule.suggest,
               colorName: rule.suggest === 0 ? 'Branco' : rule.suggest === 1 ? 'Vermelho' : 'Preto',
-              confidence: rule.weight,
+              confidence: Math.min(weight, 1).toFixed(2),
               method: 'Patterns'
             };
           }
@@ -574,8 +645,8 @@ class BlazeInterface {
     return entropy;
   }
 
-  predictEntropy() {
-    const history = this.results.filter(r => r.status === 'complete').slice(0, 10);
+  predictEntropy(history = this.results) {
+    history = history.filter(r => r.status === 'complete').slice(0, 10);
     if (history.length < 4) return null;
 
     const lastColor = history[0].color;
@@ -610,7 +681,9 @@ class BlazeInterface {
       if (i === 0 || r.color !== history[i-1].color) return acc;
       return acc + 1;
     }, 1);
-    return `${recent.join(',')}|streak:${streak}`;
+    const entropy = this.calculateEntropy(history.slice(0, 10));
+    const entropyBucket = Math.floor(entropy * 10) / 10; // Discretizar entropia
+    return `${recent.join(',')}|streak:${streak}|entropy:${entropyBucket}`;
   }
 
   getQValue(state, action) {
@@ -623,10 +696,24 @@ class BlazeInterface {
     const maxNextQ = Math.max(...Object.values(this.qTable[nextState] || { 0: 0, 1: 0, 2: 0, wait: 0 }));
     this.qTable[state][action] = currentQ + this.alpha * (reward + this.gamma * maxNextQ - currentQ);
     this.epsilon = Math.max(this.minEpsilon, this.epsilon * this.epsilonDecay);
+
+    // Adicionar ao replay buffer
+    this.replayBuffer.push({ state, action, reward, nextState });
+    if (this.replayBuffer.length > 100) this.replayBuffer.shift();
+
+    // Replay: Treinar com 5 amostras aleatórias
+    if (this.replayBuffer.length >= 10) {
+      for (let i = 0; i < 5; i++) {
+        const sample = this.replayBuffer[Math.floor(Math.random() * this.replayBuffer.length)];
+        const currentQ = this.getQValue(sample.state, sample.action);
+        const maxNextQ = Math.max(...Object.values(this.qTable[sample.nextState] || { 0: 0, 1: 0, 2: 0, wait: 0 }));
+        this.qTable[sample.state][sample.action] = currentQ + this.alpha * (sample.reward + this.gamma * maxNextQ - currentQ);
+      }
+    }
   }
 
-  predictQLearning() {
-    const history = this.results.filter(r => r.status === 'complete').slice(0, 10);
+  predictQLearning(history = this.results) {
+    history = history.filter(r => r.status === 'complete').slice(0, 10);
     if (history.length < 4) return null;
     const state = this.getState(history);
     const actions = [0, 1, 2, 'wait'];
@@ -680,8 +767,8 @@ class BlazeInterface {
     }
   }
 
-  predictConditional() {
-    const history = this.results.filter(r => r.status === 'complete').slice(0, 10);
+  predictConditional(history = this.results) {
+    history = history.filter(r => r.status === 'complete').slice(0, 10);
     if (history.length < 4) return null;
 
     let condition = null;
@@ -724,7 +811,7 @@ class BlazeInterface {
       this.predictEntropy(),
       this.predictQLearning(),
       this.predictConditional()
-    ].filter(p => p !== null);
+    ].filter(p => p !== null && p.confidence >= 0.5); // Filtrar baixa confiança
 
     if (!predictions.length) return null;
 
@@ -763,13 +850,34 @@ class BlazeInterface {
 
     predictions.forEach(p => {
       this.methodPerformance[p.method].total++;
+      this.methodPerformance[p.method].recentTotal++;
       if (p.color === cur.color) {
         this.methodPerformance[p.method].correct++;
+        this.methodPerformance[p.method].recentCorrect++;
       }
-      const accuracy = this.methodPerformance[p.method].total > 0
+      // Peso com decaimento: mais peso para acertos recentes
+      const recentAcc = this.methodPerformance[p.method].recentTotal > 0
+        ? this.methodPerformance[p.method].recentCorrect / this.methodPerformance[p.method].recentTotal
+        : 0.5;
+      const totalAcc = this.methodPerformance[p.method].total > 0
         ? this.methodPerformance[p.method].correct / this.methodPerformance[p.method].total
         : 0.5;
-      this.methodWeights[p.method] = 0.5 + accuracy * 0.5;
+      this.methodWeights[p.method] = 0.6 * recentAcc + 0.4 * totalAcc;
+
+      // Resetar recent após 20 rodadas
+      if (this.methodPerformance[p.method].recentTotal >= 20) {
+        this.methodPerformance[p.method].recentCorrect = 0;
+        this.methodPerformance[p.method].recentTotal = 0;
+      }
+    });
+
+    // Atualizar acurácia de padrões
+    this.patternRules.forEach(rule => {
+      const recent = this.results.slice(0, rule.pattern.length).map(r => r.color);
+      if (recent.join(',') === rule.pattern.join(',')) {
+        rule.total++;
+        if (cur.color === rule.suggest) rule.correct++;
+      }
     });
   }
 
@@ -778,13 +886,14 @@ class BlazeInterface {
     const i = this.results.findIndex(r => (r.id || r.tmp) === id);
     if (i >= 0) this.results[i] = { ...this.results[i], ...d };
     else {
-      if (this.results.length > 50) this.results.pop(); // Aumentado para 50
+      if (this.results.length > 50) this.results.pop();
       this.results.unshift({ ...d, tmp: id });
       if (d.status === 'complete') {
         this.updatePredictionStats(d);
         this.updateMarkovMatrix(this.results.filter(r => r.status === 'complete'));
         this.updateConditionalFreq(this.results.filter(r => r.status === 'complete'));
-        this.learnPatterns(); // Aprender novos padrões
+        this.learnPatterns();
+        this.crossValidate(this.results.filter(r => r.status === 'complete'));
         if (this.results.length > 1) {
           const prevState = this.getState(this.results.filter(r => r.status === 'complete').slice(1, 5));
           const action = this.nextPredColor;
@@ -794,7 +903,7 @@ class BlazeInterface {
             this.updateQTable(prevState, action, reward, nextState);
           }
         }
-        this.saveState(); // Salvar estado após atualizações
+        this.saveState();
       }
     }
 
