@@ -110,6 +110,7 @@ class BlazeInterface {
     this.epsilon = 0.2;
     this.epsilonDecay = 0.99;
     this.minEpsilon = 0.01;
+    this.consecutiveCorrect = { 'Q-Learning': 0 }; // Para recompensas diferenciadas
 
     // Frequência Condicional
     this.conditionalFreq = {
@@ -121,14 +122,15 @@ class BlazeInterface {
     };
 
     // Preditor Neural
-    this.neuralWeights1 = Array(10).fill().map(() => Array(9).fill(Math.random() * 0.1 - 0.05)); // 10 nós x 9 entradas
+    this.neuralWeights1 = Array(10).fill().map(() => Array(9).fill(Math.random() * 0.1 - 0.05));
     this.neuralBiases1 = Array(10).fill(0);
-    this.neuralWeights2 = Array(5).fill().map(() => Array(10).fill(Math.random() * 0.1 - 0.05)); // 5 nós x 10 entradas
+    this.neuralWeights2 = Array(5).fill().map(() => Array(10).fill(Math.random() * 0.1 - 0.05));
     this.neuralBiases2 = Array(5).fill(0);
-    this.outputWeights = Array(3).fill().map(() => Array(5).fill(Math.random() * 0.1 - 0.05)); // 3 saídas x 5 nós
+    this.outputWeights = Array(3).fill().map(() => Array(5).fill(Math.random() * 0.1 - 0.05));
     this.outputBiases = Array(3).fill(0);
     this.neuralLearningRate = 0.01;
     this.dropoutRate = 0.2;
+    this.consecutiveErrors = { 'Neural': 0 }; // Para ajustar taxa de aprendizado
 
     // Contexto Temporal
     this.contextWindows = { 5: {}, 10: {}, 20: {} };
@@ -143,12 +145,22 @@ class BlazeInterface {
       'Neural': 0.7
     };
     this.methodPerformance = {
-      'Markov': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0, confidenceSum: 0, confidenceCount: 0, confidenceVariance: 0 },
-      'Patterns': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0, confidenceSum: 0, confidenceCount: 0, confidenceVariance: 0 },
-      'Entropy': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0, confidenceSum: 0, confidenceCount: 0, confidenceVariance: 0 },
-      'Q-Learning': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0, confidenceSum: 0, confidenceCount: 0, confidenceVariance: 0 },
-      'Conditional': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0, confidenceSum: 0, confidenceCount: 0, confidenceVariance: 0 },
-      'Neural': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0, confidenceSum: 0, confidenceCount: 0, confidenceVariance: 0 }
+      'Markov': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0, confidenceSum: 0, confidenceCount: 0, confidenceVariance: 0, contextErrors: {} },
+      'Patterns': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0, confidenceSum: 0, confidenceCount: 0, confidenceVariance: 0, contextErrors: {} },
+      'Entropy': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0, confidenceSum: 0, confidenceCount: 0, confidenceVariance: 0, contextErrors: {} },
+      'Q-Learning': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0, confidenceSum: 0, confidenceCount: 0, confidenceVariance: 0, contextErrors: {} },
+      'Conditional': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0, confidenceSum: 0, confidenceCount: 0, confidenceVariance: 0, contextErrors: {} },
+      'Neural': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0, confidenceSum: 0, confidenceCount: 0, confidenceVariance: 0, contextErrors: {} }
+    };
+
+    // Histórico de Previsões por Método
+    this.predictionHistory = {
+      'Markov': [],
+      'Patterns': [],
+      'Entropy': [],
+      'Q-Learning': [],
+      'Conditional': [],
+      'Neural': []
     };
 
     // Otimização de Hiperparâmetros
@@ -257,8 +269,7 @@ class BlazeInterface {
       .prediction-accuracy { font-size: 12px; margin-top: 5px; opacity: .7; }
       .prediction-waiting { color: #00e676; text-shadow: 0 0 5px rgba(0,230,118,.7); }
       .analysis-detail { font-size: 12px; margin-top: 10px; border-top: 1px solid #666; padding-top: 5px; }
-      .feedback-btn { background: #666; border: none; color: #fff; padding: 5px 10px; margin: 5px; border-radius: 3px; cursor: pointer; }
-      .feedback-btn:hover { background: #888; }
+      .performance-report { font-size: 12px; margin-top: 10px; border-top: 1px solid #666; padding-top: 5px; }
     `;
     const style = document.createElement('style');
     style.textContent = css;
@@ -455,28 +466,13 @@ class BlazeInterface {
 
       methods.forEach(method => {
         const score = scores[method] / 50;
-        if (this.methodPerformance[method].total > 20) {
+        if (this.methodPerformance[method].total > 10) {
           this.methodWeights[method] = Math.max(0.5, 0.5 + score * 0.5);
           console.log(`Peso ajustado para ${method}: ${this.methodWeights[method].toFixed(2)} (Pontuação Monte Carlo: ${score.toFixed(2)})`);
         }
       });
     } catch (err) {
       console.error('Erro na validação Monte Carlo:', err);
-    }
-  }
-
-  handleFeedback(method, isUseful, roundId) {
-    try {
-      const boost = isUseful ? 0.1 : -0.1;
-      this.methodWeights[method] = Math.max(0.5, Math.min(1.5, this.methodWeights[method] + boost));
-      if (!isUseful && method === 'Neural') {
-        const round = this.results.find(r => r.id === roundId);
-        if (round) this.trainNeural(this.results.filter(r => r.status === 'complete'), round.color);
-      }
-      console.log(`Feedback para ${method} (rodada ${roundId || 'N/A'}): ${isUseful ? 'Útil' : 'Incorreto'}. Novo peso: ${this.methodWeights[method].toFixed(2)}`);
-      this.saveState();
-    } catch (err) {
-      console.error('Erro ao processar feedback:', err);
     }
   }
 
@@ -934,27 +930,24 @@ class BlazeInterface {
         input.push(...[color === 0 ? 1 : 0, color === 1 ? 1 : 0, color === 2 ? 1 : 0]);
       }
 
-      // Camada oculta 1
       const hidden1 = Array(10).fill(0);
       for (let i = 0; i < 10; i++) {
         for (let j = 0; j < 9; j++) {
           hidden1[i] += input[j] * this.neuralWeights1[i][j];
         }
         hidden1[i] = Math.max(0, hidden1[i] + this.neuralBiases1[i]);
-        if (Math.random() < this.dropoutRate) hidden1[i] = 0; // Dropout
+        if (Math.random() < this.dropoutRate) hidden1[i] = 0;
       }
 
-      // Camada oculta 2
       const hidden2 = Array(5).fill(0);
       for (let i = 0; i < 5; i++) {
         for (let j = 0; j < 10; j++) {
           hidden2[i] += hidden1[j] * this.neuralWeights2[i][j];
         }
         hidden2[i] = Math.max(0, hidden2[i] + this.neuralBiases2[i]);
-        if (Math.random() < this.dropoutRate) hidden2[i] = 0; // Dropout
+        if (Math.random() < this.dropoutRate) hidden2[i] = 0;
       }
 
-      // Saída
       const output = Array(3).fill(0);
       for (let i = 0; i < 3; i++) {
         for (let j = 0; j < 5; j++) {
@@ -963,7 +956,6 @@ class BlazeInterface {
         output[i] += this.outputBiases[i];
       }
 
-      // Softmax
       const expSum = output.reduce((sum, val) => sum + Math.exp(val), 0);
       const probs = output.map(val => Math.exp(val) / expSum);
       const maxProb = Math.max(...probs);
@@ -995,7 +987,6 @@ class BlazeInterface {
         input.push(...[color === 0 ? 1 : 0, color === 1 ? 1 : 0, color === 2 ? 1 : 0]);
       }
 
-      // Forward
       const hidden1 = Array(10).fill(0);
       for (let i = 0; i < 10; i++) {
         for (let j = 0; j < 9; j++) {
@@ -1023,12 +1014,10 @@ class BlazeInterface {
       const expSum = output.reduce((sum, val) => sum + Math.exp(val), 0);
       const probs = output.map(val => Math.exp(val) / expSum);
 
-      // Backpropagation
       const target = [0, 0, 0];
       target[actualColor] = 1;
       const outputErrors = probs.map((p, i) => p - target[i]);
 
-      // Atualizar pesos de saída
       for (let i = 0; i < 3; i++) {
         for (let j = 0; j < 5; j++) {
           this.outputWeights[i][j] -= this.neuralLearningRate * outputErrors[i] * hidden2[j];
@@ -1036,13 +1025,12 @@ class BlazeInterface {
         this.outputBiases[i] -= this.neuralLearningRate * outputErrors[i];
       }
 
-      // Camada oculta 2
       const hidden2Errors = Array(5).fill(0);
       for (let i = 0; i < 5; i++) {
         for (let j = 0; j < 3; j++) {
           hidden2Errors[i] += outputErrors[j] * this.outputWeights[j][i];
         }
-        hidden2Errors[i] *= hidden2[i] > 0 ? 1 : 0; // ReLU derivative
+        hidden2Errors[i] *= hidden2[i] > 0 ? 1 : 0;
       }
 
       for (let i = 0; i < 5; i++) {
@@ -1052,13 +1040,12 @@ class BlazeInterface {
         this.neuralBiases2[i] -= this.neuralLearningRate * hidden2Errors[i];
       }
 
-      // Camada oculta 1
       const hidden1Errors = Array(10).fill(0);
       for (let i = 0; i < 10; i++) {
         for (let j = 0; j < 5; j++) {
           hidden1Errors[i] += hidden2Errors[j] * this.neuralWeights2[j][i];
         }
-        hidden1Errors[i] *= hidden1[i] > 0 ? 1 : 0; // ReLU derivative
+        hidden1Errors[i] *= hidden1[i] > 0 ? 1 : 0;
       }
 
       for (let i = 0; i < 10; i++) {
@@ -1104,6 +1091,10 @@ class BlazeInterface {
           this.methodPerformance[p.method].confidenceVariance * (this.methodPerformance[p.method].confidenceCount - 1) +
           (p.confidence - mean) ** 2
         ) / this.methodPerformance[p.method].confidenceCount;
+
+        // Salvar previsão para análise posterior
+        this.predictionHistory[p.method].unshift({ color: p.color, confidence: p.confidence });
+        if (this.predictionHistory[p.method].length > 50) this.predictionHistory[p.method].pop();
       });
 
       const maxVote = Math.max(...Object.values(votes));
@@ -1140,24 +1131,56 @@ class BlazeInterface {
         this.predictNeural()
       ].filter(p => p !== null);
 
+      const context = this.getState(this.results.filter(r => r.status === 'complete'));
       predictions.forEach(p => {
         this.methodPerformance[p.method].total++;
         this.methodPerformance[p.method].recentTotal++;
-        if (p.color === cur.color) {
+        const isCorrect = p.color === cur.color;
+        if (isCorrect) {
           this.methodPerformance[p.method].correct++;
           this.methodPerformance[p.method].recentCorrect++;
+          this.consecutiveCorrect[p.method] = (this.consecutiveCorrect[p.method] || 0) + 1;
+          this.consecutiveErrors[p.method] = 0;
+        } else {
+          this.methodPerformance[p.method].contextErrors[context] = (this.methodPerformance[p.method].contextErrors[context] || 0) + 1;
+          this.consecutiveCorrect[p.method] = 0;
+          this.consecutiveErrors[p.method] = (this.consecutiveErrors[p.method] || 0) + 1;
         }
-        if (this.methodPerformance[p.method].total >= 20) {
+
+        // Ajuste mais rápido dos pesos
+        if (this.methodPerformance[p.method].total >= 10) {
           const recentAcc = this.methodPerformance[p.method].recentTotal > 0
             ? this.methodPerformance[p.method].recentCorrect / this.methodPerformance[p.method].recentTotal
             : 0.5;
           const totalAcc = this.methodPerformance[p.method].correct / this.methodPerformance[p.method].total;
           const l2 = 0.01 * this.methodWeights[p.method] ** 2;
-          this.methodWeights[p.method] = Math.max(0.5, (0.6 * recentAcc + 0.4 * totalAcc) - l2);
+          let penalty = 0;
+          if (recentAcc < 0.3 && this.methodPerformance[p.method].recentTotal >= 5) {
+            penalty = -0.2; // Penalidade maior para desempenho ruim
+          }
+          this.methodWeights[p.method] = Math.max(0.5, (0.7 * recentAcc + 0.3 * totalAcc) - l2 + penalty);
+          console.log(`Peso ajustado para ${p.method}: ${this.methodWeights[p.method].toFixed(2)} (Acurácia recente: ${(recentAcc * 100).toFixed(1)}%)`);
         }
-        if (this.methodPerformance[p.method].recentTotal >= 20) {
+
+        if (this.methodPerformance[p.method].recentTotal >= 10) {
           this.methodPerformance[p.method].recentCorrect = 0;
           this.methodPerformance[p.method].recentTotal = 0;
+        }
+
+        // Feedback implícito
+        const boost = isCorrect ? 0.1 : -0.1;
+        this.methodWeights[p.method] = Math.max(0.5, Math.min(1.5, this.methodWeights[p.method] + boost));
+        console.log(`Feedback implícito para ${p.method}: ${isCorrect ? 'Acerto' : 'Erro'}. Novo peso: ${this.methodWeights[p.method].toFixed(2)}`);
+
+        // Ajuste dinâmico da taxa de aprendizado da rede neural
+        if (p.method === 'Neural') {
+          if (this.consecutiveErrors['Neural'] >= 3) {
+            this.neuralLearningRate = Math.min(0.05, this.neuralLearningRate * 1.2);
+            console.log(`Taxa de aprendizado neural aumentada para ${this.neuralLearningRate.toFixed(4)} devido a ${this.consecutiveErrors['Neural']} erros consecutivos`);
+          } else if (this.consecutiveCorrect['Neural'] >= 3) {
+            this.neuralLearningRate = Math.max(0.005, this.neuralLearningRate * 0.8);
+            console.log(`Taxa de aprendizado neural reduzida para ${this.neuralLearningRate.toFixed(4)} devido a ${this.consecutiveCorrect['Neural']} acertos consecutivos`);
+          }
         }
       });
 
@@ -1202,9 +1225,13 @@ class BlazeInterface {
             const prevState = this.getState(this.results.filter(r => r.status === 'complete').slice(1, 5));
             const action = this.nextPredColor;
             if (action !== null) {
-              const reward = d.color === action ? 1 : -1;
+              const isCorrect = d.color === action;
+              const reward = isCorrect
+                ? (this.consecutiveCorrect['Q-Learning'] >= 2 ? 2 : 1)
+                : (this.consecutiveErrors['Q-Learning'] >= 2 ? -2 : -1);
               const nextState = this.getState(this.results.filter(r => r.status === 'complete').slice(0, 4));
               this.updateQTable(prevState, action, reward, nextState);
+              console.log(`Recompensa Q-Learning: ${reward} (${isCorrect ? 'Acerto' : 'Erro'})`);
             }
           }
           this.saveState();
@@ -1232,6 +1259,18 @@ class BlazeInterface {
       if (pDiv && pred) {
         const acc = this.totalPredictions ? Math.round((this.correctPredictions / this.totalPredictions) * 100) : 0;
         const waitCls = pred.isWaiting ? 'prediction-waiting' : '';
+        // Relatório de desempenho (últimas 10 rodadas)
+        const report = Object.keys(this.methodPerformance).map(method => {
+          const recentPreds = this.predictionHistory[method].slice(0, 10);
+          const recentCorrect = recentPreds.filter((p, i) => {
+            const actual = this.results[i]?.color;
+            return actual !== undefined && p.color === actual;
+          }).length;
+          const recentTotal = recentPreds.length;
+          const recentAcc = recentTotal > 0 ? (recentCorrect / recentTotal * 100).toFixed(1) : 0;
+          return `${method}: ${recentAcc}% (${recentCorrect}/${recentTotal})`;
+        }).join('<br>');
+
         pDiv.innerHTML = `
           <div class="prediction-title">${pred.isWaiting ? 'PREVISÃO PARA PRÓXIMA RODADA' : 'PRÓXIMA COR PREVISTA'}</div>
           <div class="prediction-value ${waitCls}">
@@ -1240,14 +1279,13 @@ class BlazeInterface {
           <div class="prediction-accuracy">Confiança: ${pred.confidence * 100}% | Taxa de acerto: ${acc}% (${this.correctPredictions}/${this.totalPredictions})</div>
           <div class="analysis-detail">
             ${pred.details.map(d => `
-              <div>${d.method}: ${d.colorName} (${d.confidence * 100}%) [Acurácia: ${(this.methodPerformance[d.method].total > 0 ? this.methodPerformance[d.method].correct / this.methodPerformance[d.method].total * 100 : 0).toFixed(1)}%]
-                <button class="feedback-btn" onclick="window.blazeInterface.handleFeedback('${d.method}', true, '${r.id || r.tmp}')">Útil</button>
-                <button class="feedback-btn" onclick="window.blazeInterface.handleFeedback('${d.method}', false, '${r.id || r.tmp}')">Incorreto</button>
-              </div>
+              <div>${d.method}: ${d.colorName} (${d.confidence * 100}%) [Acurácia: ${(this.methodPerformance[d.method].total > 0 ? this.methodPerformance[d.method].correct / this.methodPerformance[d.method].total * 100 : 0).toFixed(1)}%]</div>
             `).join('')}
           </div>
+          <div class="performance-report">
+            <strong>Desempenho (últimas 10 rodadas):</strong><br>${report}
+          </div>
         `;
-        window.blazeInterface = this; // Expor para feedback
         this.nextPredColor = pred.color;
       }
 
