@@ -129,7 +129,7 @@ class BlazeInterface {
     this.outputWeights = Array(3).fill().map(() => Array(5).fill(Math.random() * 0.1 - 0.05));
     this.outputBiases = Array(3).fill(0);
     this.neuralLearningRate = 0.01;
-    this.dropoutRate = 0.4; // Aumentado para evitar overfitting
+    this.dropoutRate = 0.4;
     this.consecutiveErrors = { 'Neural': 0 };
 
     // Contexto Temporal
@@ -1363,6 +1363,7 @@ class BlazeInterface {
 
   updateResults(data) {
     try {
+      console.log('Dados recebidos:', data); // Log para depuração
       if (this.processedIds.has(data.id)) return;
       this.processedIds.add(data.id);
 
@@ -1393,16 +1394,16 @@ class BlazeInterface {
       this.nextPredColor = pred?.color ?? null;
 
       const resultsElement = document.getElementById('blazeResults');
-      const predictionElement = document.getElementById('blazePrediction');
       if (resultsElement) {
-        const colorClass = `result-color-${data.color}`;
-        const statusClass = `result-status-${data.status}`;
+        const colorClass = `result-color-${data.color !== undefined ? data.color : 0}`;
+        const statusClass = `result-status-${data.status || 'waiting'}`;
         resultsElement.innerHTML = `
-          <div class="result-number ${colorClass}">${data.roll || '...'}</div>
-          <div class="result-status ${statusClass}">${data.status}</div>
+          <div class="result-number ${colorClass}">${data.roll !== undefined ? data.roll : '...'}</div>
+          <div class="result-status ${statusClass}">${data.status || 'waiting'}</div>
         `;
       }
 
+      const predictionElement = document.getElementById('blazePrediction');
       if (predictionElement) {
         if (pred) {
           const acc = this.totalPredictions > 0 ? (this.correctPredictions / this.totalPredictions * 100).toFixed(1) : 0;
