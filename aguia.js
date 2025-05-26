@@ -46,78 +46,22 @@ class BlazeInterface {
     this.correctPredictions = 0;
     this.totalPredictions = 0;
     this.isMinimized = false;
-    this.model = null; // Para armazenar o modelo de rede neural
-    this.historyWindow = 10; // Janela de histórico para entrada
 
-    // Injetar ml5.js dinamicamente
-    if (!window.ml5) {
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/ml5@0.14.0/dist/ml5.min.js';
-      script.onload = () => this.initializeModel();
-      document.head.appendChild(script);
-      console.log('Carregando ml5.js...');
-    } else {
-      this.initializeModel();
+    // Configuração da rede neural
+    this.historyWindow = 10;
+    this.weights = Array(this.historyWindow * 2).fill(0).map(() => Array(3).fill(0.33 + (Math.random() - 0.5) * 0.1));
+    this.bias = Array(3).fill((Math.random() - 0.5) * 0.1);
+    this.learningRate = 0.03;
+    this.weightDecay = 0.00005;
+    this.stagnationCount = 0;
+    this.maxStagnation = 15;
+    this.lastPrediction = null;
+
+    // Inicializar interface
+    document.addEventListener('DOMContentLoaded', () => this.initMonitorInterface());
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      setTimeout(() => this.initMonitorInterface(), 500);
     }
-  }
-
-  initializeModel() {
-    // Configurar modelo MLP simples
-    const options = {
-      task: 'classification',
-      inputs: this.historyWindow * 2, // Cor e roll para cada posição
-      outputs: 3, // 0: Branco, 1: Vermelho, 2: Preto
-      layers: [64, 32], // Camadas ocultas
-      learningRate: 0.01
-    };
-    this.model = ml5.neuralNetwork(options);
-    console.log('Modelo MLP inicializado');
-  }
-
-  // Pré-processar dados para o modelo
-  preprocessData(history) {
-    if (history.length < this.historyWindow) return null;
-    const recent = history.slice(0, this.historyWindow).map(r => [r.color, r.roll || 0]).flat();
-    const nextColor = history[0].color;
-    return { input: recent, output: [nextColor === 0 ? 1 : 0, nextColor === 1 ? 1 : 0, nextColor === 2 ? 1 : 0] };
-  }
-
-  // Treinar o modelo com novo dado
-  trainModel(data) {
-    if (this.model && data) {
-      this.model.addData(data.input, data.output);
-      this.model.train({ epochs: 50 }, () => {
-        console.log('Modelo treinado com novo dado');
-      });
-    }
-  }
-
-  // Fazer previsão
-  predictAdvanced() {
-    const history = this.results.filter(r => r.status === 'complete').slice(0, this.historyWindow);
-    if (history.length < this.historyWindow || !this.model) return null;
-
-    const data = this.preprocessData(history);
-    if (!data) return null;
-
-    return new Promise((resolve) => {
-      this.model.classify(data.input, (err, results) => {
-        if (err) {
-          console.error('Erro na previsão:', err);
-          resolve(null);
-          return;
-        }
-        const [white, red, black] = results[0].confidence;
-        const maxConfidence = Math.max(white, red, black);
-        const predictedColor = white === maxConfidence ? 0 : red === maxConfidence ? 1 : 2;
-        resolve({
-          color: predictedColor,
-          colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
-          confidence: maxConfidence.toFixed(2),
-          method: 'NeuralNetwork'
-        });
-      });
-    });
   }
 
   injectGlobalStyles() {
@@ -260,6 +204,97 @@ class BlazeInterface {
     this.ws.doubleTick((d) => this.updateResults(d));
   }
 
+  softmax(outputs) {
+    const expOutputs = outputs.map(v => Math.exp(v));
+    const sumExp = expOutputs.reduce((a, b) => a + b, 0);
+    return expOutputs.map(v => v / sumExp);
+  }
+
+  preprocessData(history) {
+    if (history.length < this.historyWindow) return null;
+    const maxRoll = Math.max(...history.map(r => r.roll || 0)) || 14;
+    const inputs = history.slice(0, this.historyWindow).map(r => [
+      r.color / 2,
+      (r.roll || 0) / (maxRoll || 1)
+    ]).flat();
+    console.log('Inputs normalizados:', inputs);
+    return inputs;
+  }
+
+  predictAdvanced(history) {
+    const inputs = this.preprocessData(history);
+    if (!inputs) return { color: null, colorName: 'Aguardando', confidence: 0, method: 'NeuralNetwork' }; // Retorno seguro
+
+    const outputs = [0, 0, 0];
+    for (let i = 0; i < this.weights.length; i++) {
+      for (let j = 0; j < 3; j++) {
+        outputs[j] += inputs[i] * this.weights[i][j];
+      }
+    }
+    for (let j = 0; j < 3; j++) {
+      outputs[j] += this.bias[j];
+    }
+
+    const probabilities = this.softmax(outputs);
+    const maxProb = Math.max(...probabilities);
+    const predictedColor = probabilities.indexOf(maxProb);
+
+    if (this.lastPrediction === predictedColor) {
+      this.stagnationCount++;
+      if (this.stagnationCount > this.maxStagnation) {
+        console.log('Estagnação detectada, reiniciando pesos com perturbação...');
+        this.weights = Array(this.historyWindow * 2).fill(0).map(() => Array(3).fill(0.33 + (Math.random() - 0.5) * 0.2));
+        this.bias = Array(3).fill((Math.random() - 0.5) * 0.2);
+        this.stagnationCount = 0;
+      }
+    } else {
+      this.stagnationCount = 0;
+    }
+    this.lastPrediction = predictedColor;
+
+    return {
+      color: predictedColor,
+      colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
+      confidence: maxProb.toFixed(2),
+      method: 'NeuralNetwork'
+    };
+  }
+
+  trainModel(history) {
+    if (history.length < this.historyWindow + 1) return;
+    const inputs = this.preprocessData(history.slice(1));
+    if (!inputs) return;
+
+    const target = history[0].color;
+    const targetOutput = [0, 0, 0];
+    targetOutput[target] = 1;
+
+    const outputs = [0, 0, 0];
+    for (let i = 0; i < this.weights.length; i++) {
+      for (let j = 0; j < 3; j++) {
+        outputs[j] += inputs[i] * this.weights[i][j];
+      }
+    }
+    for (let j = 0; j < 3; j++) {
+      outputs[j] += this.bias[j];
+    }
+    const probabilities = this.softmax(outputs);
+
+    const errors = probabilities.map((p, i) => targetOutput[i] - p);
+    for (let i = 0; i < this.weights.length; i++) {
+      for (let j = 0; j < 3; j++) {
+        this.weights[i][j] += this.learningRate * errors[j] * inputs[i] - this.weightDecay * this.weights[i][j];
+      }
+    }
+    for (let j = 0; j < 3; j++) {
+      this.bias[j] += this.learningRate * errors[j];
+    }
+
+    const colorCount = { 0: 0, 1: 0, 2: 0 };
+    history.forEach(r => colorCount[r.color]++);
+    console.log('Distribuição de cores:', colorCount);
+  }
+
   updateResults(d) {
     const id = d.id || `tmp-${Date.now()}-${d.color}-${d.roll}`;
     const i = this.results.findIndex(r => (r.id || r.tmp) === id);
@@ -268,57 +303,63 @@ class BlazeInterface {
       if (this.results.length > 20) this.results.pop();
       this.results.unshift({ ...d, tmp: id });
       if (d.status === 'complete') {
-        const data = this.preprocessData(this.results.filter(r => r.status === 'complete'));
-        if (data) this.trainModel(data);
+        this.trainModel(this.results.filter(r => r.status === 'complete'));
       }
     }
 
     const r = this.results[0];
     const rDiv = document.getElementById('blazeResults');
-    if (rDiv && r) {
-      const stCls = r.status === 'waiting' ? 'result-status-waiting'
-        : r.status === 'rolling' ? 'result-status-rolling'
-          : 'result-status-complete';
-      const stTxt = r.status === 'waiting' ? 'Aguardando'
-        : r.status === 'rolling' ? 'Girando'
-          : 'Completo';
-      rDiv.innerHTML = `
-        <div class="result-number result-color-${r.color}">${r.roll ?? '-'}</div>
-        <div>${r.color === 0 ? 'Branco' : r.color === 1 ? 'Vermelho' : 'Preto'}</div>
-        <div class="result-status ${stCls}">${stTxt}</div>
-      `;
+    if (rDiv) {
+      if (r) {
+        const stCls = r.status === 'waiting' ? 'result-status-waiting'
+          : r.status === 'rolling' ? 'result-status-rolling'
+            : 'result-status-complete';
+        const stTxt = r.status === 'waiting' ? 'Aguardando'
+          : r.status === 'rolling' ? 'Girando'
+            : 'Completo';
+        rDiv.innerHTML = `
+          <div class="result-number result-color-${r.color}">${r.roll ?? '-'}</div>
+          <div>${r.color === 0 ? 'Branco' : r.color === 1 ? 'Vermelho' : 'Preto'}</div>
+          <div class="result-status ${stCls}">${stTxt}</div>
+        `;
+      } else {
+        console.warn('Nenhum resultado disponível para exibir');
+        rDiv.innerHTML = '<div>Carregando...</div>';
+      }
     }
 
-    const pred = this.predictAdvanced();
-    if (pred) {
-      pred.then((prediction) => {
-        const pDiv = document.getElementById('blazePrediction');
-        if (pDiv && prediction) {
-          const acc = this.totalPredictions ? Math.round((this.correctPredictions / this.totalPredictions) * 100) : 0;
-          pDiv.innerHTML = `
-            <div class="prediction-title">PRÓXIMA COR PREVISTA</div>
-            <div class="prediction-value">
-              <span class="color-dot color-dot-${prediction.color}"></span>${prediction.colorName}
-            </div>
-            <div class="prediction-accuracy">Confiança: ${prediction.confidence * 100}% | Taxa de acerto: ${acc}% (${this.correctPredictions}/${this.totalPredictions})</div>
-            <div class="analysis-detail">
-              <div>${prediction.method}: ${prediction.colorName} (${prediction.confidence * 100}%)</div>
-            </div>
-          `;
-          this.nextPredColor = prediction.color;
-        }
+    const pred = this.predictAdvanced(this.results.filter(r => r.status === 'complete'));
+    const pDiv = document.getElementById('blazePrediction');
+    if (pDiv) {
+      if (pred && pred.color !== null) {
+        const acc = this.totalPredictions ? Math.round((this.correctPredictions / this.totalPredictions) * 100) : 0;
+        const waitCls = pred.isWaiting ? 'prediction-waiting' : '';
+        pDiv.innerHTML = `
+          <div class="prediction-title">${pred.isWaiting ? 'PREVISÃO PARA PRÓXIMA RODADA' : 'PRÓXIMA COR PREVISTA'}</div>
+          <div class="prediction-value ${waitCls}">
+            <span class="color-dot color-dot-${pred.color}"></span>${pred.colorName}
+          </div>
+          <div class="prediction-accuracy">Confiança: ${pred.confidence * 100}% | Taxa de acerto: ${acc}% (${this.correctPredictions}/${this.totalPredictions})</div>
+          <div class="analysis-detail">
+            ${`<div>${pred.method}: ${pred.colorName} (${pred.confidence * 100}%)</div>`}
+          </div>
+        `;
+        this.nextPredColor = pred.color;
+      } else {
+        console.warn('Nenhuma previsão disponível');
+        pDiv.innerHTML = '<div>Aguardando dados suficientes...</div>';
+      }
+    }
 
-        const needToast = (d.status === 'rolling' || d.status === 'complete') && !this.notifiedIds.has(id);
-        if (needToast && this.nextPredColor !== null) {
-          this.notifiedIds.add(id);
-          const win = d.color === this.nextPredColor;
-          if (d.status === 'complete') {
-            this.totalPredictions++;
-            if (win) this.correctPredictions++;
-          }
-          this.showNotification(d, win);
-        }
-      });
+    const needToast = (d.status === 'rolling' || d.status === 'complete') && !this.notifiedIds.has(id);
+    if (needToast && this.nextPredColor !== null) {
+      this.notifiedIds.add(id);
+      const win = d.color === this.nextPredColor;
+      if (d.status === 'complete') {
+        this.totalPredictions++;
+        if (win) this.correctPredictions++;
+      }
+      this.showNotification(d, win);
     }
   }
 
