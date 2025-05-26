@@ -47,14 +47,13 @@ class BlazeInterface {
     this.totalPredictions = 0;
     this.isMinimized = false;
 
-    // Configuração da rede neural
-    this.historyWindow = 10;
-    this.weights = Array(this.historyWindow * 2).fill(0).map(() => Array(3).fill(0.33 + (Math.random() - 0.5) * 0.1));
-    this.bias = Array(3).fill((Math.random() - 0.5) * 0.1);
-    this.learningRate = 0.03;
-    this.weightDecay = 0.00005;
+    // Configuração para frequência condicional adaptativa
+    this.historyWindow = 20; // Aumentado para capturar mais contexto
+    this.decayFactor = 0.9; // Decaimento para dar mais peso a dados recentes
+    this.colorCounts = { 0: 0, 1: 0, 2: 0 }; // Contagem de cores
+    this.transitionMatrix = Array(3).fill().map(() => Array(3).fill(0.01)); // Inicialização com pequeno valor para evitar zeros
     this.stagnationCount = 0;
-    this.maxStagnation = 15;
+    this.maxStagnation = 10;
     this.lastPrediction = null;
 
     // Inicializar interface
@@ -204,47 +203,56 @@ class BlazeInterface {
     this.ws.doubleTick((d) => this.updateResults(d));
   }
 
-  softmax(outputs) {
-    const expOutputs = outputs.map(v => Math.exp(v));
-    const sumExp = expOutputs.reduce((a, b) => a + b, 0);
-    return expOutputs.map(v => v / sumExp);
-  }
+  updateStats(history) {
+    if (history.length < 2) return;
 
-  preprocessData(history) {
-    if (history.length < this.historyWindow) return null;
-    const maxRoll = Math.max(...history.map(r => r.roll || 0)) || 14;
-    const inputs = history.slice(0, this.historyWindow).map(r => [
-      r.color / 2,
-      (r.roll || 0) / (maxRoll || 1)
-    ]).flat();
-    console.log('Inputs normalizados:', inputs);
-    return inputs;
+    // Resetar contagens com decaimento
+    this.colorCounts = { 0: 0, 1: 0, 2: 0 };
+    this.transitionMatrix = Array(3).fill().map(() => Array(3).fill(0.01));
+
+    // Atualizar com decaimento
+    history.slice(0, this.historyWindow).forEach((r, idx) => {
+      const weight = Math.pow(this.decayFactor, this.historyWindow - idx - 1);
+      this.colorCounts[r.color] += weight;
+
+      if (idx > 0) {
+        const prevColor = history[idx].color;
+        const currColor = history[idx - 1].color;
+        this.transitionMatrix[prevColor][currColor] += weight;
+      }
+    });
+
+    // Normalizar a matriz de transição
+    for (let i = 0; i < 3; i++) {
+      const total = this.transitionMatrix[i].reduce((a, b) => a + b, 0);
+      if (total > 0) {
+        this.transitionMatrix[i] = this.transitionMatrix[i].map(v => v / total);
+      } else {
+        this.transitionMatrix[i] = [1/3, 1/3, 1/3];
+      }
+    }
+
+    console.log('Matriz de transição (com decaimento):', this.transitionMatrix);
+    console.log('Contagem de cores (com decaimento):', this.colorCounts);
   }
 
   predictAdvanced(history) {
-    const inputs = this.preprocessData(history);
-    if (!inputs) return { color: null, colorName: 'Aguardando', confidence: 0, method: 'NeuralNetwork' }; // Retorno seguro
-
-    const outputs = [0, 0, 0];
-    for (let i = 0; i < this.weights.length; i++) {
-      for (let j = 0; j < 3; j++) {
-        outputs[j] += inputs[i] * this.weights[i][j];
-      }
-    }
-    for (let j = 0; j < 3; j++) {
-      outputs[j] += this.bias[j];
+    if (history.length < this.historyWindow) {
+      return { color: null, colorName: 'Aguardando', confidence: 0, method: 'ConditionalFrequency' };
     }
 
-    const probabilities = this.softmax(outputs);
+    // Previsão baseada na transição condicional mais recente
+    const lastColor = history[0].color;
+    const probabilities = this.transitionMatrix[lastColor];
     const maxProb = Math.max(...probabilities);
     const predictedColor = probabilities.indexOf(maxProb);
 
+    // Verificar estagnação
     if (this.lastPrediction === predictedColor) {
       this.stagnationCount++;
       if (this.stagnationCount > this.maxStagnation) {
-        console.log('Estagnação detectada, reiniciando pesos com perturbação...');
-        this.weights = Array(this.historyWindow * 2).fill(0).map(() => Array(3).fill(0.33 + (Math.random() - 0.5) * 0.2));
-        this.bias = Array(3).fill((Math.random() - 0.5) * 0.2);
+        console.log('Estagnação detectada, revisando dados...');
+        this.updateStats(history); // Forçar atualização dos dados
         this.stagnationCount = 0;
       }
     } else {
@@ -256,43 +264,8 @@ class BlazeInterface {
       color: predictedColor,
       colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
       confidence: maxProb.toFixed(2),
-      method: 'NeuralNetwork'
+      method: 'ConditionalFrequency'
     };
-  }
-
-  trainModel(history) {
-    if (history.length < this.historyWindow + 1) return;
-    const inputs = this.preprocessData(history.slice(1));
-    if (!inputs) return;
-
-    const target = history[0].color;
-    const targetOutput = [0, 0, 0];
-    targetOutput[target] = 1;
-
-    const outputs = [0, 0, 0];
-    for (let i = 0; i < this.weights.length; i++) {
-      for (let j = 0; j < 3; j++) {
-        outputs[j] += inputs[i] * this.weights[i][j];
-      }
-    }
-    for (let j = 0; j < 3; j++) {
-      outputs[j] += this.bias[j];
-    }
-    const probabilities = this.softmax(outputs);
-
-    const errors = probabilities.map((p, i) => targetOutput[i] - p);
-    for (let i = 0; i < this.weights.length; i++) {
-      for (let j = 0; j < 3; j++) {
-        this.weights[i][j] += this.learningRate * errors[j] * inputs[i] - this.weightDecay * this.weights[i][j];
-      }
-    }
-    for (let j = 0; j < 3; j++) {
-      this.bias[j] += this.learningRate * errors[j];
-    }
-
-    const colorCount = { 0: 0, 1: 0, 2: 0 };
-    history.forEach(r => colorCount[r.color]++);
-    console.log('Distribuição de cores:', colorCount);
   }
 
   updateResults(d) {
@@ -303,7 +276,7 @@ class BlazeInterface {
       if (this.results.length > 20) this.results.pop();
       this.results.unshift({ ...d, tmp: id });
       if (d.status === 'complete') {
-        this.trainModel(this.results.filter(r => r.status === 'complete'));
+        this.updateStats(this.results.filter(r => r.status === 'complete'));
       }
     }
 
