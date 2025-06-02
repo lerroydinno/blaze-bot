@@ -53,7 +53,8 @@ class BlazeInterface {
     this.maxBankroll = 2000; // Limite de lucro
     this.minBankroll = 500; // Limite de perda
     this.initMonitorInterface();
-    this.fetchHistoricalData(); // Carregar dados históricos ao iniciar
+    this.initIndexedDB();
+    this.fetchHistoricalData();
   }
 
   injectGlobalStyles() {
@@ -96,11 +97,18 @@ class BlazeInterface {
     style.textContent = css;
     document.head.appendChild(style);
 
-    // Injetar Chart.js
-    const chartJs = document.createElement('script');
-    chartJs.src = 'https://cdn.jsdelivr.net/npm/chart.js';
-    document.head.appendChild(chartJs);
-
+    // Injetar bibliotecas
+    const scripts = [
+      'https://cdn.jsdelivr.net/npm/chart.js',
+      'https://cdn.jsdelivr.net/npm/danfojs@1.1.2/dist/index.min.js',
+      'https://cdn.jsdelivr.net/npm/ml@6.0.3/dist/ml.min.js'
+    ];
+    scripts.forEach(src => {
+      const script = document.createElement('script');
+      script.src = src;
+      document.head.appendChild(script);
+    });
+    
     this.bubble = document.createElement('div');
     this.bubble.className = 'blaze-bubble';
     document.body.appendChild(this.bubble);
@@ -117,7 +125,7 @@ class BlazeInterface {
         <button id="blazeMinBtn" class="blaze-min-btn">−</button>  
         <div class="prediction-card" id="blazePrediction"></div>  
         <div class="result-card" id="blazeResults"></div>  
-        <div class="chart-container" id="blazeChart"></div>
+        <div class="chart-container"><canvas id="blazeChart"></canvas></div>
       </div>
     `;
     document.body.appendChild(this.overlay);
@@ -143,27 +151,67 @@ class BlazeInterface {
     this.ws.doubleTick((d) => this.updateResults(d));
   }
 
+  initIndexedDB() {
+    this.dbRequest = indexedDB.open('BlazeResults', 1);
+    this.dbRequest.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      db.createObjectStore('results', { keyPath: 'id' });
+    };
+  }
+
+  async storeHistoricalData(data) {
+    try {
+      const db = await new Promise((resolve, reject) => {
+        this.dbRequest.onsuccess = (event) => resolve(event.target.result);
+        this.dbRequest.onerror = (event) => reject(event.target.error);
+      });
+      const tx = db.transaction(['results'], 'readwrite');
+      const store = tx.objectStore('results');
+      data.forEach(result => store.put(result));
+      await new Promise((resolve) => tx.oncomplete = resolve);
+    } catch (err) {
+      console.error('Erro ao salvar dados no IndexedDB:', err);
+    }
+  }
+
   async fetchHistoricalData() {
     try {
-      const response = await fetch('http://localhost:3000/historical-data');
+      const response = await fetch('https://blaze.com/api/roulette_games/recent', { mode: 'cors' });
       const data = await response.json();
-      this.storeHistoricalData(data);
+      await this.storeHistoricalData(data.map(item => ({
+        id: item.id,
+        color: item.color,
+        roll: item.roll,
+        status: item.status,
+        hash: item.hash
+      })));
+      this.updateFrequencyChart();
     } catch (err) {
       console.error('Erro ao coletar dados históricos:', err);
     }
   }
 
-  storeHistoricalData(data) {
-    fetch('http://localhost:3000/save-results', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    }).catch(err => console.error('Erro ao salvar dados:', err));
+  async getHistoricalData() {
+    try {
+      const db = await new Promise((resolve, reject) => {
+        this.dbRequest.onsuccess = (event) => resolve(event.target.result);
+        this.dbRequest.onerror = (event) => reject(event.target.error);
+      });
+      const tx = db.transaction(['results'], 'readonly');
+      const store = tx.objectStore('results');
+      const request = store.getAll();
+      return new Promise((resolve) => {
+        request.onsuccess = () => resolve(request.result);
+      });
+    } catch (err) {
+      console.error('Erro ao recuperar dados do IndexedDB:', err);
+      return [];
+    }
   }
 
   async verifyProvablyFair(resultId, hash) {
     try {
-      const response = await fetch(`https://blaze.com/api/provably-fair/${resultId}`);
+      const response = await fetch(`https://blaze.com/api/provably-fair/${resultId}`, { mode: 'cors' });
       const data = await response.json();
       return data.hash === hash;
     } catch (err) {
@@ -216,39 +264,120 @@ class BlazeInterface {
     console.log(`Saldo: R$${this.bankroll}, Aposta atual: R$${this.currentBet}`);
   }
 
+  async sendSignalToTelegram(prediction) {
+    try {
+      const token = 'SEU_TOKEN_DO_TELEGRAM'; // Substitua pelo seu token
+      const chatId = 'SEU_CHAT_ID'; // Substitua pelo seu chat ID
+      const message = `Previsão: ${prediction.colorName} (Confiança: ${prediction.confidence * 100 | 0}%)`;
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=${encodeURIComponent(message)}`);
+    } catch (err) {
+      console.error('Erro ao enviar sinal ao Telegram:', err);
+    }
+  }
+
   async placeBet(color) {
     if (this.bankroll <= this.minBankroll || this.bankroll >= this.maxBankroll) return;
     try {
+      // Para automação no navegador, usar API da Blaze (se disponível) ou simular cliques
+      // Aqui, assumimos uma API fictícia para apostas
       await fetch('http://localhost:3000/place-bet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ color, amount: this.currentBet })
       });
+      console.log(`Aposta de R$${this.currentBet} colocada na cor ${color}`);
     } catch (err) {
       console.error('Erro ao fazer aposta:', err);
     }
   }
 
-  async sendSignalToTelegram(prediction) {
+  async updateFrequencyChart() {
     try {
-      await fetch('http://localhost:3000/send-signal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(prediction)
+      const historicalData = await this.getHistoricalData();
+      const freq = historicalData.reduce((acc, r) => {
+        if (r.status === 'complete') acc[r.color] = (acc[r.color] || 0) + 1;
+        return acc;
+      }, {});
+      
+      const ctx = document.getElementById('blazeChart').getContext('2d');
+      if (this.chart) this.chart.destroy();
+      this.chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Branco', 'Vermelho', 'Preto'],
+          datasets: [{
+            label: 'Frequência de Cores',
+            data: [freq[0] || 0, freq[1] || 0, freq[2] || 0],
+            backgroundColor: ['#ffffff', '#f44336', '#212121'],
+            borderColor: ['#cccccc', '#d32f2f', '#000000'],
+            borderWidth: 1
+          }]
+        },
+        options: {
+          scales: {
+            y: { beginAtZero: true, title: { display: true, text: 'Frequência' } },
+            x: { title: { display: true, text: 'Cores' } }
+          },
+          plugins: {
+            legend: { display: true, position: 'top' },
+            title: { display: true, text: 'Frequência de Cores no Double' }
+          }
+        }
       });
     } catch (err) {
-      console.error('Erro ao enviar sinal:', err);
+      console.error('Erro ao atualizar gráfico:', err);
     }
   }
 
-  async fetchFrequencyChart() {
+  async analyzePatterns() {
+    const history = this.results.filter(r => r.status === 'complete');
+    if (history.length < 10 || !window.danfo || !window.ml) return;
+
     try {
-      const response = await fetch('http://localhost:3000/frequency-chart');
-      const chartData = await response.json();
-      const ctx = document.getElementById('blazeChart').getContext('2d');
-      new Chart(ctx, chartData);
+      // Usar Danfo.js para manipulação de dados
+      const df = new danfo.DataFrame(history);
+      const X = df['color'].shift(1).fillna(0).values;
+      const y = df['color'].values;
+      const X_train = X.slice(0, -1);
+      const y_train = y.slice(0, -1);
+
+      // Treinar modelo Random Forest com ml.js
+      const model = new ml.RandomForestClassifier({ nEstimators: 100, seed: 42 });
+      model.train(X_train.map(x => [x]), y_train);
+
+      // Prever próxima cor
+      const last_color = [X[X.length - 1]];
+      const predictedColor = model.predict(last_color)[0];
+      const probabilities = model.predictProba(last_color)[0];
+      const confidence = Math.max(...probabilities);
+
+      // Atualizar interface
+      const pDiv = document.getElementById('blazePrediction');
+      if (pDiv) {
+        const colorName = predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto';
+        pDiv.innerHTML = `
+          <div class="prediction-title">PRÓXIMA COR PREVISTA</div>
+          <div class="prediction-value">
+            <span class="color-dot color-dot-${predictedColor}"></span>${colorName}
+          </div>
+          <div class="prediction-accuracy">Confiança: ${Math.round(confidence * 100)}%</div>
+        `;
+        this.nextPredColor = predictedColor;
+        if (confidence > 0.7) {
+          await this.sendSignalToTelegram({ colorName, confidence });
+          await this.placeBet(predictedColor);
+        }
+      }
+
+      // Análise de frequência
+      const historicalData = await this.getHistoricalData();
+      const freq = historicalData.reduce((acc, r) => {
+        if (r.status === 'complete') acc[r.color] = (acc[r.color] || 0) + 1;
+        return acc;
+      }, {});
+      console.log(`Frequência de cores: Branco=${freq[0] || 0}, Vermelho=${freq[1] || 0}, Preto=${freq[2] || 0}`);
     } catch (err) {
-      console.error('Erro ao carregar gráfico:', err);
+      console.error('Erro na análise de padrões:', err);
     }
   }
 
@@ -263,7 +392,7 @@ class BlazeInterface {
         this.updatePredictionStats(d);
         const isValid = await this.verifyProvablyFair(d.id, d.hash);
         if (!isValid) console.warn('Resultado não verificado pelo Provably Fair');
-        this.storeHistoricalData([d]);
+        await this.storeHistoricalData([d]);
       }
     }
 
@@ -284,7 +413,7 @@ class BlazeInterface {
     }
 
     await this.analyzePatterns();
-    await this.fetchFrequencyChart();
+    await this.updateFrequencyChart();
 
     const needToast = (d.status === 'complete') && !this.notifiedIds.has(id);
     if (needToast && this.nextPredColor !== null) {
@@ -292,38 +421,6 @@ class BlazeInterface {
       const win = d.color === this.nextPredColor;
       this.manageBankroll(win);
       this.showNotification(d, win);
-    }
-  }
-
-  async analyzePatterns() {
-    const history = this.results.filter(r => r.status === 'complete');
-    if (history.length < 10) return;
-
-    try {
-      const response = await fetch('http://localhost:3000/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history })
-      });
-      const { predictedColor, confidence } = await response.json();
-      const pDiv = document.getElementById('blazePrediction');
-      if (pDiv) {
-        const colorName = predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto';
-        pDiv.innerHTML = `
-          <div class="prediction-title">PRÓXIMA COR PREVISTA</div>
-          <div class="prediction-value">
-            <span class="color-dot color-dot-${predictedColor}"></span>${colorName}
-          </div>
-          <div class="prediction-accuracy">Confiança: ${Math.round(confidence * 100)}%</div>
-        `;
-        this.nextPredColor = predictedColor;
-        if (confidence > 0.7) {
-          await this.sendSignalToTelegram({ colorName, confidence });
-          await this.placeBet(predictedColor);
-        }
-      }
-    } catch (err) {
-      console.error('Erro na análise de padrões:', err);
     }
   }
 
