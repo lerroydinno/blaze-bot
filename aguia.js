@@ -14,28 +14,40 @@ class BlazeWebSocket {
 
   connect() {
     try {
+      console.log('Tentando conectar ao WebSocket...');
       this.ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
 
       this.ws.onopen = () => {
         console.log('Conectado ao servidor WebSocket');
         this.ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
-        this.pingInterval = setInterval(() => this.ws.send('2'), 25000);
+        this.pingInterval = setInterval(() => {
+          console.log('Enviando ping');
+          this.ws.send('2');
+        }, 25000);
         this.reconnectAttempts = 0;
       };
 
       this.ws.onmessage = (e) => {
         try {
+          console.log('Mensagem recebida:', e.data);
           const m = e.data;
-          if (m === '2') { this.ws.send('3'); return; }
+          if (m === '2') {
+            this.ws.send('3');
+            return;
+          }
           if (m.startsWith('0') || m === '40') return;
           if (m.startsWith('42')) {
             const j = JSON.parse(m.slice(2));
+            console.log('Mensagem parseada:', j);
             if (j[0] === 'data' && j[1].id === 'double.tick') {
               const p = j[1].payload;
+              console.log('Double tick payload:', p);
               this.onDoubleTickCallback?.({ id: p.id, color: p.color, roll: p.roll, status: p.status });
             }
           }
-        } catch (err) { console.error('Erro ao processar mensagem WebSocket:', err); }
+        } catch (err) {
+          console.error('Erro ao processar mensagem WebSocket:', err);
+        }
       };
 
       this.ws.onerror = (e) => {
@@ -129,8 +141,7 @@ class BlazeInterface {
     this.outputWeights = Array(3).fill().map(() => Array(5).fill(Math.random() * 0.1 - 0.05));
     this.outputBiases = Array(3).fill(0);
     this.neuralLearningRate = 0.01;
-    this.dropoutRate = 0.4; // Aumentado para evitar overfitting
-    this.consecutiveErrors = { 'Neural': 0 };
+    this.dropoutRate = 0.4;
 
     // Contexto Temporal
     this.contextWindows = { 5: {}, 10: {}, 20: {} };
@@ -158,27 +169,6 @@ class BlazeInterface {
       'Bayesian': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0, confidenceSum: 0, confidenceCount: 0, confidenceVariance: 0, contextErrors: {} },
       'MCTS': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0, confidenceSum: 0, confidenceCount: 0, confidenceVariance: 0, contextErrors: {} }
     };
-
-    // Histórico de Previsões por Método
-    this.predictionHistory = {
-      'Markov': [],
-      'Patterns': [],
-      'Entropy': [],
-      'Q-Learning': [],
-      'Conditional': [],
-      'Neural': [],
-      'Transformer': [],
-      'Bayesian': [],
-      'MCTS': []
-    };
-
-    // Otimização de Hiperparâmetros
-    this.hyperParams = {
-      neuralLearningRate: [0.01, 0.02, 0.03],
-      alpha: [0.1, 0.15, 0.2],
-      epsilonDecay: [0.95, 0.99, 0.995]
-    };
-    this.bestHyperParams = JSON.parse(localStorage.getItem('bestHyperParams')) || {};
 
     // Carregar estado
     this.loadState();
@@ -240,19 +230,12 @@ class BlazeInterface {
   }
 
   injectGlobalStyles() {
-    const cssUrl = 'https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPOSITORIO/main/blaze.css';
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = cssUrl;
-    document.head.appendChild(link);
-    console.log('Tentando injetar CSS externo:', cssUrl);
-
     const css = `
       .blaze-min-btn { background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 0 8px; }
       .blaze-min-btn:hover { opacity: .75; }
-      .blaze-bubble { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; border-radius: 50%; background: url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg') center/cover no-repeat, rgba(34,34,34,.7); box-shadow: 0 4px 12px rgba(0,0,0,.5); cursor: pointer; z-index: 999999; display: none; }
-      .blaze-overlay { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); z-index: 999999; font-family: 'Arial', sans-serif; display: block; opacity: 1; }
-      .blaze-monitor { background: rgba(34,34,34,.7) url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg') center/contain no-repeat; background-blend-mode: overlay; border-radius: 10px; padding: 15px; box-shadow: 0 5px 15px rgba(0,0,0,.5); color: #fff; width: 350px; display: block; }
+      .blaze-bubble { position: fixed !important; bottom: 20px !important; right: 20px !important; width: 60px; height: 60px; border-radius: 50%; background: rgba(34,34,34,.7); box-shadow: 0 4px 12px rgba(0,0,0,.5); cursor: pointer; z-index: 999999 !important; display: none !important; }
+      .blaze-overlay { position: fixed !important; top: 50% !important; left: 50% !important; transform: translate(-50%,-50%) !important; z-index: 999999 !important; font-family: 'Arial', sans-serif; display: block !important; opacity: 1 !important; }
+      .blaze-monitor { background: rgba(34,34,34,.7); border-radius: 10px; padding: 15px; box-shadow: 0 5px 15px rgba(0,0,0,.5); color: #fff; width: 350px; display: block !important; visibility: visible !important; }
       .hidden { display: none !important; }
       .visible { display: block !important; }
       .result-card { background: #4448; border-radius: 5px; padding: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
@@ -277,14 +260,11 @@ class BlazeInterface {
       .color-dot-2 { background: #212121; }
       .prediction-accuracy { font-size: 12px; margin-top: 5px; opacity: .7; }
       .prediction-waiting { color: #00e676; text-shadow: 0 0 5px rgba(0,230,118,.7); }
-      .analysis-detail { font-size: 12px; margin-top: 10px; border-top: 1px solid #666; padding-top: 5px; }
-      .performance-report { font-size: 12px; margin-top: 10px; border-top: 1px solid #666; padding-top: 5px; }
-      .overall-report { font-size: 12px; margin-top: 10px; border-top: 1px solid #666; padding-top: 5px; }
     `;
     const style = document.createElement('style');
     style.textContent = css;
     document.head.appendChild(style);
-    console.log('CSS inline injetado como fallback');
+    console.log('CSS inline injetado');
 
     this.bubble = document.createElement('div');
     this.bubble.className = 'blaze-bubble';
@@ -301,7 +281,7 @@ class BlazeInterface {
       this.overlay.style.display = 'block !important';
       this.overlay.style.opacity = '1 !important';
       this.overlay.innerHTML = `
-        <div class="blaze-monitor" id="blazeMonitorBox">
+        <div class="blaze-monitor visible" id="blazeMonitorBox">
           <h3>App SHA256</h3>
           <button id="blazeMinBtn" class="blaze-min-btn">−</button>
           <div class="prediction-card" id="blazePrediction"></div>
@@ -320,7 +300,8 @@ class BlazeInterface {
           if (attempts > 1) {
             setTimeout(() => setupEvents(attempts - 1, delay * 1.5), delay);
           } else {
-            console.error('Erro: Não foi possível encontrar blazeMinBtn ou blazeMonitorBox após várias tentativas');
+            console.error('Erro: Não foi possível encontrar blazeMinBtn ou blazeMonitorBox. Re-inicializando interface.');
+            this.initMonitorInterface();
           }
           return;
         }
@@ -328,28 +309,34 @@ class BlazeInterface {
         console.log('Elementos blazeMinBtn e blazeMonitorBox encontrados. Configurando eventos.');
 
         minBtn.addEventListener('click', () => {
-          console.log('Botão Minimizar clicado');
+          console.log('Botão Minimizar clicado. Estado atual:', this.isMinimized);
           this.isMinimized = true;
           monitorBox.classList.add('hidden');
           monitorBox.classList.remove('visible');
+          monitorBox.style.display = 'none';
           this.bubble.classList.add('visible');
           this.bubble.classList.remove('hidden');
+          this.bubble.style.display = 'block';
+          console.log('Após clique: monitorBox classes:', monitorBox.classList, 'bubble classes:', this.bubble.classList);
         });
 
         this.bubble.addEventListener('click', () => {
-          console.log('Bolha clicada');
+          console.log('Bolha clicada. Estado atual:', this.isMinimized);
           this.isMinimized = false;
           this.bubble.classList.add('hidden');
           this.bubble.classList.remove('visible');
+          this.bubble.style.display = 'none';
           monitorBox.classList.add('visible');
           monitorBox.classList.remove('hidden');
+          monitorBox.style.display = 'block';
+          console.log('Após clique: monitorBox classes:', monitorBox.classList, 'bubble classes:', this.bubble.classList);
         });
 
         monitorBox.classList.add('visible');
         monitorBox.classList.remove('hidden');
+        monitorBox.style.display = 'block !important';
         this.overlay.classList.add('visible');
         this.overlay.classList.remove('hidden');
-        monitorBox.style.display = 'block !important';
         this.overlay.style.display = 'block !important';
         console.log('Visibilidade inicial configurada: painel visível, bolha oculta');
       };
@@ -359,17 +346,19 @@ class BlazeInterface {
       const visibilityInterval = setInterval(() => {
         const monitorBox = document.getElementById('blazeMonitorBox');
         if (monitorBox && !this.isMinimized) {
-          if (!monitorBox.classList.contains('visible')) {
-            console.log('Reaplicando visibilidade ao painel');
+          if (monitorBox.style.display !== 'block' || !monitorBox.classList.contains('visible')) {
+            console.log('Reaplicando visibilidade: monitorBox style antes:', monitorBox.style.display, 'classes:', monitorBox.classList);
+            monitorBox.style.display = 'block';
             monitorBox.classList.add('visible');
             monitorBox.classList.remove('hidden');
-            monitorBox.style.display = 'block !important';
+            this.overlay.style.display = 'block';
             this.overlay.classList.add('visible');
             this.overlay.classList.remove('hidden');
-            this.overlay.style.display = 'block !important';
+            console.log('Após reaplicação: monitorBox style:', monitorBox.style.display, 'classes:', monitorBox.classList);
           }
         } else if (!monitorBox) {
-          console.warn('Painel blazeMonitorBox não encontrado no DOM. Possível remoção externa.');
+          console.warn('Painel blazeMonitorBox não encontrado no DOM. Re-inicializando interface.');
+          this.initMonitorInterface();
         }
       }, 1000);
 
@@ -380,6 +369,11 @@ class BlazeInterface {
 
       this.ws = new BlazeWebSocket();
       this.ws.doubleTick((d) => this.updateResults(d));
+
+      // Função de teste para simular atualizações
+      window.testBlazeUpdate = () => {
+        this.updateResults({ id: 'mock' + Date.now(), color: Math.floor(Math.random() * 3), roll: Math.floor(Math.random() * 14) + 1, status: 'complete' });
+      };
     } catch (err) {
       console.error('Erro ao inicializar interface:', err);
     }
@@ -410,7 +404,7 @@ class BlazeInterface {
         }
         this.contextWindows[size] = { freq, entropy, streak, weight: size === optimalWindow ? 1.5 : 1.0 };
       });
-      console.log('Janelas de contexto atualizadas:', this.contextWindows, 'Janela ótima:', optimalWindow);
+      console.log('Janelas de contexto atualizadas:', this.contextWindows);
     } catch (err) {
       console.error('Erro ao computar janelas de contexto:', err);
     }
@@ -625,9 +619,9 @@ class BlazeInterface {
       let bestScore = 0;
       let bestParams = {};
 
-      for (let lr of this.hyperParams.neuralLearningRate) {
-        for (let alpha of this.hyperParams.alpha) {
-          for (let decay of this.hyperParams.epsilonDecay) {
+      for (let lr of [0.01, 0.02, 0.03]) {
+        for (let alpha of [0.1, 0.15, 0.2]) {
+          for (let decay of [0.95, 0.99, 0.995]) {
             this.neuralLearningRate = lr;
             this.alpha = alpha;
             this.epsilonDecay = decay;
@@ -1184,7 +1178,7 @@ class BlazeInterface {
       for (let i = 0; i < 10; i++) {
         for (let j = 0; j < 9; j++) {
           this.neuralWeights1[i][j] -= this.neuralLearningRate * hidden1Errors[i] * input[j];
-          this.neuralWeights1[i][j] *= 0.99; // Regularização L2
+          this.neuralWeights1[i][j] *= 0.99;
         }
         this.neuralBiases1[i] -= this.neuralLearningRate * hidden1Errors[i];
       }
@@ -1363,8 +1357,10 @@ class BlazeInterface {
 
   updateResults(data) {
     try {
-      if (this.processedIds.has(data.id)) return;
-      this.processedIds.add(data.id);
+      console.log('Atualizando resultados com data:', data);
+      // Comentei a verificação de processedIds para teste
+      // if (this.processedIds.has(data.id)) return;
+      // this.processedIds.add(data.id);
 
       this.results.unshift(data);
       this.results = this.results.slice(0, 100);
@@ -1391,16 +1387,22 @@ class BlazeInterface {
 
       const pred = this.combinePredictions(this.results);
       this.nextPredColor = pred?.color ?? null;
+      console.log('Previsão combinada:', pred);
 
       const resultsElement = document.getElementById('blazeResults');
       const predictionElement = document.getElementById('blazePrediction');
+      if (!resultsElement || !predictionElement) {
+        console.error('Elementos blazeResults ou blazePrediction não encontrados. Re-inicializando interface.');
+        this.initMonitorInterface();
+        return;
+      }
+
       if (resultsElement) {
-        const colorClass = `result-color-${data.color}`;
-        const statusClass = `result-status-${data.status}`;
         resultsElement.innerHTML = `
-          <div class="result-number ${colorClass}">${data.roll || '...'}</div>
-          <div class="result-status ${statusClass}">${data.status}</div>
+          <div class="result-number result-color-${data.color}">${data.roll || '...'}</div>
+          <div class="result-status result-status-${data.status}">${data.status}</div>
         `;
+        console.log('Resultados atualizados:', resultsElement.innerHTML);
       }
 
       if (predictionElement) {
@@ -1413,30 +1415,15 @@ class BlazeInterface {
               ${pred.colorName} (${(pred.confidence * 100).toFixed(0)}%)
             </div>
             <div class="prediction-accuracy">Acurácia Geral: ${acc}%</div>
-            <div class="analysis-detail">
-              Detalhes da Análise:<br>
-              ${pred.details.map(d => `${d.method}: ${d.colorName} (${(d.confidence * 100).toFixed(0)}%)`).join('<br>')}
-            </div>
-            <div class="performance-report">
-              Desempenho por Método:<br>
-              ${Object.entries(this.methodPerformance)
-                .filter(([m]) => this.methodWeights[m] > 0.05)
-                .map(([m, p]) => `${m}: ${(p.correct / p.total * 100).toFixed(1)}% (${p.correct}/${p.total})`)
-                .join('<br>')}
-            </div>
-            <div class="overall-report">
-              Contexto Temporal:<br>
-              Janela de 5: ${JSON.stringify(this.contextWindows[5]?.freq || {})}<br>
-              Janela de 10: ${JSON.stringify(this.contextWindows[10]?.freq || {})}<br>
-              Janela de 20: ${JSON.stringify(this.contextWindows[20]?.freq || {})}
-            </div>
           `;
+          console.log('Previsão atualizada:', predictionElement.innerHTML);
         } else {
           predictionElement.innerHTML = `
             <div class="prediction-title">PRÓXIMA COR SUGERIDA</div>
             <div class="prediction-value prediction-waiting">Aguardando dados...</div>
             <div class="prediction-accuracy">Acurácia Geral: ${this.totalPredictions > 0 ? (this.correctPredictions / this.totalPredictions * 100).toFixed(1) : 0}%</div>
           `;
+          console.log('Previsão em espera:', predictionElement.innerHTML);
         }
       }
 
