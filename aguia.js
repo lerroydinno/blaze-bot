@@ -52,13 +52,26 @@ class BlazeInterface {
       '2': { '0': 0.1, '1': 0.1, '2': 0.1 }
     };
     this.patternHistory = [];
-    // Inicializar a rede neural com Brain.js
-    this.neuralNet = new brain.NeuralNetwork({
-      hiddenLayers: [50, 25],
-      activation: 'sigmoid',
-      learningRate: 0.01
-    });
+    this.neuralNet = null; // Inicializar após carregar Brain.js
     this.initMonitorInterface();
+    this.loadBrainJS();
+  }
+
+  loadBrainJS() {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/brain.js@2.0.0-beta.1/dist/brain-browser.min.js';
+    script.onload = () => {
+      console.log('[BlazeInterface] Brain.js carregado');
+      this.neuralNet = new brain.NeuralNetwork({
+        hiddenLayers: [50, 25],
+        activation: 'sigmoid',
+        learningRate: 0.01
+      });
+    };
+    script.onerror = () => {
+      console.error('[BlazeInterface] Falha ao carregar Brain.js. Usando apenas cadeia de Markov.');
+    };
+    document.head.appendChild(script);
   }
 
   injectGlobalStyles() {
@@ -77,15 +90,18 @@ class BlazeInterface {
       .result-card{background:#4448;border-radius:5px;padding:10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}  
       .result-number{font-size:24px;font-weight:bold}  
       .result-color-0{color:#fff;background:linear-gradient(45deg,#fff,#ddd);-webkit-background-clip:text;-webkit-text-fill-color:transparent}  
-      .result-color-1{color:#f44336}.result-color-2{color:#0F1923}  
-      .result-status{padding:5px 10px;border-radius:3px;font-size:12px;font-weight:bold;text-transform:uppercase}  
+      .result-color-1{color:#f44336}.result-color-2{color:#000}  
+      .result-status{padding:5px 10px;font-size:12px;color:#333;font-weight:bold;border-radius:3px;text-transform:uppercase}  
+      .shadow-0{box-shadow:0 0 4px rgba(255,255,255,.5)}  
+      .shadow-1{box-shadow:0 0 15px rgba(244,67,54,.5)}  
+      .shadow-2{box-shadow:0 0 15px rgba(0,0,0,.5)}  
       .result-status-waiting{background:#ffc107;color:#000}  
-      .result-status-rolling{background:#ff9800;color:#000;animation:pulse 1s infinite}  
-      .result-status-complete{background:#4caf50;color:#fff}  
+      .result-status-rolling:background{#ff9800;color:#000;animation:pulse 1s infinite}  
       @keyframes pulse{0%{opacity:1}50%{opacity:.5}100%{opacity:1}}  
-      .blaze-notification{position:fixed;top:80px;right:20px;padding:15px;border-radius:5px;  
-        color:#fff;font-weight:bold;opacity:0;transform:translateY(-20px);  
-        transition:all .3s ease;z-index:10000}  
+      .result-status-complete{background:#4caf50;color:#fff}  
+      .blaze-notification{position:fixed;top:80px;background:#fff;padding-right:15px;border-radius:5px;  
+        color:#fff;font-weight:700;opacity:20px;transform:translateY(-20px);  
+        transition:all .3s ease-in-out;z-index:10000}  
       .blaze-notification.show{opacity:1;transform:translateY(0)}  
       .notification-win{background:#4caf50}.notification-loss{background:#f44336}  
       .prediction-card{background:#4448;border-radius:5px;padding:15px;margin-bottom:15px;text-align:center;font-weight:bold}  
@@ -105,15 +121,13 @@ class BlazeInterface {
     this.bubble = document.createElement('div');
     this.bubble.className = 'blaze-bubble';
     document.body.appendChild(this.bubble);
+    console.log('[BlazeInterface] Bubble criado:', this.bubble);
   }
 
   initMonitorInterface() {
-    // Carregar Brain.js via CDN
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/brain.js@2.0.0-beta.1/dist/brain-browser.min.js';
-    script.onload = () => {
-      console.log('[BlazeInterface] Brain.js carregado');
+    try {
       this.injectGlobalStyles();
+
       this.overlay = document.createElement('div');
       this.overlay.className = 'blaze-overlay';
       this.overlay.innerHTML = `
@@ -125,17 +139,25 @@ class BlazeInterface {
         </div>
       `;
       document.body.appendChild(this.overlay);
+      console.log('[BlazeInterface] Overlay e monitor criados');
 
-      document.getElementById('blazeMinBtn')
-        .addEventListener('click', () => {
-          document.getElementById('blazeMonitorBox').style.display = 'none';
+      const minBtn = document.getElementById('blazeMinBtn');
+      const monitorBox = document.getElementById('blazeMonitorBox');
+      if (minBtn && monitorBox && this.bubble) {
+        minBtn.addEventListener('click', () => {
+          monitorBox.style.display = 'none';
           this.bubble.style.display = 'block';
+          console.log('[BlazeInterface] Monitor minimizado, bubble visível');
         });
 
-      this.bubble.addEventListener('click', () => {
-        this.bubble.style.display = 'none';
-        document.getElementById('blazeMonitorBox').style.display = 'block';
-      });
+        this.bubble.addEventListener('click', () => {
+          this.bubble.style.display = 'none';
+          monitorBox.style.display = 'block';
+          console.log('[BlazeInterface] Bubble clicado, monitor visível');
+        });
+      } else {
+        console.error('[BlazeInterface] Elementos não encontrados:', { minBtn, monitorBox, bubble: this.bubble });
+      }
 
       this.results = [];
       this.processedIds = new Set();
@@ -145,8 +167,9 @@ class BlazeInterface {
 
       this.ws = new BlazeWebSocket();
       this.ws.doubleTick((d) => this.updateResults(d));
-    };
-    document.head.appendChild(script);
+    } catch (err) {
+      console.error('[BlazeInterface] Erro ao inicializar interface:', err);
+    }
   }
 
   updateTransitionMatrix(prevColor, currentColor) {
@@ -161,7 +184,7 @@ class BlazeInterface {
   }
 
   detectPatterns(history) {
-    const lastColors = history.slice(0, 15).map(r => r.color); // Analisar últimas 15 rodadas
+    const lastColors = history.slice(0, 15).map(r => r.color);
     const streak = lastColors.every((c, i, arr) => i === 0 || c === arr[0]) ? lastColors[0] : null;
     const alternation = lastColors.every((c, i) => i % 2 === 0 ? c === lastColors[0] : c !== lastColors[0]);
     
@@ -176,26 +199,26 @@ class BlazeInterface {
   }
 
   prepareNeuralInput(history) {
-    const lastColors = history.slice(0, 15).map(r => r.color); // Últimas 15 cores
+    const lastColors = history.slice(0, 15).map(r => r.color);
     const input = [];
     lastColors.forEach(color => {
       const oneHot = [0, 0, 0];
-      oneHot[color] = 1; // One-hot encoding: [1,0,0] para branco, [0,1,0] para vermelho, [0,0,1] para preto
+      oneHot[color] = 1;
       input.push(...oneHot);
     });
-    return input; // Vetor de 15 * 3 = 45 elementos
+    return input;
   }
 
   prepareNeuralOutput(color) {
     const output = [0, 0, 0];
-    output[color] = 1; // One-hot encoding para a cor
+    output[color] = 1;
     return output;
   }
 
   trainNeuralNetwork(history) {
-    if (history.length < 16) return; // Precisamos de 15 cores + 1 para a saída
-    const input = this.prepareNeuralInput(history.slice(1, 16)); // Últimas 15 cores
-    const output = this.prepareNeuralOutput(history[0].color); // Cor atual
+    if (!this.neuralNet || history.length < 16) return;
+    const input = this.prepareNeuralInput(history.slice(1, 16));
+    const output = this.prepareNeuralOutput(history[0].color);
     this.neuralNet.train([{ input, output }], {
       iterations: 100,
       errorThresh: 0.005,
@@ -206,11 +229,11 @@ class BlazeInterface {
   }
 
   predictWithNeuralNetwork(history) {
-    if (history.length < 15) return null;
+    if (!this.neuralNet || history.length < 15) return null;
     const input = this.prepareNeuralInput(history.slice(0, 15));
     const output = this.neuralNet.run(input);
     console.log('[BlazeInterface] Previsão da rede neural:', output);
-    return output; // Vetor de probabilidades [p_branco, p_vermelho, p_preto]
+    return output;
   }
 
   predictNextColor() {
@@ -231,7 +254,6 @@ class BlazeInterface {
     const frequencies = patterns.frequency;
     const lastColor = last.color;
     
-    // Probabilidades da cadeia de Markov
     let probs = { ...this.transitionMatrix[lastColor] };
     
     if (!probs['0'] && !probs['1'] && !probs['2']) {
@@ -259,7 +281,6 @@ class BlazeInterface {
       }
     });
     
-    // Normalizar probabilidades da cadeia de Markov
     let total = Object.values(probs).reduce((sum, val) => sum + val, 0);
     if (total === 0) {
       probs = { '0': 0.33, '1': 0.33, '2': 0.33 };
@@ -267,15 +288,12 @@ class BlazeInterface {
       Object.keys(probs).forEach(key => probs[key] = probs[key] / total);
     }
     
-    // Previsão da rede neural
     const nnProbs = this.predictWithNeuralNetwork(history);
     let combinedProbs = { '0': 0.33, '1': 0.33, '2': 0.33 };
     if (nnProbs) {
-      // Combinar probabilidades: 50% Markov, 50% Rede Neural
       combinedProbs['0'] = 0.5 * probs['0'] + 0.5 * nnProbs[0];
       combinedProbs['1'] = 0.5 * probs['1'] + 0.5 * nnProbs[1];
       combinedProbs['2'] = 0.5 * probs['2'] + 0.5 * nnProbs[2];
-      // Normalizar novamente
       total = Object.values(combinedProbs).reduce((sum, val) => sum + val, 0);
       Object.keys(combinedProbs).forEach(key => combinedProbs[key] = combinedProbs[key] / total);
     } else {
@@ -312,7 +330,7 @@ class BlazeInterface {
     }
     
     this.updateTransitionMatrix(prev.color, cur.color);
-    this.trainNeuralNetwork(this.results.filter(r => r.status === 'complete')); // Treinar rede neural
+    this.trainNeuralNetwork(this.results.filter(r => r.status === 'complete'));
   }
 
   updateResults(d) {
@@ -374,7 +392,7 @@ class BlazeInterface {
     n.textContent = `${win ? 'GANHOU' : 'PERDEU'}! ${(d.color === 0 ? 'BRANCO' : d.color === 1 ? 'VERMELHO' : 'PRETO')} ${d.roll ?? ''}`;
     document.body.appendChild(n);
     setTimeout(() => n.classList.add('show'), 50);
-    setTimeout(() => { n.classList.remove('show'), n.remove(); }, 300);
+    setTimeout(() => { n.classList.remove('show'); n.remove(); }, 3000);
   }
 
   analyzePatterns() {
