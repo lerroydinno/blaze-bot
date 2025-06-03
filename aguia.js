@@ -43,11 +43,11 @@ class BlazeWebSocket {
               const p = j[1].payload;
               if (typeof p.color !== 'number' || ![0, 1, 2].includes(p.color)) {
                 console.warn('Color inválido, usando fallback:', p.color);
-                p.color = 0; // Fallback para Branco
+                p.color = 0;
               }
               if (!['waiting', 'rolling', 'complete'].includes(p.status)) {
                 console.warn('Status inválido, usando fallback:', p.status);
-                p.status = 'complete'; // Fallback para complete
+                p.status = 'complete';
               }
               console.log('Double tick payload processado:', p);
               this.onDoubleTickCallback?.({ id: p.id, color: p.color, roll: p.roll || 1, status: p.status });
@@ -268,62 +268,207 @@ class BlazeInterface {
 
   injectGlobalStyles() {
     const css = `
-      .blaze-min-btn { background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 0 8px; }
-      .blaze-min-btn:hover { opacity: 0.75; }
-      .blaze-bubble { position: fixed !important; bottom: 20px !important; right: 20px !important; width: 60px; height: 60px; border-radius: 50%; background: rgba(34,34,34,.6); box-shadow: 0 4px 12px rgba(0,0,0,.5); cursor: pointer; z-index: 10000000 !important; display: none !important; }
-      .blaze-overlay { position: fixed !important; top: 50% !important; left: 50% !important; transform: translate(-50%,-50%) !important; z-index: 10000000 !important; font-family: Arial, sans-serif; display: block !important; opacity: 1 !important; }
-      .blaze-monitor { background: rgba(34,34,34,.8); border-radius: 10px; padding: 15px; box-shadow: 0 5px 15px rgba(0,0,0,.5); color: #fff; width: 350px; display: block !important; visibility: visible !important; }
-      .hidden { display: none !important; }
-      .visible { display: block !important; }
-      .result-card { background: rgba(68,68,68,.2); border-radius: 5px; padding: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-      .result-number { font-size: 24px; font-weight: bold; }
-      .result-color-0 { color: #fff; background: linear-gradient(45deg,#fff,#ddd); -webkit-background-clip: text; background-clip: text; }
-      .result-color-1 { color: #f44336; }
-      .result-color-2 { color: #0F1923; }
-      .result-status { padding: 5px 10px; border-radius: 3px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
-      .result-status-waiting { background: #ffc107; color: #000; }
-      .result-status-rolling { background: #ff9800; color: #000; animation: pulse 1s infinite; }
-      .result-status-complete { background: #4caf50; color: #fff; }
-      @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-      .blaze-notification { position: fixed; top: 80px; right: 20px; padding: 15px; border-radius: 5px; color: #fff; font-weight: bold; opacity: 0; transform: translateY(-20px); transition: all 0.3s ease; z-index: 10000001; }
-      .notification-win { background: #4caf50; }
-      .notification-loss { background: #f44336; }
-      .prediction-card { background: rgba(68,68,68,.2); border-radius: 5px; padding: 15px; margin-bottom: 15px; text-align: center; font-weight: bold; }
-      .prediction-title { font-size: 14px; opacity: 0.8; margin-bottom: 5px; }
-      .prediction-value { font-size: 18px; font-weight: bold; display: flex; align-items: center; justify-content: center; }
-      .color-dot { width: 24px; height: 24px; border-radius: 50%; display: inline-block; margin-right: 10px; }
-      .color-dot-0 { background: #fff; border: 1px solid #777; }
-      .color-dot-1 { background: #f44336; }
-      .color-dot-2 { background: #212121; }
-      .prediction-accuracy { font-size: 12px; margin-top: 5px; opacity: 0.7; }
-      .prediction-awaiting { color: #00e676; text-shadow: 0 0 5px rgba(0,230,118,.7); }
+      .blaze-min-btn { 
+        background: transparent; 
+        border: none; 
+        color: #fff; 
+        font-size: 20px; 
+        cursor: pointer; 
+        padding: 0 8px; 
+        position: absolute; 
+        top: 10px; 
+        right: 10px; 
+      }
+      .blaze-min-btn:hover { 
+        opacity: 0.75; 
+      }
+      .blaze-bubble { 
+        position: fixed !important; 
+        bottom: 20px !important; 
+        right: 20px !important; 
+        width: 60px; 
+        height: 60px; 
+        border-radius: 50%; 
+        background: rgba(34,34,34,0.8); 
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5); 
+        cursor: pointer; 
+        z-index: 10000001 !important; 
+        display: none; 
+        transition: opacity 0.3s ease;
+      }
+      .blaze-bubble.visible {
+        display: block !important;
+        opacity: 1;
+      }
+      .blaze-overlay { 
+        position: fixed !important; 
+        top: 50% !important; 
+        left: 50% !important; 
+        transform: translate(-50%, -50%) !important; 
+        z-index: 10000000 !important; 
+        font-family: Arial, sans-serif; 
+        display: block !important; 
+        opacity: 1; 
+      }
+      .blaze-monitor { 
+        background: rgba(34,34,34,0.8); 
+        border-radius: 10px; 
+        padding: 15px; 
+        box-shadow: 0 5px 15px rgba(0,0,0,0.5); 
+        color: #fff; 
+        width: 350px; 
+        position: relative;
+        display: block !important;
+        opacity: 1;
+        transition: opacity 0.3s ease;
+      }
+      .blaze-monitor.hidden { 
+        display: none !important; 
+        opacity: 0; 
+      }
+      .blaze-monitor.visible { 
+        display: block !important; 
+        opacity: 1; 
+      }
+      .result-card { 
+        background: rgba(68,68,68,0.2); 
+        border-radius: 5px; 
+        padding: 10px; 
+        margin-bottom: 10px; 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center; 
+      }
+      .result-number { 
+        font-size: 24px; 
+        font-weight: bold; 
+      }
+      .result-color-0 { 
+        color: #fff; 
+        background: linear-gradient(45deg,#fff,#ddd); 
+        -webkit-background-clip: text; 
+        background-clip: text; 
+      }
+      .result-color-1 { 
+        color: #f44336; 
+      }
+      .result-color-2 { 
+        color: #0F1923; 
+      }
+      .result-status { 
+        padding: 5px 10px; 
+        border-radius: 3px; 
+        font-size: 12px; 
+        font-weight: bold; 
+        text-transform: uppercase; 
+      }
+      .result-status-waiting { 
+        background: #ffc107; 
+        color: #000; 
+      }
+      .result-status-rolling { 
+        background: #ff9800; 
+        color: #000; 
+        animation: pulse 1s infinite; 
+      }
+      .result-status-complete { 
+        background: #4caf50; 
+        color: #fff; 
+      }
+      @keyframes pulse { 
+        0% { opacity: 1; } 
+        50% { opacity: 0.5; } 
+        100% { opacity: 1; } 
+      }
+      .blaze-notification { 
+        position: fixed; 
+        top: 80px; 
+        right: 20px; 
+        padding: 15px; 
+        border-radius: 5px; 
+        color: #fff; 
+        font-weight: bold; 
+        opacity: 0; 
+        transform: translateY(-20px); 
+        transition: all 0.3s ease; 
+        z-index: 10000002; 
+      }
+      .notification-win { 
+        background: #4caf50; 
+      }
+      .notification-loss { 
+        background: #f44336; 
+      }
+      .prediction-card { 
+        background: rgba(68,68,68,0.2); 
+        border-radius: 5px; 
+        padding: 15px; 
+        margin-bottom: 15px; 
+        text-align: center; 
+        font-weight: bold; 
+      }
+      .prediction-title { 
+        font-size: 14px; 
+        opacity: 0.8; 
+        margin-bottom: 5px; 
+      }
+      .prediction-value { 
+        font-size: 18px; 
+        font-weight: bold; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+      }
+      .color-dot { 
+        width: 24px; 
+        height: 24px; 
+        border-radius: 50%; 
+        display: inline-block; 
+        margin-right: 10px; 
+      }
+      .color-dot-0 { 
+        background: #fff; 
+        border: 1px solid #777; 
+      }
+      .color-dot-1 { 
+        background: #f44336; 
+      }
+      .color-dot-2 { 
+        background: #212121; 
+      }
+      .prediction-accuracy { 
+        font-size: 12px; 
+        margin-top: 5px; 
+        opacity: 0.7; 
+      }
+      .prediction-awaiting { 
+        color: #00e676; 
+        text-shadow: 0 0 5px rgba(0,230,118,0.7); 
+      }
     `;
-    const existingStyle = document.querySelector('style#blaze-monitor-style');
-    if (existingStyle) {
-      existingStyle.textContent = css;
-    } else {
-      const style = document.createElement('style');
-      style.id = 'blaze-monitor-style';
-      style.textContent = css;
-      document.head.appendChild(style);
-    }
+    const style = document.createElement('style');
+    style.id = 'blaze-monitor-style';
+    style.textContent = css;
+    document.head.appendChild(style);
     console.log('Estilos CSS injetados');
 
-    const existingBubble = document.querySelector('.blaze-bubble');
-    if (existingBubble) {
-      existingBubble.remove();
-    }
     this.bubble = document.createElement('div');
     this.bubble.className = 'blaze-bubble';
     document.body.appendChild(this.bubble);
-    console.log('Bolha adicionada ao DOM');
+    console.log('Bolha criada e adicionada ao DOM');
   }
 
   initMonitorInterface() {
     if (this.isInitialized) {
-      console.log('Interface já inicializada, verificando elementos');
+      console.log('Interface já inicializada, verificando visibilidade');
       const monitorBox = document.getElementById('blazeMonitorBox');
-      if (!monitorBox) {
+      if (monitorBox) {
+        monitorBox.classList.add('visible');
+        monitorBox.classList.remove('hidden');
+        monitorBox.style.display = 'block';
+        monitorBox.style.opacity = '1';
+        console.log('Monitor box restaurado');
+      } else {
         console.warn('Monitor box não encontrado, reinicializando');
         this.isInitialized = false;
         this.initMonitorInterface();
@@ -335,11 +480,6 @@ class BlazeInterface {
       console.log('Inicializando interface do monitor');
       this.isInitialized = true;
       this.injectGlobalStyles();
-
-      const existingOverlay = document.querySelector('.blaze-overlay');
-      if (existingOverlay) {
-        existingOverlay.remove();
-      }
 
       this.overlay = document.createElement('div');
       this.overlay.className = 'blaze-overlay';
@@ -363,83 +503,61 @@ class BlazeInterface {
         </div>
       `;
       document.body.appendChild(this.overlay);
-      console.log('Painel blaze-overlay adicionado ao DOM');
+      console.log('Painel blaze-overlay criado e adicionado ao DOM');
 
-      const setupEvents = (attempts = 2, delay = 500) => {
-        const minBtn = document.getElementById('blazeMinBtn');
-        const monitorBox = document.getElementById('blazeMonitorBox');
+      const minBtn = document.getElementById('blazeMinBtn');
+      const monitorBox = document.getElementById('blazeMonitorBox');
+      if (!minBtn || !monitorBox) {
+        console.error('Elementos blazeMinBtn ou blazeMonitorBox não encontrados');
+        throw new Error('Falha ao encontrar elementos do DOM');
+      }
 
-        if (!minBtn || !monitorBox) {
-          console.warn(`Tentativa ${3 - attempts}: Elementos blazeMinBtn ou blazeMonitorBox não encontrados. Tentando novamente em ${delay}ms`);
-          if (attempts > 1) {
-            setTimeout(() => setupEvents(attempts - 1, delay * 1.5), delay);
-          } else {
-            console.error('Erro: Não foi possível configurar eventos');
-          }
-          return;
-        }
+      console.log('Configurando eventos de minimizar/restaurar');
+      minBtn.addEventListener('click', () => {
+        console.log('Botão Minimizar clicado, minimizando monitor');
+        this.isMinimized = true;
+        monitorBox.classList.add('hidden');
+        monitorBox.classList.remove('visible');
+        monitorBox.style.display = 'none';
+        monitorBox.style.opacity = '0';
+        this.bubble.classList.add('visible');
+        this.bubble.classList.remove('hidden');
+        this.bubble.style.display = 'block';
+        this.bubble.style.opacity = '1';
+        console.log('Monitor minimizado, bolha visível');
+      });
 
-        console.log('Configurando eventos para minimizar/restaurar');
-        minBtn.addEventListener('click', () => {
-          console.log('Botão Minimizar clicado');
-          this.isMinimized = true;
-          monitorBox.classList.add('hidden');
-          monitorBox.classList.remove('visible');
-          monitorBox.style.display = 'none';
-          this.bubble.classList.add('visible');
-          this.bubble.classList.remove('hidden');
-          this.bubble.style.display = 'block';
-        });
-
-        this.bubble.addEventListener('click', () => {
-          console.log('Bolha clicada');
-          this.isMinimized = false;
-          this.bubble.classList.add('hidden');
-          this.bubble.classList.remove('visible');
-          this.bubble.style.display = 'none';
-          monitorBox.classList.add('visible');
-          monitorBox.classList.remove('hidden');
-          monitorBox.style.display = 'block';
-        });
-
+      this.bubble.addEventListener('click', () => {
+        console.log('Bolha clicada, restaurando monitor');
+        this.isMinimized = false;
+        this.bubble.classList.add('hidden');
+        this.bubble.classList.remove('visible');
+        this.bubble.style.display = 'none';
+        this.bubble.style.opacity = '0';
         monitorBox.classList.add('visible');
+        monitorBox.classList.remove('hidden');
         monitorBox.style.display = 'block';
-        this.overlay.classList.add('visible');
-        this.overlay.style.display = 'block';
-        console.log('Visibilidade inicial configurada');
-      };
+        monitorBox.style.opacity = '1';
+        console.log('Monitor restaurado, bolha oculta');
+      });
 
-      setupEvents();
-
-      const visibilityInterval = setInterval(() => {
-        const monitorBox = document.getElementById('blazeMonitorBox');
-        if (monitorBox && !this.isMinimized) {
-          monitorBox.style.display = 'block';
-          monitorBox.classList.add('visible');
-          monitorBox.classList.remove('hidden');
-          this.overlay.style.display = 'block';
-          this.overlay.classList.add('visible');
-          this.overlay.classList.remove('hidden');
-        }
-      }, 1000);
-
-      setTimeout(() => {
-        clearInterval(visibilityInterval);
-        console.log('Intervalo de visibilidade encerrado');
-      }, 10000);
+      monitorBox.classList.add('visible');
+      monitorBox.style.display = 'block';
+      monitorBox.style.opacity = '1';
+      this.overlay.classList.add('visible');
+      this.overlay.style.display = 'block';
+      console.log('Visibilidade inicial configurada: monitor visível');
 
       this.ws = new BlazeWebSocket();
       this.ws.doubleTick((d) => this.debouncedUpdateResults(d));
 
-      // Forçar atualização inicial com histórico mock
       console.log('Forçando atualização inicial com mock');
       this.results.forEach((result, index) => {
         setTimeout(() => this.updateResults({ ...result, id: 'init' + index }), index * 500);
       });
 
       window.testBlazeUpdate = () => {
-        const colors = [0, 1, 2];
-        const sequence = [1, 2, 0, 1, 2]; // Sequência realista
+        const sequence = [1, 2, 0, 1, 2];
         const index = Math.floor(Math.random() * sequence.length);
         this.updateResults({
           id: 'mock' + Date.now(),
@@ -447,6 +565,7 @@ class BlazeInterface {
           roll: Math.floor(Math.random() * 14) + 1,
           status: 'complete'
         });
+        console.log('Teste de atualização disparado');
       };
     } catch (e) {
       console.error('Erro ao inicializar interface:', e);
@@ -523,7 +642,7 @@ class BlazeInterface {
       const scores = methods.reduce((acc, method) => ({ ...acc, [method]: 0 }), {});
       const simulations = 10;
       for (let i = 0; i < simulations; i++) {
-        const start = Math.floor(Math.random() * (history.length - 5)));
+        const start = Math.floor(Math.random() * (history.length - 5));
         const sample = history.slice(start, start + 5);
         methods.forEach(method => {
           let pred;
@@ -1060,20 +1179,20 @@ class BlazeInterface {
       const hidden1Errors = Array(10).fill(0);
       for (let i = 0; i < 10; i++) {
         for (let j = 0; j < 5; j++) {
-          hidden1Errors[i] += hidden2Errors[j] * this.neuralWeights2[j][i]; j++;
+          hidden1Errors[i] += hidden2Errors[j] * this.neuralWeights2[j][i];
         }
         hidden1Errors[i] *= hidden1[i] > 0 ? 1 : 0;
       }
 
       for (let i = 0; i < 3; i++) {
-      for (let j = 0; j < 5; j++) {
-          this.outputWeights[i][j] -= this.neuralLearningRate * outputErrors[i] * hidden2[j]
+        for (let j = 0; j < 5; j++) {
+          this.outputWeights[i][j] -= this.neuralLearningRate * outputErrors[i] * hidden2[j];
         }
         this.outputBiases[i] -= this.neuralLearningRate * outputErrors[i];
       }
 
-      for (let k = i < 0; i = 5; i++) {
-        for (let l = j; l < 0; j++) {
+      for (let i = 0; i < 5; i++) {
+        for (let j = 0; j < 10; j++) {
           this.neuralWeights2[i][j] -= this.neuralLearningRate * hidden2Errors[i] * hidden1[j];
         }
         this.neuralBiases2[i] -= this.neuralLearningRate * hidden2Errors[i];
@@ -1095,14 +1214,14 @@ class BlazeInterface {
   predictNeural(history = this.results) {
     try {
       history = history.filter(r => r.status === 'complete').slice(0, 5);
-      if (history.length < 5) {
+      if (history.length < 3) {
         console.log('Histórico insuficiente para neural');
         return null;
       }
       const input = [];
       for (let i = 0; i < 3; i++) {
-        const color = parseInt(history[i]?.color) || 0;
-        input.push(color === 0 ? 1 : 0, color === 1 ? 1 : 0, color === 2 ? 0 : 1);
+        const color = history[i]?.color || 0;
+        input.push(color === 0 ? 1 : 0, color === 1 ? 1 : 0, color === 2 ? 1 : 0);
       }
 
       const hidden1 = Array(10).fill(0);
@@ -1117,7 +1236,7 @@ class BlazeInterface {
       const hidden2 = Array(5).fill(0);
       for (let i = 0; i < 5; i++) {
         for (let j = 0; j < 10; j++) {
-          hidden2[i] += hidden1[j] * this.neuralWeights2[i][j]; j];
+          hidden2[i] += hidden1[j] * this.neuralWeights2[i][j];
         }
         hidden2[i] += this.neuralBiases2[i];
         hidden2[i] = Math.max(0, hidden2[i]);
@@ -1138,7 +1257,7 @@ class BlazeInterface {
 
       const result = {
         color: predictedColor,
-        colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto';
+        colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
         confidence: maxProb.toFixed(2),
         method: 'Neural'
       };
@@ -1170,9 +1289,9 @@ class BlazeInterface {
         console.log('Sem previsões válidas, usando fallback aleatório');
         const color = Math.floor(Math.random() * 3);
         return {
-          color: color,
-          colorName: color === 0 ? 'Branco' : color === 1 ? 'Vermelho' : 'Preto';
-          confidence: '0.5',
+          color,
+          colorName: color === 0 ? 'Branco' : color === 1 ? 'Vermelho' : 'Preto',
+          confidence: '0.33',
           method: 'Fallback'
         };
       }
@@ -1187,7 +1306,7 @@ class BlazeInterface {
 
       const finalPrediction = {
         color: finalColor,
-        colorName: finalColor === 0 ? 'Branco' : finalColor === 1 ? 'Vermelho' : 'Preto';
+        colorName: finalColor === 0 ? 'Branco' : finalColor === 1 ? 'Vermelho' : 'Preto',
         confidence: (maxScore / predictions.length).toFixed(2),
         details: predictions
       };
@@ -1195,7 +1314,12 @@ class BlazeInterface {
       return finalPrediction;
     } catch (e) {
       console.error('Erro ao combinar previsões:', e);
-      return { color: Math.floor(Math.random() * 3), colorName: 'Desconhecido', confidence: '0.1', method: 'Error Fallback'};
+      return {
+        color: Math.floor(Math.random() * 3),
+        colorName: 'Desconhecido',
+        confidence: '0.1',
+        method: 'Error Fallback'
+      };
     }
   }
 
@@ -1218,12 +1342,13 @@ class BlazeInterface {
         this.predictBayesian(),
         this.predictTransformer(),
         this.predictMCTS()
-      ].filter(p => p !== null && p.color !== undefined));
+      ].filter(p => p !== null && p.color !== undefined);
       predictions.forEach(p => {
-        this.methodPerformance[p.method].total++;        p.methodPerformance[p.method].recentTotal++;
+        this.methodPerformance[p.method].total++;
+        this.methodPerformance[p.method].recentTotal++;
         if (p.color === data.color) {
           this.methodPerformance[p.method].correct++;
-          p.methodPerformance[p.method].recentCorrect++;
+          this.methodPerformance[p.method].recentCorrect++;
         }
         if (this.methodPerformance[p.method].recentTotal > 10) {
           this.methodPerformance[p.method].recentCorrect = 0;
@@ -1238,8 +1363,8 @@ class BlazeInterface {
 
   updateResults(data) {
     try {
-      console.log('Recebendo dados para atualização:', data, 'Histórico atual:', this.results);
-      if (this.data.processedIds.has(id) && data.status === 'complete') {
+      console.log('Recebido para atualização:', data, 'Histórico atual:', this.results);
+      if (this.processedIds.has(data.id) && data.status === 'complete') {
         console.log('ID já processado:', data.id);
         return;
       }
@@ -1249,14 +1374,14 @@ class BlazeInterface {
       this.results = this.results.slice(0, 50);
       if (this.processedIds.size > 500) {
         this.processedIds = new Set([...this.processedIds].slice(-500));
-        this.notifiedIds = new Set([...this.results].slice(-notifiedIds].slice(-500));
+        this.notifiedIds = new Set([...this.notifiedIds].slice(-500));
       }
 
       if (data.status === 'complete') {
         console.log('Processando resultado completo:', data);
         this.updateMarkovMatrix(this.results);
-        this.updateConditionalFreq(history(this.results);
-        this.computeContextWindows(this.results(history));
+        this.updateConditionalFreq(this.results);
+        this.computeContextWindows(this.results);
         this.trainNeural(this.results.filter(r => r.status === 'complete'), data.color);
         const state = this.getState(this.results.slice(1));
         const nextState = this.getState(this.results);
@@ -1290,21 +1415,23 @@ class BlazeInterface {
       }
 
       if (!this.isMinimized) {
-        monitorBox.style.display = 'block';
         monitorBox.classList.add('visible');
         monitorBox.classList.remove('hidden');
+        monitorBox.style.display = 'block';
+        monitorBox.style.opacity = '1';
+        console.log('Monitor box tornado visível');
       }
 
       let resultNumber = resultsElement.querySelector('.result-number');
       let resultStatus = resultsElement.querySelector('.result-status');
       if (!resultNumber) {
-        console.log('Criando elemento resultNumber');
+        console.log('Criando elemento result-number');
         resultNumber = document.createElement('div');
         resultNumber.className = 'result-number';
         resultsElement.appendChild(resultNumber);
       }
       if (!resultStatus) {
-        console.log('Criando elemento resultStatus');
+        console.log('Criando elemento result-status');
         resultStatus = document.createElement('div');
         resultStatus.className = 'result-status';
         resultsElement.appendChild(resultStatus);
@@ -1349,7 +1476,7 @@ class BlazeInterface {
         const isWin = pred?.color === data.color;
         const notification = document.createElement('div');
         notification.className = `blaze-notification ${isWin ? 'notification-win' : 'notification-loss'}`;
-        notification.textContent = isWin ? `Acerto! ${pred?.colorName || 'Desconhecido'}` : `Erro! Era ${data.color === 0 ? 'Branco' : data.color === 1' ? 'Vermelho' : 'Preto'}`;
+        notification.textContent = isWin ? `Acerto! ${pred?.colorName || 'Desconhecido'}` : `Erro! Era ${data.color === 0 ? 'Branco' : data.color === 1 ? 'Vermelho' : 'Preto'}`;
         document.body.appendChild(notification);
         setTimeout(() => {
           notification.style.opacity = '1';
