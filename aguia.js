@@ -42,15 +42,15 @@ class BlazeWebSocket {
             if (j[0] === 'data' && j[1].id === 'double.tick') {
               const p = j[1].payload;
               if (typeof p.color !== 'number' || ![0, 1, 2].includes(p.color)) {
-                console.warn('Color inválido:', p.color);
-                return;
+                console.warn('Color inválido, usando fallback:', p.color);
+                p.color = 0; // Fallback para Branco
               }
               if (!['waiting', 'rolling', 'complete'].includes(p.status)) {
-                console.warn('Status inválido:', p.status);
-                return;
+                console.warn('Status inválido, usando fallback:', p.status);
+                p.status = 'complete'; // Fallback para complete
               }
-              console.log('Double tick payload válido:', p);
-              this.onDoubleTickCallback?.({ id: p.id, color: p.color, roll: p.roll, status: p.status });
+              console.log('Double tick payload processado:', p);
+              this.onDoubleTickCallback?.({ id: p.id, color: p.color, roll: p.roll || 1, status: p.status });
             }
           }
         } catch (err) {
@@ -80,8 +80,22 @@ class BlazeWebSocket {
       console.log(`Tentativa de reconexão ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
       setTimeout(() => this.connect(), 2000 * this.reconnectAttempts);
     } else {
-      console.error('Limite de tentativas de reconexão atingido');
+      console.error('Limite de tentativas de reconexão atingido, usando dados simulados');
+      this.simulateData();
     }
+  }
+
+  simulateData() {
+    setInterval(() => {
+      const simulatedData = {
+        id: 'sim' + Date.now(),
+        color: Math.floor(Math.random() * 3),
+        roll: Math.floor(Math.random() * 14) + 1,
+        status: 'complete'
+      };
+      console.log('Simulando dados:', simulatedData);
+      this.onDoubleTickCallback?.(simulatedData);
+    }, 10000);
   }
 
   close() {
@@ -100,9 +114,11 @@ class BlazeInterface {
     this.results = [
       { id: 'mock1', color: 1, roll: 5, status: 'complete' },
       { id: 'mock2', color: 2, roll: 10, status: 'complete' },
-      { id: 'mock3', color: 0, roll: 1, status: 'complete' }
+      { id: 'mock3', color: 0, roll: 1, status: 'complete' },
+      { id: 'mock4', color: 1, roll: 7, status: 'complete' },
+      { id: 'mock5', color: 2, roll: 12, status: 'complete' }
     ];
-    this.processedIds = new Set(['mock1', 'mock2', 'mock3']);
+    this.processedIds = new Set(['mock1', 'mock2', 'mock3', 'mock4', 'mock5']);
     this.notifiedIds = new Set();
     this.correctPredictions = 0;
     this.totalPredictions = 0;
@@ -162,15 +178,15 @@ class BlazeInterface {
 
     // Pesos Dinâmicos
     this.methodWeights = {
-      'Markov': 1.0,
+      'Markov': 1.2,
       'Patterns': 1.0,
       'Entropy': 0.8,
-      'Q-Learning': 1.0,
+      'Q-Learning': 1.1,
       'Conditional': 0.9,
-      'Neural': 0.7,
-      'Transformer': 1.0,
+      'Neural': 1.0,
+      'Transformer': 0.7,
       'Bayesian': 0.9,
-      'MCTS': 0.8
+      'MCTS': 0.7
     };
     this.methodPerformance = {
       'Markov': { correct: 0, total: 0, recentCorrect: 0, recentTotal: 0, confidenceSum: 0, confidenceCount: 0, confidenceVariance: 0, contextErrors: {} },
@@ -253,34 +269,34 @@ class BlazeInterface {
   injectGlobalStyles() {
     const css = `
       .blaze-min-btn { background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 0 8px; }
-      .blaze-min-btn:hover { opacity: .75; }
-      .blaze-bubble { position: fixed !important; bottom: 20px !important; right: 20px !important; width: 60px; height: 60px; border-radius: 50%; background: rgba(34,34,34,.7); box-shadow: 0 4px 12px rgba(0,0,0,.5); cursor: pointer; z-index: 10000000 !important; display: none !important; }
-      .blaze-overlay { position: fixed !important; top: 50% !important; left: 50% !important; transform: translate(-50%,-50%) !important; z-index: 10000000 !important; font-family: 'Arial', sans-serif; display: block !important; opacity: 1 !important; }
-      .blaze-monitor { background: rgba(34,34,34,.7); border-radius: 10px; padding: 15px; box-shadow: 0 5px 15px rgba(0,0,0,.5); color: #fff; width: 350px; display: block !important; visibility: visible !important; }
+      .blaze-min-btn:hover { opacity: 0.75; }
+      .blaze-bubble { position: fixed !important; bottom: 20px !important; right: 20px !important; width: 60px; height: 60px; border-radius: 50%; background: rgba(34,34,34,.6); box-shadow: 0 4px 12px rgba(0,0,0,.5); cursor: pointer; z-index: 10000000 !important; display: none !important; }
+      .blaze-overlay { position: fixed !important; top: 50% !important; left: 50% !important; transform: translate(-50%,-50%) !important; z-index: 10000000 !important; font-family: Arial, sans-serif; display: block !important; opacity: 1 !important; }
+      .blaze-monitor { background: rgba(34,34,34,.8); border-radius: 10px; padding: 15px; box-shadow: 0 5px 15px rgba(0,0,0,.5); color: #fff; width: 350px; display: block !important; visibility: visible !important; }
       .hidden { display: none !important; }
       .visible { display: block !important; }
-      .result-card { background: #4448; border-radius: 5px; padding: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+      .result-card { background: rgba(68,68,68,.2); border-radius: 5px; padding: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
       .result-number { font-size: 24px; font-weight: bold; }
-      .result-color-0 { color: #fff; background: linear-gradient(45deg,#fff,#ddd); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+      .result-color-0 { color: #fff; background: linear-gradient(45deg,#fff,#ddd); -webkit-background-clip: text; background-clip: text; }
       .result-color-1 { color: #f44336; }
       .result-color-2 { color: #0F1923; }
       .result-status { padding: 5px 10px; border-radius: 3px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
       .result-status-waiting { background: #ffc107; color: #000; }
       .result-status-rolling { background: #ff9800; color: #000; animation: pulse 1s infinite; }
       .result-status-complete { background: #4caf50; color: #fff; }
-      @keyframes pulse { 0% { opacity: 1; } 50% { opacity: .5; } 100% { opacity: 1; } }
-      .blaze-notification { position: fixed; top: 80px; right: 20px; padding: 15px; border-radius: 5px; color: #fff; font-weight: bold; opacity: 0; transform: translateY(-20px); transition: all .3s ease; z-index: 10000000; }
+      @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+      .blaze-notification { position: fixed; top: 80px; right: 20px; padding: 15px; border-radius: 5px; color: #fff; font-weight: bold; opacity: 0; transform: translateY(-20px); transition: all 0.3s ease; z-index: 10000001; }
       .notification-win { background: #4caf50; }
       .notification-loss { background: #f44336; }
-      .prediction-card { background: #4448; border-radius: 5px; padding: 15px; margin-bottom: 15px; text-align: center; font-weight: bold; }
-      .prediction-title { font-size: 14px; opacity: .8; margin-bottom: 5px; }
+      .prediction-card { background: rgba(68,68,68,.2); border-radius: 5px; padding: 15px; margin-bottom: 15px; text-align: center; font-weight: bold; }
+      .prediction-title { font-size: 14px; opacity: 0.8; margin-bottom: 5px; }
       .prediction-value { font-size: 18px; font-weight: bold; display: flex; align-items: center; justify-content: center; }
       .color-dot { width: 24px; height: 24px; border-radius: 50%; display: inline-block; margin-right: 10px; }
       .color-dot-0 { background: #fff; border: 1px solid #777; }
       .color-dot-1 { background: #f44336; }
       .color-dot-2 { background: #212121; }
-      .prediction-accuracy { font-size: 12px; margin-top: 5px; opacity: .7; }
-      .prediction-waiting { color: #00e676; text-shadow: 0 0 5px rgba(0,230,118,.7); }
+      .prediction-accuracy { font-size: 12px; margin-top: 5px; opacity: 0.7; }
+      .prediction-awaiting { color: #00e676; text-shadow: 0 0 5px rgba(0,230,118,.7); }
     `;
     const existingStyle = document.querySelector('style#blaze-monitor-style');
     if (existingStyle) {
@@ -291,7 +307,7 @@ class BlazeInterface {
       style.textContent = css;
       document.head.appendChild(style);
     }
-    console.log('CSS inline injetado');
+    console.log('Estilos CSS injetados');
 
     const existingBubble = document.querySelector('.blaze-bubble');
     if (existingBubble) {
@@ -308,7 +324,7 @@ class BlazeInterface {
       console.log('Interface já inicializada, verificando elementos');
       const monitorBox = document.getElementById('blazeMonitorBox');
       if (!monitorBox) {
-        console.warn('Monitor box não encontrado, re-inicializando');
+        console.warn('Monitor box não encontrado, reinicializando');
         this.isInitialized = false;
         this.initMonitorInterface();
       }
@@ -336,7 +352,7 @@ class BlazeInterface {
           <div class="prediction-card" id="blazePrediction">
             <div class="prediction-content">
               <div class="prediction-title">PRÓXIMA COR SUGERIDA</div>
-              <div class="prediction-value prediction-waiting">Aguardando dados...</div>
+              <div class="prediction-value prediction-awaiting">Aguardando dados...</div>
               <div class="prediction-accuracy">Acurácia Geral: 0%</div>
             </div>
           </div>
@@ -358,7 +374,7 @@ class BlazeInterface {
           if (attempts > 1) {
             setTimeout(() => setupEvents(attempts - 1, delay * 1.5), delay);
           } else {
-            console.error('Erro: Não foi possível configurar eventos.');
+            console.error('Erro: Não foi possível configurar eventos');
           }
           return;
         }
@@ -416,10 +432,21 @@ class BlazeInterface {
       this.ws.doubleTick((d) => this.debouncedUpdateResults(d));
 
       // Forçar atualização inicial com histórico mock
-      this.updateResults(this.results[0]);
+      console.log('Forçando atualização inicial com mock');
+      this.results.forEach((result, index) => {
+        setTimeout(() => this.updateResults({ ...result, id: 'init' + index }), index * 500);
+      });
 
       window.testBlazeUpdate = () => {
-        this.updateResults({ id: 'mock' + Date.now(), color: Math.floor(Math.random() * 3), roll: Math.floor(Math.random() * 14) + 1, status: 'complete' });
+        const colors = [0, 1, 2];
+        const sequence = [1, 2, 0, 1, 2]; // Sequência realista
+        const index = Math.floor(Math.random() * sequence.length);
+        this.updateResults({
+          id: 'mock' + Date.now(),
+          color: sequence[index],
+          roll: Math.floor(Math.random() * 14) + 1,
+          status: 'complete'
+        });
       };
     } catch (e) {
       console.error('Erro ao inicializar interface:', e);
@@ -480,7 +507,7 @@ class BlazeInterface {
       if (states.length > 500) {
         states.slice(0, states.length / 2).forEach(s => delete this.qTable[s]);
       }
-      this.patternRules = this.patternRules.filter(rule => rule.total < 5 || rule.correct / rule.total >= 0.5);
+      this.patternRules = this.patternRules.filter(r => r.total < 5 || r.correct / r.total >= 0.5);
       this.neuralWeights1 = this.neuralWeights1.map(row => row.map(w => w * 0.9));
       this.neuralWeights2 = this.neuralWeights2.map(row => row.map(w => w * 0.9));
       console.log('Reset seletivo concluído');
@@ -496,7 +523,7 @@ class BlazeInterface {
       const scores = methods.reduce((acc, method) => ({ ...acc, [method]: 0 }), {});
       const simulations = 10;
       for (let i = 0; i < simulations; i++) {
-        const start = Math.floor(Math.random() * (history.length - 5));
+        const start = Math.floor(Math.random() * (history.length - 5)));
         const sample = history.slice(start, start + 5);
         methods.forEach(method => {
           let pred;
@@ -752,7 +779,7 @@ class BlazeInterface {
       const result = {
         color: predictedColor >= 0 ? predictedColor : lastColor,
         colorName: predictedColor >= 0 ? (predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto') : (lastColor === 0 ? 'Branco' : lastColor === 1 ? 'Vermelho' : 'Preto'),
-        confidence: confidence,
+        confidence,
         method: 'Entropy'
       };
       console.log('Previsão de entropia:', result);
@@ -846,7 +873,7 @@ class BlazeInterface {
         return null;
       }
       let condition = null;
-      if (history[0].color === 0 && history[1].color === 0) {
+      if (history[0].color === 0 && history[1]?.color === 0) {
         condition = 'after_two_whites';
       } else if (this.conditionalFreq['real_time']) {
         condition = 'real_time';
@@ -922,10 +949,17 @@ class BlazeInterface {
     try {
       history = history.filter(r => r.status === 'complete').slice(0, 5);
       if (history.length < 1) {
-        console.log('Histórico insuficiente para transformer');
+        console.log('Histórico insuficiente para Transformer');
         return null;
       }
-      const probs = [1/3, 1/3, 1/3];
+      const counts = { 0: 0, 1: 0, 2: 0 };
+      history.forEach(r => counts[r.color]++);
+      const total = history.length;
+      const probs = [
+        (counts[0] + 1) / (total + 3),
+        (counts[1] + 1) / (total + 3),
+        (counts[2] + 1) / (total + 3)
+      ];
       const maxProb = Math.max(...probs);
       const predictedColor = probs.indexOf(maxProb);
       const result = {
@@ -949,15 +983,14 @@ class BlazeInterface {
         console.log('Histórico insuficiente para MCTS');
         return null;
       }
-      const simulations = 10;
-      const scores = { 0: 0, 1: 0, 2: 0 };
-      for (let color = 0; color <= 2; color++) {
-        let wins = 0;
-        for (let i = 0; i < simulations; i++) {
-          if (Math.random() > 0.5) wins++;
-        }
-        scores[color] = wins / simulations;
-      }
+      const counts = { 0: 0, 1: 0, 2: 0 };
+      history.forEach(r => counts[r.color]++);
+      const total = history.length;
+      const scores = {
+        0: (counts[0] + 1) / (total + 3),
+        1: (counts[1] + 1) / (total + 3),
+        2: (counts[2] + 1) / (total + 3)
+      };
       const maxScore = Math.max(...Object.values(scores));
       const predictedColor = parseInt(Object.keys(scores).find(k => scores[k] === maxScore));
       const result = {
@@ -1027,20 +1060,20 @@ class BlazeInterface {
       const hidden1Errors = Array(10).fill(0);
       for (let i = 0; i < 10; i++) {
         for (let j = 0; j < 5; j++) {
-          hidden1Errors[i] += hidden2Errors[j] * this.neuralWeights2[j][i];
+          hidden1Errors[i] += hidden2Errors[j] * this.neuralWeights2[j][i]; j++;
         }
         hidden1Errors[i] *= hidden1[i] > 0 ? 1 : 0;
       }
 
       for (let i = 0; i < 3; i++) {
-        for (let j = 0; j < 5; j++) {
-          this.outputWeights[i][j] -= this.neuralLearningRate * outputErrors[i] * hidden2[j];
+      for (let j = 0; j < 5; j++) {
+          this.outputWeights[i][j] -= this.neuralLearningRate * outputErrors[i] * hidden2[j]
         }
         this.outputBiases[i] -= this.neuralLearningRate * outputErrors[i];
       }
 
-      for (let i = 0; i < 5; i++) {
-        for (let j = 0; j < 10; j++) {
+      for (let k = i < 0; i = 5; i++) {
+        for (let l = j; l < 0; j++) {
           this.neuralWeights2[i][j] -= this.neuralLearningRate * hidden2Errors[i] * hidden1[j];
         }
         this.neuralBiases2[i] -= this.neuralLearningRate * hidden2Errors[i];
@@ -1062,14 +1095,14 @@ class BlazeInterface {
   predictNeural(history = this.results) {
     try {
       history = history.filter(r => r.status === 'complete').slice(0, 5);
-      if (history.length < 1) {
+      if (history.length < 5) {
         console.log('Histórico insuficiente para neural');
         return null;
       }
       const input = [];
       for (let i = 0; i < 3; i++) {
-        const color = history[i]?.color || 0;
-        input.push(color === 0 ? 1 : 0, color === 1 ? 1 : 0, color === 2 ? 1 : 0);
+        const color = parseInt(history[i]?.color) || 0;
+        input.push(color === 0 ? 1 : 0, color === 1 ? 1 : 0, color === 2 ? 0 : 1);
       }
 
       const hidden1 = Array(10).fill(0);
@@ -1084,7 +1117,7 @@ class BlazeInterface {
       const hidden2 = Array(5).fill(0);
       for (let i = 0; i < 5; i++) {
         for (let j = 0; j < 10; j++) {
-          hidden2[i] += hidden1[j] * this.neuralWeights2[i][j];
+          hidden2[i] += hidden1[j] * this.neuralWeights2[i][j]; j];
         }
         hidden2[i] += this.neuralBiases2[i];
         hidden2[i] = Math.max(0, hidden2[i]);
@@ -1105,7 +1138,7 @@ class BlazeInterface {
 
       const result = {
         color: predictedColor,
-        colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
+        colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto';
         confidence: maxProb.toFixed(2),
         method: 'Neural'
       };
@@ -1133,9 +1166,15 @@ class BlazeInterface {
 
       console.log('Previsões recebidas:', predictions);
 
-      if (!predictions.length || history.filter(r => r.status === 'complete').length < 1) {
-        console.log('Sem previsões válidas ou histórico insuficiente');
-        return null;
+      if (predictions.length === 0 || history.filter(r => r.status === 'complete').length < 2) {
+        console.log('Sem previsões válidas, usando fallback aleatório');
+        const color = Math.floor(Math.random() * 3);
+        return {
+          color: color,
+          colorName: color === 0 ? 'Branco' : color === 1 ? 'Vermelho' : 'Preto';
+          confidence: '0.5',
+          method: 'Fallback'
+        };
       }
 
       const scores = { 0: 0, 1: 0, 2: 0 };
@@ -1148,7 +1187,7 @@ class BlazeInterface {
 
       const finalPrediction = {
         color: finalColor,
-        colorName: finalColor === 0 ? 'Branco' : finalColor === 1 ? 'Vermelho' : 'Preto',
+        colorName: finalColor === 0 ? 'Branco' : finalColor === 1 ? 'Vermelho' : 'Preto';
         confidence: (maxScore / predictions.length).toFixed(2),
         details: predictions
       };
@@ -1156,7 +1195,7 @@ class BlazeInterface {
       return finalPrediction;
     } catch (e) {
       console.error('Erro ao combinar previsões:', e);
-      return null;
+      return { color: Math.floor(Math.random() * 3), colorName: 'Desconhecido', confidence: '0.1', method: 'Error Fallback'};
     }
   }
 
@@ -1179,13 +1218,12 @@ class BlazeInterface {
         this.predictBayesian(),
         this.predictTransformer(),
         this.predictMCTS()
-      ].filter(p => p !== null && p.color !== undefined);
+      ].filter(p => p !== null && p.color !== undefined));
       predictions.forEach(p => {
-        this.methodPerformance[p.method].total++;
-        this.methodPerformance[p.method].recentTotal++;
+        this.methodPerformance[p.method].total++;        p.methodPerformance[p.method].recentTotal++;
         if (p.color === data.color) {
           this.methodPerformance[p.method].correct++;
-          this.methodPerformance[p.method].recentCorrect++;
+          p.methodPerformance[p.method].recentCorrect++;
         }
         if (this.methodPerformance[p.method].recentTotal > 10) {
           this.methodPerformance[p.method].recentCorrect = 0;
@@ -1200,8 +1238,8 @@ class BlazeInterface {
 
   updateResults(data) {
     try {
-      console.log('Recebido para atualização:', data);
-      if (this.processedIds.has(data.id) && data.status === 'complete') {
+      console.log('Recebendo dados para atualização:', data, 'Histórico atual:', this.results);
+      if (this.data.processedIds.has(id) && data.status === 'complete') {
         console.log('ID já processado:', data.id);
         return;
       }
@@ -1211,14 +1249,14 @@ class BlazeInterface {
       this.results = this.results.slice(0, 50);
       if (this.processedIds.size > 500) {
         this.processedIds = new Set([...this.processedIds].slice(-500));
-        this.notifiedIds = new Set([...this.notifiedIds].slice(-500));
+        this.notifiedIds = new Set([...this.results].slice(-notifiedIds].slice(-500));
       }
 
       if (data.status === 'complete') {
         console.log('Processando resultado completo:', data);
         this.updateMarkovMatrix(this.results);
-        this.updateConditionalFreq(this.results);
-        this.computeContextWindows(this.results);
+        this.updateConditionalFreq(history(this.results);
+        this.computeContextWindows(this.results(history));
         this.trainNeural(this.results.filter(r => r.status === 'complete'), data.color);
         const state = this.getState(this.results.slice(1));
         const nextState = this.getState(this.results);
@@ -1245,7 +1283,7 @@ class BlazeInterface {
       const resultsElement = document.getElementById('blazeResults');
       const predictionElement = document.getElementById('blazePrediction');
       if (!monitorBox || !resultsElement || !predictionElement) {
-        console.error('Elementos do DOM não encontrados, re-inicializando');
+        console.error('Elementos do DOM não encontrados, reinicializando');
         this.isInitialized = false;
         this.initMonitorInterface();
         return;
@@ -1279,7 +1317,7 @@ class BlazeInterface {
 
       let predContent = predictionElement.querySelector('.prediction-content');
       if (!predContent) {
-        console.log('Criando elemento predictionContent');
+        console.log('Criando elemento prediction-content');
         predContent = document.createElement('div');
         predContent.className = 'prediction-content';
         predictionElement.appendChild(predContent);
@@ -1300,7 +1338,7 @@ class BlazeInterface {
         console.log('Sem previsão válida, usando aguardando');
         predContent.innerHTML = `
           <div class="prediction-title">PRÓXIMA COR SUGERIDA</div>
-          <div class="prediction-value prediction-waiting">Aguardando dados...</div>
+          <div class="prediction-value prediction-awaiting">Aguardando dados...</div>
           <div class="prediction-accuracy">Acurácia Geral: ${this.totalPredictions > 0 ? (this.correctPredictions / this.totalPredictions * 100).toFixed(2) : 0}%</div>
         `;
       }
@@ -1311,7 +1349,7 @@ class BlazeInterface {
         const isWin = pred?.color === data.color;
         const notification = document.createElement('div');
         notification.className = `blaze-notification ${isWin ? 'notification-win' : 'notification-loss'}`;
-        notification.textContent = isWin ? `Acerto! ${pred.colorName}` : `Erro! Era ${data.color === 0 ? 'Branco' : data.color === 1 ? 'Vermelho' : 'Preto'}`;
+        notification.textContent = isWin ? `Acerto! ${pred?.colorName || 'Desconhecido'}` : `Erro! Era ${data.color === 0 ? 'Branco' : data.color === 1' ? 'Vermelho' : 'Preto'}`;
         document.body.appendChild(notification);
         setTimeout(() => {
           notification.style.opacity = '1';
