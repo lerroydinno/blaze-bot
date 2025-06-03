@@ -1,9 +1,11 @@
+
 (function () {
-    const results = [[], [], []]; // 3 colunas com até 5 elementos cada
+    const results = [[], [], []]; // 3 colunas com atÃ© 5 elementos cada
     const colors = { 0: 'white', 1: 'red', 2: 'black' };
 
     // Cria o painel
     const panel = document.createElement('div');
+    panel.id = 'blaze-column-panel';
     panel.style.position = 'fixed';
     panel.style.top = '10px';
     panel.style.right = '10px';
@@ -14,6 +16,7 @@
     panel.style.display = 'flex';
     panel.style.flexDirection = 'row';
     panel.style.gap = '10px';
+    panel.style.fontFamily = 'Arial';
     document.body.appendChild(panel);
 
     function updatePanel() {
@@ -54,11 +57,10 @@
 
     // Conectar ao WebSocket da Blaze
     const ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
-
     let heartbeatInterval;
 
     ws.onopen = () => {
-        console.log('WebSocket conectado à Blaze');
+        console.log('WebSocket conectado Ã  Blaze');
         ws.send('40'); // protocolo de handshake
     };
 
@@ -76,7 +78,6 @@
                 if (json[0] === 'roulette') {
                     const { color } = json[1];
                     if ([0, 1, 2].includes(color)) {
-                        // Adiciona o resultado na primeira coluna (shift para a próxima coluna a cada 5)
                         results[0].unshift(color);
                         if (results[0].length > 5) {
                             results[1].unshift(results[0].pop());
@@ -95,14 +96,13 @@
             }
         }
 
-        // Inicia ping/pong
         if (data === '40') {
             heartbeatInterval = setInterval(() => ws.send('2'), 25000);
         }
     };
 
     ws.onclose = () => {
-        console.warn('WebSocket fechado. Recarregue a página.');
+        console.warn('WebSocket fechado. Recarregue a pÃ¡gina.');
         clearInterval(heartbeatInterval);
     };
 })();
