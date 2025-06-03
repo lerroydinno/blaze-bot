@@ -1,6 +1,7 @@
 (function () {
     'use strict';
 
+    // Estilo da interface
     const style = document.createElement('style');
     style.textContent = `
         .blaze-menu {
@@ -59,48 +60,61 @@
     document.body.appendChild(menu);
 
     const grid = document.getElementById('blaze-grid');
-    const maxCells = 15;
-    let results = Array(maxCells).fill(null); // Inicializa com 15 posições nulas
+    const columns = [[], [], []]; // Três colunas, cada uma com até 5 resultados
+    let nextColumn = 0; // Índice da próxima coluna a receber um resultado
 
-    // Atualiza a grade visual com os resultados
+    // Função para atualizar a grade
     function updateGrid() {
-        grid.innerHTML = ''; // Limpa o grid
-        results.forEach(res => {
-            const div = document.createElement('div');
-            div.className = 'blaze-cell';
-            if (res) { // Só aplica cor e texto se houver resultado
-                div.className += ` color-${res.color}`;
-                div.textContent = res.roll;
+        grid.innerHTML = ''; // Limpa a grade
+        // Preenche a grade coluna por coluna, de cima para baixo
+        for (let col = 0; col < 3; col++) {
+            const columnResults = columns[col];
+            for (let row = 0; row < 5; row++) {
+                const res = columnResults[row] || null;
+                const div = document.createElement('div');
+                div.className = 'blaze-cell';
+                if (res) {
+                    div.className += ` color-${res.color}`;
+                    div.textContent = res.roll;
+                }
+                grid.appendChild(div);
             }
-            grid.appendChild(div);
-        });
+        }
     }
 
-    // Adiciona novo resultado e empurra os anteriores
+    // Função para adicionar um novo resultado
     function addResult(color, roll) {
-        results.unshift({ color, roll }); // Adiciona ao início
-        results.pop(); // Remove o último
+        const column = columns[nextColumn];
+        // Adiciona o novo resultado no topo da coluna
+        column.unshift({ color, roll });
+        // Se a coluna tiver mais de 5 resultados, remove o mais antigo
+        if (column.length > 5) {
+            column.pop();
+        }
+        // Avança para a próxima coluna de forma cíclica
+        nextColumn = (nextColumn + 1) % 3;
         updateGrid();
     }
 
-    // WebSocket para resultados da Blaze
+    // Conexão WebSocket com a Blaze
     const ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
 
     ws.onopen = () => {
         console.log('[WS] Conectado');
         ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
-        setInterval(() => ws.send('2'), 25000); // ping
+        setInterval(() => ws.send('2'), 25000); // Ping para manter a conexão
     };
 
     ws.onmessage = (e) => {
         const msg = e.data;
-        if (msg === '2') { ws.send('3'); return; }
-        if (!msg.startsWith('42')) return;
+        if (msg === '2') { ws.send('3'); return; } // Responde ao ping
+        if (!msg.startsWith('42')) return; // Ignora mensagens irrelevantes
 
         try {
             const data = JSON.parse(msg.slice(2));
             if (data[0] === 'data' && data[1].id === 'double.tick') {
                 const p = data[1].payload;
+                // Adiciona o novo resultado recebido
                 addResult(p.color, p.roll);
             }
         } catch (err) {
@@ -111,6 +125,6 @@
     ws.onerror = err => console.error('[WS] Erro:', err);
     ws.onclose = () => console.warn('[WS] Conexão encerrada');
 
-    // Inicializa a grade
+    // Inicializa a grade com células vazias
     updateGrid();
 })();
