@@ -1,108 +1,130 @@
+// ==UserScript== // @name         Blaze Column Menu Bot // @namespace    http://tampermonkey.net/ // @version      1.0 // @description  Menu flutuante com 3 colunas verticais e 5 linhas horizontais para exibir resultados da Blaze em tempo real // @author       GPT // @match        ://blaze.com/ // @grant        none // ==/UserScript==
 
-(function () {
-    const results = [[], [], []]; // 3 colunas com atÃ© 5 elementos cada
-    const colors = { 0: 'white', 1: 'red', 2: 'black' };
+(function() { 'use strict';
 
-    // Cria o painel
-    const panel = document.createElement('div');
-    panel.id = 'blaze-column-panel';
-    panel.style.position = 'fixed';
-    panel.style.top = '10px';
-    panel.style.right = '10px';
-    panel.style.zIndex = '99999';
-    panel.style.background = 'rgba(0,0,0,0.8)';
-    panel.style.padding = '10px';
-    panel.style.borderRadius = '10px';
-    panel.style.display = 'flex';
-    panel.style.flexDirection = 'row';
-    panel.style.gap = '10px';
-    panel.style.fontFamily = 'Arial';
-    document.body.appendChild(panel);
+// Estilo do painel
+const style = document.createElement('style');
+style.innerHTML = `
+    #blaze-panel {
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        width: 260px;
+        background-color: #111;
+        color: white;
+        border: 2px solid #333;
+        border-radius: 10px;
+        padding: 10px;
+        z-index: 9999;
+        font-family: Arial, sans-serif;
+    }
+    .column {
+        float: left;
+        width: 33%;
+        text-align: center;
+    }
+    .cell {
+        width: 100%;
+        height: 30px;
+        line-height: 30px;
+        margin: 2px 0;
+        border-radius: 5px;
+        color: white;
+    }
+    .red { background-color: #c0392b; }
+    .black { background-color: #000000; }
+    .white { background-color: #ecf0f1; color: #000; }
+    .header {
+        font-size: 14px;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .clearfix::after {
+        content: "";
+        clear: both;
+        display: table;
+    }
+`;
+document.head.appendChild(style);
 
-    function updatePanel() {
-        panel.innerHTML = ''; // limpa
+const panel = document.createElement('div');
+panel.id = 'blaze-panel';
+panel.innerHTML = `
+    <div class="clearfix">
+        <div class="column"><div class="header" id="head1">-</div><div id="col1"></div></div>
+        <div class="column"><div class="header" id="head2">-</div><div id="col2"></div></div>
+        <div class="column"><div class="header" id="head3">-</div><div id="col3"></div></div>
+    </div>
+`;
+document.body.appendChild(panel);
 
-        for (let i = 0; i < 3; i++) {
-            const column = document.createElement('div');
-            column.style.display = 'flex';
-            column.style.flexDirection = 'column';
-            column.style.alignItems = 'center';
-            column.style.color = '#fff';
+const history = [];
 
-            // Calcular cor predominante e porcentagem
-            const col = results[i];
-            const freq = { red: 0, black: 0, white: 0 };
-            col.forEach(c => freq[colors[c]]++);
-            const max = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
-            const percent = col.length ? ((max[1] / col.length) * 100).toFixed(1) : '0.0';
-
-            const header = document.createElement('div');
-            header.innerText = `${max[0]} (${percent}%)`;
-            header.style.marginBottom = '5px';
-            column.appendChild(header);
-
-            for (let j = 0; j < 5; j++) {
-                const cell = document.createElement('div');
-                cell.style.width = '30px';
-                cell.style.height = '30px';
-                cell.style.margin = '2px 0';
-                cell.style.borderRadius = '5px';
-                cell.style.backgroundColor = colors[results[i][j]] || 'gray';
-                column.appendChild(cell);
-            }
-
-            panel.appendChild(column);
-        }
+function updateColumns() {
+    const cols = [[], [], []];
+    for (let i = 0; i < history.length; i++) {
+        cols[i % 3].unshift(history[i]);
     }
 
-    // Conectar ao WebSocket da Blaze
-    const ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
-    let heartbeatInterval;
-
-    ws.onopen = () => {
-        console.log('WebSocket conectado Ã  Blaze');
-        ws.send('40'); // protocolo de handshake
-    };
-
-    ws.onmessage = (event) => {
-        const data = event.data;
-
-        if (data === '3') {
-            ws.send('2'); // resposta ao ping
-            return;
+    for (let i = 0; i < 3; i++) {
+        const col = document.getElementById(`col${i+1}`);
+        col.innerHTML = '';
+        for (let j = 0; j < 5; j++) {
+            const color = cols[i][j];
+            const div = document.createElement('div');
+            div.className = `cell ${color || ''}`;
+            div.textContent = color ? color.toUpperCase() : '';
+            col.appendChild(div);
         }
-
-        if (data.startsWith('42')) {
-            try {
-                const json = JSON.parse(data.slice(2));
-                if (json[0] === 'roulette') {
-                    const { color } = json[1];
-                    if ([0, 1, 2].includes(color)) {
-                        results[0].unshift(color);
-                        if (results[0].length > 5) {
-                            results[1].unshift(results[0].pop());
-                            if (results[1].length > 5) {
-                                results[2].unshift(results[1].pop());
-                                if (results[2].length > 5) {
-                                    results[2] = results[2].slice(0, 5);
-                                }
-                            }
-                        }
-                        updatePanel();
-                    }
-                }
-            } catch (e) {
-                console.warn('Erro ao processar mensagem:', e);
+        const freq = cols[i].reduce((acc, c) => { acc[c] = (acc[c] || 0) + 1; return acc; }, {});
+        const total = cols[i].length;
+        let maxColor = '-';
+        let maxCount = 0;
+        for (const c in freq) {
+            if (freq[c] > maxCount) {
+                maxCount = freq[c];
+                maxColor = `${c.toUpperCase()} ${(freq[c]/total*100).toFixed(0)}%`;
             }
         }
+        document.getElementById(`head${i+1}`).textContent = maxColor;
+    }
+}
 
-        if (data === '40') {
-            heartbeatInterval = setInterval(() => ws.send('2'), 25000);
+function parseColor(number) {
+    if (number === 0) return 'white';
+    if (number >= 1 && number <= 7) return 'red';
+    return 'black';
+}
+
+function connectWebSocket() {
+    const ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
+    let connected = false;
+
+    ws.onopen = () => {
+        console.log('[Blaze Bot] Conectado ao WebSocket');
+    };
+
+    ws.onmessage = (msg) => {
+        const data = msg.data;
+        if (data.includes("round")) {
+            const match = data.match(/\{"color":(\d+),"roll":(\d+)/);
+            if (match) {
+                const color = parseColor(parseInt(match[1]));
+                history.unshift(color);
+                if (history.length > 15) history.pop();
+                updateColumns();
+            }
         }
     };
 
+    ws.onerror = () => console.warn('[Blaze Bot] Erro na conexão WebSocket');
     ws.onclose = () => {
-        console.warn('WebSocket fechado. Recarregue a pÃ¡gina.');
-        clearInterval(heartbeatInterval);
+        console.warn('[Blaze Bot] WebSocket desconectado. Reconectando...');
+        setTimeout(connectWebSocket, 3000);
     };
+}
+
+connectWebSocket();
+
 })();
+
