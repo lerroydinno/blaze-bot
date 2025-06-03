@@ -41,7 +41,15 @@ class BlazeWebSocket {
             console.log('Mensagem parseada:', j);
             if (j[0] === 'data' && j[1].id === 'double.tick') {
               const p = j[1].payload;
-              console.log('Double tick payload:', p);
+              if (typeof p.color !== 'number' || ![0, 1, 2].includes(p.color)) {
+                console.warn('Color inválido:', p.color);
+                return;
+              }
+              if (!['waiting', 'rolling', 'complete'].includes(p.status)) {
+                console.warn('Status inválido:', p.status);
+                return;
+              }
+              console.log('Double tick payload válido:', p);
               this.onDoubleTickCallback?.({ id: p.id, color: p.color, roll: p.roll, status: p.status });
             }
           }
@@ -89,8 +97,12 @@ class BlazeWebSocket {
 class BlazeInterface {
   constructor() {
     this.nextPredColor = null;
-    this.results = [];
-    this.processedIds = new Set();
+    this.results = [
+      { id: 'mock1', color: 1, roll: 5, status: 'complete' },
+      { id: 'mock2', color: 2, roll: 10, status: 'complete' },
+      { id: 'mock3', color: 0, roll: 1, status: 'complete' }
+    ];
+    this.processedIds = new Set(['mock1', 'mock2', 'mock3']);
     this.notifiedIds = new Set();
     this.correctPredictions = 0;
     this.totalPredictions = 0;
@@ -403,6 +415,9 @@ class BlazeInterface {
       this.ws = new BlazeWebSocket();
       this.ws.doubleTick((d) => this.debouncedUpdateResults(d));
 
+      // Forçar atualização inicial com histórico mock
+      this.updateResults(this.results[0]);
+
       window.testBlazeUpdate = () => {
         this.updateResults({ id: 'mock' + Date.now(), color: Math.floor(Math.random() * 3), roll: Math.floor(Math.random() * 14) + 1, status: 'complete' });
       };
@@ -477,7 +492,7 @@ class BlazeInterface {
   monteCarloValidate(history) {
     try {
       if (history.length < 10) return;
-      const methods = ['Markov', 'Patterns', 'Entropy', 'Q-Learning', 'Conditional', 'Neural'];
+      const methods = ['Markov', 'Patterns', 'Entropy', 'Q-Learning', 'Conditional', 'Neural', 'Bayesian', 'Transformer', 'MCTS'];
       const scores = methods.reduce((acc, method) => ({ ...acc, [method]: 0 }), {});
       const simulations = 10;
       for (let i = 0; i < simulations; i++) {
@@ -491,6 +506,9 @@ class BlazeInterface {
           else if (method === 'Q-Learning') pred = this.predictQLearning(sample);
           else if (method === 'Conditional') pred = this.predictConditional(sample);
           else if (method === 'Neural') pred = this.predictNeural(sample);
+          else if (method === 'Bayesian') pred = this.predictBayesian(sample);
+          else if (method === 'Transformer') pred = this.predictTransformer(sample);
+          else if (method === 'MCTS') pred = this.predictMCTS(sample);
           if (pred && pred.color === sample[0].color) scores[method]++;
         });
       }
@@ -627,6 +645,10 @@ class BlazeInterface {
   predictMarkov(history = this.results) {
     try {
       history = history.filter(r => r.status === 'complete');
+      if (history.length < 1) {
+        console.log('Histórico insuficiente para previsão Markov');
+        return null;
+      }
       let bestPred = null;
       let maxWeight = 0;
       for (let order = 1; order <= this.markovOrder; order++) {
@@ -647,6 +669,7 @@ class BlazeInterface {
           };
         }
       }
+      console.log('Previsão Markov:', bestPred || 'Nenhuma previsão válida');
       return bestPred;
     } catch (e) {
       console.error('Erro ao prever com Markov:', e);
@@ -657,7 +680,10 @@ class BlazeInterface {
   analyzePatterns(history = this.results) {
     try {
       history = history.filter(r => r.status === 'complete').slice(0, 20);
-      if (history.length < 3) return null;
+      if (history.length < 1) {
+        console.log('Histórico insuficiente para padrões');
+        return null;
+      }
       let bestPrediction = null;
       let highestWeight = 0;
       this.patternRules.forEach(rule => {
@@ -678,6 +704,7 @@ class BlazeInterface {
           }
         }
       });
+      console.log('Previsão de padrões:', bestPrediction || 'Nenhuma previsão');
       return bestPrediction;
     } catch (e) {
       console.error('Erro ao analisar padrões:', e);
@@ -705,7 +732,10 @@ class BlazeInterface {
   predictEntropy(history = this.results) {
     try {
       history = history.filter(r => r.status === 'complete').slice(0, 5);
-      if (history.length < 3) return null;
+      if (history.length < 1) {
+        console.log('Histórico insuficiente para entropia');
+        return null;
+      }
       const lastColor = history[0].color;
       if (!this.conditionalEntropy[lastColor]) this.conditionalEntropy[lastColor] = {};
       const entropy = this.calculateEntropy(history);
@@ -719,12 +749,14 @@ class BlazeInterface {
         }
       }
       const confidence = Math.min((1 - minEntropy / 1.585), 0.9).toFixed(2);
-      return {
+      const result = {
         color: predictedColor >= 0 ? predictedColor : lastColor,
         colorName: predictedColor >= 0 ? (predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto') : (lastColor === 0 ? 'Branco' : lastColor === 1 ? 'Vermelho' : 'Preto'),
         confidence: confidence,
         method: 'Entropy'
       };
+      console.log('Previsão de entropia:', result);
+      return result;
     } catch (e) {
       console.error('Erro ao prever com entropia:', e);
       return null;
@@ -768,7 +800,10 @@ class BlazeInterface {
   predictQLearning(history = this.results) {
     try {
       history = history.filter(r => r.status === 'complete').slice(0, 5);
-      if (history.length < 3) return null;
+      if (history.length < 1) {
+        console.log('Histórico insuficiente para Q-Learning');
+        return null;
+      }
       const state = this.getState(history);
       const actions = [0, 1, 2];
       let action;
@@ -778,12 +813,14 @@ class BlazeInterface {
         action = actions.reduce((a, b) => this.getQValue(state, a) > this.getQValue(state, b) ? a : b);
       }
       const qValue = this.getQValue(state, action);
-      return {
+      const result = {
         color: parseInt(action),
         colorName: action === 0 ? 'Branco' : action === 1 ? 'Vermelho' : 'Preto',
         confidence: (qValue / (1 + Math.abs(qValue))).toFixed(2),
         method: 'Q-Learning'
       };
+      console.log('Previsão Q-Learning:', result);
+      return result;
     } catch (e) {
       console.error('Erro ao prever com Q-Learning:', e);
       return null;
@@ -804,7 +841,10 @@ class BlazeInterface {
   predictConditional(history = this.results) {
     try {
       history = history.filter(r => r.status === 'complete').slice(0, 5);
-      if (history.length < 3) return null;
+      if (history.length < 1) {
+        console.log('Histórico insuficiente para condicional');
+        return null;
+      }
       let condition = null;
       if (history[0].color === 0 && history[1].color === 0) {
         condition = 'after_two_whites';
@@ -822,12 +862,14 @@ class BlazeInterface {
         };
         const maxProb = Math.max(...Object.values(probs));
         const predictedColor = parseInt(Object.keys(probs).find(k => probs[k] === maxProb));
-        return {
+        const result = {
           color: predictedColor,
           colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
           confidence: maxProb.toFixed(2),
           method: 'Conditional'
         };
+        console.log('Previsão condicional:', result);
+        return result;
       }
       return null;
     } catch (e) {
@@ -839,7 +881,10 @@ class BlazeInterface {
   predictBayesian(history = this.results) {
     try {
       history = history.filter(r => r.status === 'complete').slice(0, 5);
-      if (history.length < 3) return null;
+      if (history.length < 1) {
+        console.log('Histórico insuficiente para Bayesian');
+        return null;
+      }
       const priorCounts = { 0: 0, 1: 0, 2: 0 };
       history.forEach(r => priorCounts[r.color]++);
       const total = history.length;
@@ -859,12 +904,14 @@ class BlazeInterface {
       }
       const maxProb = Math.max(...Object.values(posteriors));
       const predictedColor = parseInt(Object.keys(posteriors).find(k => posteriors[k] === maxProb));
-      return {
+      const result = {
         color: predictedColor,
         colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
         confidence: maxProb.toFixed(2),
         method: 'Bayesian'
       };
+      console.log('Previsão Bayesian:', result);
+      return result;
     } catch (e) {
       console.error('Erro ao prever com Bayesian:', e);
       return null;
@@ -874,16 +921,21 @@ class BlazeInterface {
   predictTransformer(history = this.results) {
     try {
       history = history.filter(r => r.status === 'complete').slice(0, 5);
-      if (history.length < 3) return null;
+      if (history.length < 1) {
+        console.log('Histórico insuficiente para transformer');
+        return null;
+      }
       const probs = [1/3, 1/3, 1/3];
       const maxProb = Math.max(...probs);
       const predictedColor = probs.indexOf(maxProb);
-      return {
+      const result = {
         color: predictedColor,
         colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
         confidence: maxProb.toFixed(2),
         method: 'Transformer'
       };
+      console.log('Previsão Transformer:', result);
+      return result;
     } catch (e) {
       console.error('Erro ao prever com Transformer:', e);
       return null;
@@ -893,7 +945,10 @@ class BlazeInterface {
   predictMCTS(history = this.results) {
     try {
       history = history.filter(r => r.status === 'complete').slice(0, 5);
-      if (history.length < 3) return null;
+      if (history.length < 1) {
+        console.log('Histórico insuficiente para MCTS');
+        return null;
+      }
       const simulations = 10;
       const scores = { 0: 0, 1: 0, 2: 0 };
       for (let color = 0; color <= 2; color++) {
@@ -905,12 +960,14 @@ class BlazeInterface {
       }
       const maxScore = Math.max(...Object.values(scores));
       const predictedColor = parseInt(Object.keys(scores).find(k => scores[k] === maxScore));
-      return {
+      const result = {
         color: predictedColor,
         colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
         confidence: maxScore.toFixed(2),
         method: 'MCTS'
       };
+      console.log('Previsão MCTS:', result);
+      return result;
     } catch (e) {
       console.error('Erro ao prever com MCTS:', e);
       return null;
@@ -996,6 +1053,7 @@ class BlazeInterface {
         }
         this.neuralBiases1[i] -= this.neuralLearningRate * hidden1Errors[i];
       }
+      console.log('Treinamento neural concluído');
     } catch (e) {
       console.error('Erro ao treinar rede neural:', e);
     }
@@ -1004,7 +1062,10 @@ class BlazeInterface {
   predictNeural(history = this.results) {
     try {
       history = history.filter(r => r.status === 'complete').slice(0, 5);
-      if (history.length < 3) return null;
+      if (history.length < 1) {
+        console.log('Histórico insuficiente para neural');
+        return null;
+      }
       const input = [];
       for (let i = 0; i < 3; i++) {
         const color = history[i]?.color || 0;
@@ -1042,12 +1103,14 @@ class BlazeInterface {
       const maxProb = Math.max(...probs);
       const predictedColor = probs.indexOf(maxProb);
 
-      return {
+      const result = {
         color: predictedColor,
         colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
         confidence: maxProb.toFixed(2),
         method: 'Neural'
       };
+      console.log('Previsão neural:', result);
+      return result;
     } catch (e) {
       console.error('Erro ao prever com rede neural:', e);
       return null;
@@ -1062,17 +1125,17 @@ class BlazeInterface {
         this.predictEntropy(history),
         this.predictQLearning(history),
         this.predictConditional(history),
-        this.predictNeural(history)
+        this.predictNeural(history),
+        this.predictBayesian(history),
+        this.predictTransformer(history),
+        this.predictMCTS(history)
       ].filter(p => p !== null && p.color !== undefined);
 
-      if (!predictions.length) {
-        console.log('Sem previsões válidas, usando fallback');
-        return {
-          color: 0,
-          colorName: 'Branco',
-          confidence: '0.33',
-          details: []
-        };
+      console.log('Previsões recebidas:', predictions);
+
+      if (!predictions.length || history.filter(r => r.status === 'complete').length < 1) {
+        console.log('Sem previsões válidas ou histórico insuficiente');
+        return null;
       }
 
       const scores = { 0: 0, 1: 0, 2: 0 };
@@ -1083,37 +1146,39 @@ class BlazeInterface {
       const maxScore = Math.max(...Object.values(scores));
       const finalColor = parseInt(Object.keys(scores).find(k => scores[k] === maxScore));
 
-      return {
+      const finalPrediction = {
         color: finalColor,
         colorName: finalColor === 0 ? 'Branco' : finalColor === 1 ? 'Vermelho' : 'Preto',
         confidence: (maxScore / predictions.length).toFixed(2),
         details: predictions
       };
+      console.log('Previsão combinada:', finalPrediction);
+      return finalPrediction;
     } catch (e) {
       console.error('Erro ao combinar previsões:', e);
-      return {
-        color: 0,
-        colorName: 'Branco',
-        confidence: '0.33',
-        details: []
-      };
+      return null;
     }
   }
 
   updatePredictionStats(data) {
     try {
       if (this.results.length < 2 || data.status !== 'complete') return;
-      const prev = this.results.filter(r => r.status === 'complete')[1];
+      const prev = this.results[0];
       if (!prev) return;
       this.totalPredictions++;
-      if (prev.color === data.color) this.correctPredictions++;
+      if (this.nextPredColor === data.color) {
+        this.correctPredictions++;
+      }
       const predictions = [
         this.predictMarkov(),
         this.analyzePatterns(),
         this.predictEntropy(),
         this.predictQLearning(),
         this.predictConditional(),
-        this.predictNeural()
+        this.predictNeural(),
+        this.predictBayesian(),
+        this.predictTransformer(),
+        this.predictMCTS()
       ].filter(p => p !== null && p.color !== undefined);
       predictions.forEach(p => {
         this.methodPerformance[p.method].total++;
@@ -1122,11 +1187,12 @@ class BlazeInterface {
           this.methodPerformance[p.method].correct++;
           this.methodPerformance[p.method].recentCorrect++;
         }
-        if (this.methodPerformance[p.method].recentTotal >= 10) {
+        if (this.methodPerformance[p.method].recentTotal > 10) {
           this.methodPerformance[p.method].recentCorrect = 0;
           this.methodPerformance[p.method].recentTotal = 0;
         }
       });
+      console.log('Estatísticas de previsão atualizadas');
     } catch (e) {
       console.error('Erro ao atualizar estatísticas de previsão:', e);
     }
@@ -1157,10 +1223,10 @@ class BlazeInterface {
         const state = this.getState(this.results.slice(1));
         const nextState = this.getState(this.results);
         const action = data.color;
-        const reward = this.nextPredColor === data.color ? 1 : -1;
+        const reward = this.nextPredColor === data.color ? 1 : -0.5;
         this.updateQTable(state, action, reward, nextState);
         this.updateCount++;
-        if (this.updateCount % 100 === 0) {
+        if (this.updateCount % 5 === 0) {
           console.log('Executando análises periódicas');
           this.detectDrift(this.results);
           this.learnPatterns();
@@ -1174,7 +1240,6 @@ class BlazeInterface {
 
       const pred = this.combinePredictions(this.results);
       this.nextPredColor = pred?.color ?? null;
-      console.log('Previsão combinada:', pred);
 
       const monitorBox = document.getElementById('blazeMonitorBox');
       const resultsElement = document.getElementById('blazeResults');
@@ -1221,7 +1286,7 @@ class BlazeInterface {
       }
 
       if (pred && pred.color !== undefined) {
-        const acc = this.totalPredictions > 0 ? (this.correctPredictions / this.totalPredictions * 100).toFixed(1) : 0;
+        const acc = this.totalPredictions > 0 ? (this.correctPredictions / this.totalPredictions * 100).toFixed(2) : 0;
         predContent.innerHTML = `
           <div class="prediction-title">PRÓXIMA COR SUGERIDA</div>
           <div class="prediction-value">
@@ -1230,20 +1295,20 @@ class BlazeInterface {
           </div>
           <div class="prediction-accuracy">Acurácia Geral: ${acc}%</div>
         `;
-        console.log('Previsão renderizada:', predContent.innerHTML);
+        console.log('Previsão renderizada:', pred);
       } else {
         console.log('Sem previsão válida, usando aguardando');
         predContent.innerHTML = `
           <div class="prediction-title">PRÓXIMA COR SUGERIDA</div>
           <div class="prediction-value prediction-waiting">Aguardando dados...</div>
-          <div class="prediction-accuracy">Acurácia Geral: ${this.totalPredictions > 0 ? (this.correctPredictions / this.totalPredictions * 100).toFixed(1) : 0}%</div>
+          <div class="prediction-accuracy">Acurácia Geral: ${this.totalPredictions > 0 ? (this.correctPredictions / this.totalPredictions * 100).toFixed(2) : 0}%</div>
         `;
       }
 
-      if (data.status === 'complete' && pred && pred.color !== undefined && !this.notifiedIds.has(data.id)) {
-        console.log('Criando notificação:', { isWin: pred.color === data.color });
+      if (data.status === 'complete' && !this.notifiedIds.has(data.id)) {
+        console.log('Criando notificação:', { isWin: pred?.color === data.color });
         this.notifiedIds.add(data.id);
-        const isWin = pred.color === data.color;
+        const isWin = pred?.color === data.color;
         const notification = document.createElement('div');
         notification.className = `blaze-notification ${isWin ? 'notification-win' : 'notification-loss'}`;
         notification.textContent = isWin ? `Acerto! ${pred.colorName}` : `Erro! Era ${data.color === 0 ? 'Branco' : data.color === 1 ? 'Vermelho' : 'Preto'}`;
@@ -1262,10 +1327,8 @@ class BlazeInterface {
       this.saveState();
     } catch (e) {
       console.error('Erro ao atualizar resultados:', e);
-      this.isInitialized = false;
-      this.initMonitorInterface();
     }
   }
 }
 
-const blaze = new BlazeInterface();
+const blazeInterface = new BlazeInterface();
