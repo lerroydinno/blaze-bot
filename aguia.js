@@ -60,23 +60,26 @@
 
     const grid = document.getElementById('blaze-grid');
     const maxCells = 15;
-    let results = [];
+    let results = Array(maxCells).fill(null); // Inicializa com 15 posições nulas
 
     // Atualiza a grade visual com os resultados
     function updateGrid() {
         grid.innerHTML = ''; // Limpa o grid
-        results.forEach((res, index) => {
+        results.forEach(res => {
             const div = document.createElement('div');
-            div.className = `blaze-cell color-${res.color}`;
-            div.textContent = res.roll;
+            div.className = 'blaze-cell';
+            if (res) { // Só aplica cor e texto se houver resultado
+                div.className += ` color-${res.color}`;
+                div.textContent = res.roll;
+            }
             grid.appendChild(div);
         });
     }
 
-    // Adiciona novo resultado e atualiza a grade
+    // Adiciona novo resultado e empurra os anteriores
     function addResult(color, roll) {
         results.unshift({ color, roll }); // Adiciona ao início
-        if (results.length > maxCells) results.pop(); // Remove o último se passar de 15
+        results.pop(); // Remove o último
         updateGrid();
     }
 
@@ -107,4 +110,7 @@
 
     ws.onerror = err => console.error('[WS] Erro:', err);
     ws.onclose = () => console.warn('[WS] Conexão encerrada');
+
+    // Inicializa a grade
+    updateGrid();
 })();
