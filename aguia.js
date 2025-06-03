@@ -60,39 +60,35 @@
     document.body.appendChild(menu);
 
     const grid = document.getElementById('blaze-grid');
-    const columns = [[], [], []]; // Três colunas, cada uma com até 5 resultados
-    let nextColumn = 0; // Índice da próxima coluna a receber um resultado
+    const maxCells = 15;
+    let results = []; // Array para armazenar os resultados históricos
 
     // Função para atualizar a grade
     function updateGrid() {
-        grid.innerHTML = ''; // Limpa a grade
-        // Preenche a grade coluna por coluna, de cima para baixo
-        for (let col = 0; col < 3; col++) {
-            const columnResults = columns[col];
-            for (let row = 0; row < 5; row++) {
-                const res = columnResults[row] || null;
-                const div = document.createElement('div');
-                div.className = 'blaze-cell';
-                if (res) {
-                    div.className += ` color-${res.color}`;
-                    div.textContent = res.roll;
-                }
-                grid.appendChild(div);
-            }
+        grid.innerHTML = ''; // Limpa a grade atual
+        // Adiciona cada resultado como uma célula individual
+        results.slice(0, maxCells).forEach(res => {
+            const div = document.createElement('div');
+            div.className = `blaze-cell color-${res.color}`;
+            div.textContent = res.roll;
+            grid.appendChild(div);
+        });
+        // Preenche com células vazias se houver menos de 15 resultados
+        for (let i = results.length; i < maxCells; i++) {
+            const div = document.createElement('div');
+            div.className = 'blaze-cell';
+            grid.appendChild(div);
         }
     }
 
     // Função para adicionar um novo resultado
     function addResult(color, roll) {
-        const column = columns[nextColumn];
-        // Adiciona o novo resultado no topo da coluna
-        column.unshift({ color, roll });
-        // Se a coluna tiver mais de 5 resultados, remove o mais antigo
-        if (column.length > 5) {
-            column.pop();
+        // Adiciona o novo resultado no início do array
+        results.unshift({ color, roll });
+        // Remove o resultado mais antigo se ultrapassar 15
+        if (results.length > maxCells) {
+            results.pop();
         }
-        // Avança para a próxima coluna de forma cíclica
-        nextColumn = (nextColumn + 1) % 3;
         updateGrid();
     }
 
@@ -114,8 +110,10 @@
             const data = JSON.parse(msg.slice(2));
             if (data[0] === 'data' && data[1].id === 'double.tick') {
                 const p = data[1].payload;
-                // Adiciona o novo resultado recebido
-                addResult(p.color, p.roll);
+                // Adiciona apenas se for diferente do último resultado
+                if (results.length === 0 || (p.roll !== results[0].roll || p.color !== results[0].color)) {
+                    addResult(p.color, p.roll);
+                }
             }
         } catch (err) {
             console.error('[WS] Erro ao processar mensagem:', err);
