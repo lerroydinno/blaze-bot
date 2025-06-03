@@ -64,8 +64,8 @@
 
     // Atualiza a grade visual com os resultados
     function updateGrid() {
-        grid.innerHTML = '';
-        results.forEach(res => {
+        grid.innerHTML = ''; // Limpa o grid
+        results.forEach((res, index) => {
             const div = document.createElement('div');
             div.className = `blaze-cell color-${res.color}`;
             div.textContent = res.roll;
@@ -75,8 +75,8 @@
 
     // Adiciona novo resultado e atualiza a grade
     function addResult(color, roll) {
-        results.unshift({ color, roll }); // adiciona ao início
-        if (results.length > maxCells) results.pop(); // remove o último se passar de 15
+        results.unshift({ color, roll }); // Adiciona ao início
+        if (results.length > maxCells) results.pop(); // Remove o último se passar de 15
         updateGrid();
     }
 
