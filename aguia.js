@@ -51,129 +51,48 @@ class BlazeInterface {
       '2': { '0': 0, '1': 0, '2': 0 }
     };
     this.patternHistory = [];
-    this.initMonitorInterface();
+    // Inicializar apenas após o DOM estar carregado
+    document.addEventListener('DOMContentLoaded', () => {
+      this.initMonitorInterface();
+      console.log('[BlazeInterface] DOM carregado, interface inicializada');
+    });
   }
 
   injectGlobalStyles() {
     const css = `
-      .blaze-min-btn {
-        background: transparent;
-        border: none;
-        color: #fff;
-        font-size: 20px;
-        cursor: pointer;
-        padding: 0 8px;
-        position: absolute;
-        top: 10px;
-        right: 10px;
-      }
-      .blaze-min-btn:hover { opacity: .75 }
-      .blaze-bubble {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        background: url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);
-        box-shadow: 0 4px 12px rgba(0,0,0,.5);
-        cursor: pointer;
-        z-index: 10001; /* Aumentado para evitar sobreposição */
-        display: none;
-      }
-      .blaze-overlay {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        z-index: 9999;
-        font-family: 'Arial', sans-serif;
-      }
-      .blaze-monitor {
-        background: rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;
-        background-blend-mode: overlay;
-        border-radius: 10px;
-        padding: 15px;
-        box-shadow: 0 5px 15px rgba(0,0,0,.5);
-        color: #fff;
-        width: 300px;
-        position: relative;
-      }
-      .blaze-monitor h3 { margin: 0 0 10px; text-align: center; font-size: 18px }
-      .result-card {
-        background: #4448;
-        border-radius: 5px;
-        padding: 10px;
-        margin-bottom: 10px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center
-      }
-      .result-number { font-size: 24px; font-weight: bold }
-      .result-color-0 {
-        color: #fff;
-        background: linear-gradient(45deg, #fff, #ddd);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent
-      }
-      .result-color-1 { color: #f44336 }
-      .result-color-2 { color: #0F1923 }
-      .result-status {
-        padding: 5px 10px;
-        border-radius: 3px;
-        font-size: 12px;
-        font-weight: bold;
-        text-transform: uppercase
-      }
-      .result-status-waiting { background: #ffc107; color: #000 }
-      .result-status-rolling { background: #ff9800; color: #000; animation: pulse 1s infinite }
-      .result-status-complete { background: #4caf50; color: #fff }
-      @keyframes pulse { 0% { opacity: 1 } 50% { opacity: .5 } 100% { opacity: 1 } }
-      .blaze-notification {
-        position: fixed;
-        top: 80px;
-        right: 20px;
-        padding: 15px;
-        border-radius: 5px;
-        color: #fff;
-        font-weight: bold;
-        opacity: 0;
-        transform: translateY(-20px);
-        transition: all .3s ease;
-        z-index: 10000
-      }
-      .blaze-notification.show { opacity: 1; transform: translateY(0) }
-      .notification-win { background: #4caf50 }
-      .notification-loss { background: #f44336 }
-      .prediction-card {
-        background: #4448;
-        border-radius: 5px;
-        padding: 15px;
-        margin-bottom: 15px;
-        text-align: center;
-        font-weight: bold
-      }
-      .prediction-title { font-size: 14px; opacity: .8; margin-bottom: 5px }
-      .prediction-value {
-        font-size: 18px;
-        font-weight: bold;
-        display: flex;
-        align-items: center;
-        justify-content: center
-      }
-      .color-dot {
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        display: inline-block;
-        margin-right: 10px
-      }
-      .color-dot-0 { background: #fff; border: 1px solid #777 }
-      .color-dot-1 { background: #f44336 }
-      .color-dot-2 { background: #212121 }
-      .prediction-accuracy { font-size: 12px; margin-top: 5px; opacity: .7 }
-      .prediction-waiting { color: #00e676; text-shadow: 0 0 5px rgba(0,230,118,.7) }
-      .confidence-score { font-size: 12px; margin-top: 5px; color: #ffd700 }
+      .blaze-min-btn{background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;padding:0 8px}
+      .blaze-min-btn:hover{opacity:.75}
+      .blaze-bubble{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;
+        background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);
+        box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:none;}
+      .blaze-overlay{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+        z-index:9999;font-family:'Arial',sans-serif;}
+      .blaze-monitor{background:rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;
+        background-blend-mode:overlay;border-radius:10px;padding:15px;
+        box-shadow:0 5px 15px rgba(0,0,0,.5);color:#fff;width:300px}
+      .blaze-monitor h3{margin:0 0 10px;text-align:center;font-size:18px}
+      .result-card{background:#4448;border-radius:5px;padding:10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+      .result-number{font-size:24px;font-weight:bold}
+      .result-color-0{color:#fff;background:linear-gradient(45deg,#fff,#ddd);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+      .result-color-1{color:#f44336}.result-color-2{color:#0F1923}
+      .result-status{padding:5px 10px;border-radius:3px;font-size:12px;font-weight:bold;text-transform:uppercase}
+      .result-status-waiting{background:#ffc107;color:#000}
+      .result-status-rolling{background:#ff9800;color:#000;animation:pulse 1s infinite}
+      .result-status-complete{background:#4caf50;color:#fff}
+      @keyframes pulse{0%{opacity:1}50%{opacity:.5}100%{opacity:1}}
+      .blaze-notification{position:fixed;top:80px;right:20px;padding:15px;border-radius:5px;
+        color:#fff;font-weight:bold;opacity:0;transform:translateY(-20px);
+        transition:all .3s ease;z-index:10000}
+      .blaze-notification.show{opacity:1;transform:translateY(0)}
+      .notification-win{background:#4caf50}.notification-loss{background:#f44336}
+      .prediction-card{background:#4448;border-radius:5px;padding:15px;margin-bottom:15px;text-align:center;font-weight:bold}
+      .prediction-title{font-size:14px;opacity:.8;margin-bottom:5px}
+      .prediction-value{font-size:18px;font-weight:bold;display:flex;align-items:center;justify-content:center}
+      .color-dot{width:24px;height:24px;border-radius:50%;display:inline-block;margin-right:10px}
+      .color-dot-0{background:#fff;border:1px solid #777}.color-dot-1{background:#f44336}.color-dot-2{background:#212121}
+      .prediction-accuracy{font-size:12px;margin-top:5px;opacity:.7}
+      .prediction-waiting{color:#00e676;text-shadow:0 0 5px rgba(0,230,118,.7)}
+      .confidence-score{font-size:12px;margin-top:5px;color:#ffd700}
     `;
     const style = document.createElement('style');
     style.textContent = css;
@@ -182,7 +101,7 @@ class BlazeInterface {
     this.bubble = document.createElement('div');
     this.bubble.className = 'blaze-bubble';
     document.body.appendChild(this.bubble);
-    console.log('[BlazeInterface] Bubble criado:', this.bubble); // Log para verificar criação
+    console.log('[BlazeInterface] Bubble criado:', this.bubble);
   }
 
   initMonitorInterface() {
@@ -199,7 +118,7 @@ class BlazeInterface {
       </div>
     `;
     document.body.appendChild(this.overlay);
-    console.log('[BlazeInterface] Overlay criado:', this.overlay); // Log para verificar criação
+    console.log('[BlazeInterface] Overlay criado:', this.overlay);
 
     const minBtn = document.getElementById('blazeMinBtn');
     if (minBtn) {
@@ -282,7 +201,7 @@ class BlazeInterface {
     
     const probs = this.transitionMatrix[lastColor] || { '0': 0.33, '1': 0.33, '2': 0.33 };
     
-    if (patterns.streak && patterns.stniej.length >= 3) {
+    if (patterns.streak && patterns.streak.length >= 3) {
       probs[patterns.streak.color] *= 1.2;
     }
     if (patterns.alternation) {
