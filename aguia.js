@@ -313,8 +313,14 @@ class BlazeInterface {
   }
 
   updatePredictionStats(cur) {
-    console.log('[BlazeInterface] Entrando em updatePredictionStats:', { cur, nextPredColor: this.nextPredColor, resultsLength: this.results.length });
-    
+    console.log('[BlazeInterface] Entrando em updatePredictionStats:', {
+      cur: { id: cur.id, color: cur.color, status: cur.status },
+      nextPredColor: this.nextPredColor,
+      resultsLength: this.results.length,
+      correctPredictions: this.correctPredictions,
+      totalPredictions: this.totalPredictions
+    });
+
     if (cur.status !== 'complete') {
       console.log('[BlazeInterface] Resultado não completo, pulando atualização de stats');
       return;
@@ -325,17 +331,33 @@ class BlazeInterface {
       return;
     }
 
-    const prev = this.results.filter(r => r.status === 'complete')[1];
+    if (![0, 1, 2].includes(cur.color) || ![0, 1, 2].includes(this.nextPredColor)) {
+      console.log('[BlazeInterface] Cor inválida:', { curColor: cur.color, nextPredColor: this.nextPredColor });
+      return;
+    }
+
     this.totalPredictions++;
     if (this.nextPredColor === cur.color) {
       this.correctPredictions++;
       this.consecutiveErrors[cur.color] = 0;
-      console.log('[BlazeInterface] Previsão correta:', { predicted: this.nextPredColor, actual: cur.color, correct: this.correctPredictions, total: this.totalPredictions });
+      console.log('[BlazeInterface] Previsão correta:', {
+        predicted: this.nextPredColor,
+        actual: cur.color,
+        correct: this.correctPredictions,
+        total: this.totalPredictions
+      });
     } else {
       this.consecutiveErrors[this.nextPredColor]++;
-      console.log('[BlazeInterface] Previsão incorreta:', { predicted: this.nextPredColor, actual: cur.color, errors: this.consecutiveErrors, correct: this.correctPredictions, total: this.totalPredictions });
+      console.log('[BlazeInterface] Previsão incorreta:', {
+        predicted: this.nextPredColor,
+        actual: cur.color,
+        errors: this.consecutiveErrors,
+        correct: this.correctPredictions,
+        total: this.totalPredictions
+      });
     }
 
+    const prev = this.results.filter(r => r.status === 'complete' && r.id !== cur.id)[0];
     if (prev) {
       this.updateTransitionMatrix(prev.color, cur.color);
     }
@@ -343,8 +365,14 @@ class BlazeInterface {
   }
 
   updateResults(d) {
-    console.log('[BlazeInterface] Atualizando resultados:', d);
-    
+    console.log('[BlazeInterface] Atualizando resultados:', {
+      id: d.id,
+      color: d.color,
+      roll: d.roll,
+      status: d.status,
+      currentNextPredColor: this.nextPredColor
+    });
+
     const id = d.id || `tmp-${Date.now()}-${d.color}-${d.roll}`;
     const i = this.results.findIndex(r => (r.id || r.tmp) === id);
     if (i >= 0) {
@@ -352,9 +380,6 @@ class BlazeInterface {
     } else {
       if (this.results.length > 50) this.results.pop();
       this.results.unshift({ ...d, tmp: id });
-      if (d.status === 'complete') {
-        this.updatePredictionStats(d);
-      }
     }
 
     const r = this.results[0];
@@ -373,7 +398,24 @@ class BlazeInterface {
       `;
     }
 
+    // Atualizar previsão antes de verificar stats para a rodada atual
     const pred = this.predictNextColor();
+    if (pred) {
+      this.nextPredColor = pred.color;
+      console.log('[BlazeInterface] Nova previsão definida:', {
+        nextPredColor: this.nextPredColor,
+        colorName: pred.colorName,
+        confidence: pred.confidence
+      });
+    } else {
+      console.log('[BlazeInterface] Previsão não disponível:', { resultsLength: this.results.length });
+    }
+
+    // Verificar stats após atualizar a previsão
+    if (d.status === 'complete') {
+      this.updatePredictionStats(d);
+    }
+
     const pDiv = document.getElementById('blazePrediction');
     if (pDiv) {
       if (pred) {
@@ -387,7 +429,6 @@ class BlazeInterface {
           <div class="loss-count">Losses: ${this.totalPredictions - this.correctPredictions}</div>
           <div class="confidence-score">Confiança da previsão: ${pred.confidence}%</div>
         `;
-        this.nextPredColor = pred.color;
       } else {
         pDiv.innerHTML = `
           <div class="prediction-title">AGUARDANDO DADOS</div>
