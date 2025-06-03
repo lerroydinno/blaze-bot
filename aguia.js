@@ -37,15 +37,16 @@
       style.innerHTML = `
         #painelBlaze {
           position: fixed;
-          bottom: 100px;
-          left: 10px;
-          background: rgba(20,20,20,0.95);
+          bottom: 80px;
+          left: 2.5vw;
+          width: 95vw;
+          background: rgba(30, 30, 30, 0.95);
           color: white;
-          border-radius: 12px;
+          border-radius: 10px;
           padding: 10px;
           z-index: 9999;
           font-family: Arial, sans-serif;
-          box-shadow: 0 0 10px rgba(0,0,0,0.5);
+          box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
         }
 
         #painelBlaze h3 {
@@ -62,8 +63,8 @@
         }
 
         .coluna {
-          background: rgba(255,255,255,0.05);
-          padding: 5px;
+          background: rgba(255,255,255,0.08);
+          padding: 6px 4px;
           border-radius: 6px;
           text-align: center;
           font-size: 12px;
@@ -71,19 +72,20 @@
 
         .coluna .predominante {
           font-weight: bold;
-          margin-bottom: 3px;
           font-size: 13px;
+          margin-bottom: 3px;
         }
 
         .coluna .porcentagem {
           font-size: 11px;
-          margin-bottom: 3px;
+          margin-bottom: 4px;
         }
 
         .coluna .numero {
           padding: 2px 0;
           border-radius: 3px;
           margin-bottom: 2px;
+          font-size: 13px;
         }
 
         .white { background: #fff; color: #000; }
@@ -100,6 +102,12 @@
           border-radius: 50%;
           z-index: 10000;
           cursor: pointer;
+        }
+
+        @media (max-width: 500px) {
+          .coluna .predominante { font-size: 12px; }
+          .coluna .porcentagem { font-size: 10px; }
+          .coluna .numero { font-size: 12px; }
         }
       `;
       document.head.appendChild(style);
@@ -149,12 +157,7 @@
         coluna.innerHTML = `
           <div class="predominante">${this.nomeCor(corPred)}</div>
           <div class="porcentagem">${pct.toFixed(0)}%</div>
-          ${sub
-            .map(
-              (r) =>
-                `<div class="numero ${r.cor}">${r.numero}</div>`
-            )
-            .join("")}
+          ${sub.map((r) => `<div class="numero ${r.cor}">${r.numero}</div>`).join("")}
         `;
 
         grid.appendChild(coluna);
