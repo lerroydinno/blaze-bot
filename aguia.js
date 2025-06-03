@@ -52,7 +52,7 @@ class BlazeInterface {
       '2': { '0': 0.1, '1': 0.1, '2': 0.1 }
     };
     this.patternHistory = [];
-    this.neuralNet = null; // Inicializar após carregar Brain.js
+    this.neuralNet = null;
     this.initMonitorInterface();
     this.loadBrainJS();
   }
@@ -89,19 +89,16 @@ class BlazeInterface {
       .blaze-monitor h3{margin:0 0 10px;text-align:center;font-size:18px}  
       .result-card{background:#4448;border-radius:5px;padding:10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}  
       .result-number{font-size:24px;font-weight:bold}  
-      .result-color-0{color:#fff;background:linear-gradient(45deg,#fff,#ddd);-webkit-background-clip:text;-webkit-text-fill-color:transparent}  
-      .result-color-1{color:#f44336}.result-color-2{color:#000}  
-      .result-status{padding:5px 10px;font-size:12px;color:#333;font-weight:bold;border-radius:3px;text-transform:uppercase}  
-      .shadow-0{box-shadow:0 0 4px rgba(255,255,255,.5)}  
-      .shadow-1{box-shadow:0 0 15px rgba(244,67,54,.5)}  
-      .shadow-2{box-shadow:0 0 15px rgba(0,0,0,.5)}  
+      .result-color-0{color:#fff;background:linear-gradient(45deg,#fff,#ddd);background-clip:text;color:transparent}  
+      .result-color-1{color:#f44336}.result-color-2{color:#0F1923}  
+      .result-status{padding:5px 10px;border-radius:3px;font-size:12px;font-weight:bold;text-transform:uppercase}  
       .result-status-waiting{background:#ffc107;color:#000}  
-      .result-status-rolling:background{#ff9800;color:#000;animation:pulse 1s infinite}  
-      @keyframes pulse{0%{opacity:1}50%{opacity:.5}100%{opacity:1}}  
+      .result-status-rolling{background:#ff9800;color:#000;animation:pulse 1s infinite}  
       .result-status-complete{background:#4caf50;color:#fff}  
-      .blaze-notification{position:fixed;top:80px;background:#fff;padding-right:15px;border-radius:5px;  
-        color:#fff;font-weight:700;opacity:20px;transform:translateY(-20px);  
-        transition:all .3s ease-in-out;z-index:10000}  
+      @keyframes pulse{0%{opacity:1}50%{opacity:.5}100%{opacity:1}}  
+      .blaze-notification{position:fixed;top:80px;right:20px;padding:15px;border-radius:5px;  
+        color:#fff;font-weight:bold;opacity:0;transform:translateY(-20px);  
+        transition:all .3s ease;z-index:10000}  
       .blaze-notification.show{opacity:1;transform:translateY(0)}  
       .notification-win{background:#4caf50}.notification-loss{background:#f44336}  
       .prediction-card{background:#4448;border-radius:5px;padding:15px;margin-bottom:15px;text-align:center;font-weight:bold}  
@@ -316,31 +313,48 @@ class BlazeInterface {
   }
 
   updatePredictionStats(cur) {
-    if (this.results.length < 2 || cur.status !== 'complete') return;
+    console.log('[BlazeInterface] Entrando em updatePredictionStats:', { cur, nextPredColor: this.nextPredColor, resultsLength: this.results.length });
+    
+    if (cur.status !== 'complete') {
+      console.log('[BlazeInterface] Resultado não completo, pulando atualização de stats');
+      return;
+    }
+
+    if (this.nextPredColor == null) {
+      console.log('[BlazeInterface] nextPredColor não definido, pulando atualização de stats');
+      return;
+    }
+
     const prev = this.results.filter(r => r.status === 'complete')[1];
-    if (!prev) return;
     this.totalPredictions++;
     if (this.nextPredColor === cur.color) {
       this.correctPredictions++;
       this.consecutiveErrors[cur.color] = 0;
-      console.log('[BlazeInterface] Previsão correta:', cur.color);
+      console.log('[BlazeInterface] Previsão correta:', { predicted: this.nextPredColor, actual: cur.color, correct: this.correctPredictions, total: this.totalPredictions });
     } else {
       this.consecutiveErrors[this.nextPredColor]++;
-      console.log('[BlazeInterface] Previsão incorreta:', { predicted: this.nextPredColor, actual: cur.color, errors: this.consecutiveErrors });
+      console.log('[BlazeInterface] Previsão incorreta:', { predicted: this.nextPredColor, actual: cur.color, errors: this.consecutiveErrors, correct: this.correctPredictions, total: this.totalPredictions });
     }
-    
-    this.updateTransitionMatrix(prev.color, cur.color);
+
+    if (prev) {
+      this.updateTransitionMatrix(prev.color, cur.color);
+    }
     this.trainNeuralNetwork(this.results.filter(r => r.status === 'complete'));
   }
 
   updateResults(d) {
+    console.log('[BlazeInterface] Atualizando resultados:', d);
+    
     const id = d.id || `tmp-${Date.now()}-${d.color}-${d.roll}`;
     const i = this.results.findIndex(r => (r.id || r.tmp) === id);
-    if (i >= 0) this.results[i] = { ...this.results[i], ...d };
-    else {
+    if (i >= 0) {
+      this.results[i] = { ...this.results[i], ...d };
+    } else {
       if (this.results.length > 50) this.results.pop();
       this.results.unshift({ ...d, tmp: id });
-      if (d.status === 'complete') this.updatePredictionStats(d);
+      if (d.status === 'complete') {
+        this.updatePredictionStats(d);
+      }
     }
 
     const r = this.results[0];
@@ -361,18 +375,28 @@ class BlazeInterface {
 
     const pred = this.predictNextColor();
     const pDiv = document.getElementById('blazePrediction');
-    if (pDiv && pred) {
-      const waitCls = pred.isWaiting ? 'prediction-waiting' : '';
-      pDiv.innerHTML = `
-        <div class="prediction-title">${pred.isWaiting ? 'PREVISÃO PARA PRÓXIMA RODADA' : 'PRÓXIMA COR PREVISTA'}</div>
-        <div class="prediction-value ${waitCls}">
-          <span class="color-dot color-dot-${pred.color}"></span>${pred.colorName}
-        </div>
-        <div class="win-count">Wins: ${this.correctPredictions}</div>
-        <div class="loss-count">Losses: ${this.totalPredictions - this.correctPredictions}</div>
-        <div class="confidence-score">Confiança da previsão: ${pred.confidence}%</div>
-      `;
-      this.nextPredColor = pred.color;
+    if (pDiv) {
+      if (pred) {
+        const waitCls = pred.isWaiting ? 'prediction-waiting' : '';
+        pDiv.innerHTML = `
+          <div class="prediction-title">${pred.isWaiting ? 'PREVISÃO PARA PRÓXIMA RODADA' : 'PRÓXIMA COR PREVISTA'}</div>
+          <div class="prediction-value ${waitCls}">
+            <span class="color-dot color-dot-${pred.color}"></span>${pred.colorName}
+          </div>
+          <div class="win-count">Wins: ${this.correctPredictions}</div>
+          <div class="loss-count">Losses: ${this.totalPredictions - this.correctPredictions}</div>
+          <div class="confidence-score">Confiança da previsão: ${pred.confidence}%</div>
+        `;
+        this.nextPredColor = pred.color;
+      } else {
+        pDiv.innerHTML = `
+          <div class="prediction-title">AGUARDANDO DADOS</div>
+          <div class="prediction-value">Sem previsão</div>
+          <div class="win-count">Wins: ${this.correctPredictions}</div>
+          <div class="loss-count">Losses: ${this.totalPredictions - this.correctPredictions}</div>
+          <div class="confidence-score">Confiança: 0%</div>
+        `;
+      }
     }
 
     const needToast = (d.status === 'rolling' || d.status === 'complete') && !this.notifiedIds.has(id);
@@ -392,7 +416,7 @@ class BlazeInterface {
     n.textContent = `${win ? 'GANHOU' : 'PERDEU'}! ${(d.color === 0 ? 'BRANCO' : d.color === 1 ? 'VERMELHO' : 'PRETO')} ${d.roll ?? ''}`;
     document.body.appendChild(n);
     setTimeout(() => n.classList.add('show'), 50);
-    setTimeout(() => { n.classList.remove('show'); n.remove(); }, 3000);
+    setTimeout(() => { n.classList.remove('show'); setTimeout(() => n.remove(), 300); }, 3000);
   }
 
   analyzePatterns() {
