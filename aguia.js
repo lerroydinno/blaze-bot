@@ -45,10 +45,11 @@ class BlazeInterface {
     this.notifiedIds = new Set();
     this.correctPredictions = 0;
     this.totalPredictions = 0;
+    this.consecutiveErrors = { '0': 0, '1': 0, '2': 0 }; // Rastrear erros consecutivos por cor
     this.transitionMatrix = {
-      '0': { '0': 0, '1': 0, '2': 0 },
-      '1': { '0': 0, '1': 0, '2': 0 },
-      '2': { '0': 0, '1': 0, '2': 0 }
+      '0': { '0': 0.1, '1': 0.1, '2': 0.1 }, // Inicializar com valores mínimos
+      '1': { '0': 0.1, '1': 0.1, '2': 0.1 },
+      '2': { '0': 0.1, '1': 0.1, '2': 0.1 }
     };
     this.patternHistory = [];
     this.initMonitorInterface();
@@ -140,7 +141,7 @@ class BlazeInterface {
       this.transitionMatrix[prevColor][currentColor]++;
       const total = Object.values(this.transitionMatrix[prevColor]).reduce((sum, val) => sum + val, 0);
       for (let key in this.transitionMatrix[prevColor]) {
-        this.transitionMatrix[prevColor][key] = this.transitionMatrix[prevColor][key] / total || 0;
+        this.transitionMatrix[prevColor][key] = total ? this.transitionMatrix[prevColor][key] / total : 0.33;
       }
       console.log('[BlazeInterface] Matriz de transição atualizada:', this.transitionMatrix);
     }
@@ -162,9 +163,15 @@ class BlazeInterface {
   }
 
   predictNextColor() {
-    if (!this.results.length) return null;
+    if (!this.results.length) {
+      console.log('[BlazeInterface] Nenhum resultado disponível para previsão');
+      return null;
+    }
     const history = this.results.filter(r => r.status === 'complete');
-    if (history.length < 3) return null;
+    if (history.length < 3) {
+      console.log('[BlazeInterface] Histórico insuficiente (< 3 resultados completos)');
+      return null;
+    }
 
     const waiting = this.results.find(r => r.status === 'waiting');
     const last = history[0];
@@ -174,7 +181,12 @@ class BlazeInterface {
     const lastColor = last.color;
     
     // Probabilidades base da cadeia de Markov
-    const probs = { ...this.transitionMatrix[lastColor] } || { '0': 0.33, '1': 0.33, '2': 0.33 };
+    let probs = { ...this.transitionMatrix[lastColor] };
+    
+    // Garantir valores mínimos para evitar divisão por zero
+    if (!probs['0'] && !probs['1'] && !probs['2']) {
+      probs = { '0': 0.33, '1': 0.33, '2': 0.33 };
+    }
     
     // Ajustar probabilidades com base em padrões
     if (patterns.streak && patterns.streak.length >= 3) {
@@ -191,11 +203,25 @@ class BlazeInterface {
     probs['0'] = (probs['0'] || 0) * (1 + frequencies.branco);
     probs['1'] = (probs['1'] || 0) * (1 + frequencies.vermelho);
     probs['2'] = (probs['2'] || 0) * (1 + frequencies.preto);
+    
+    // Penalizar cores com erros consecutivos
+    Object.keys(this.consecutiveErrors).forEach(color => {
+      if (this.consecutiveErrors[color] >= 3) {
+        probs[color] = (probs[color] || 0) * 0.8;
+        console.log('[BlazeInterface] Penalidade por erros consecutivos:', { color, count: this.consecutiveErrors[color] });
+      }
+    });
+    
     console.log('[BlazeInterface] Probabilidades após ajustes:', probs);
     
     // Normalizar probabilidades
-    const total = Object.values(probs).reduce((sum, val) => sum + val, 0) || 1;
-    Object.keys(probs).forEach(key => probs[key] = probs[key] / total);
+    const total = Object.values(probs).reduce((sum, val) => sum + val, 0);
+    if (total === 0) {
+      console.log('[BlazeInterface] Soma total das probabilidades é zero, usando padrão');
+      probs = { '0': 0.33, '1': 0.33, '2': 0.33 };
+    } else {
+      Object.keys(probs).forEach(key => probs[key] = probs[key] / total);
+    }
     console.log('[BlazeInterface] Probabilidades normalizadas:', probs);
     
     // Escolher a cor com maior probabilidade
@@ -217,7 +243,14 @@ class BlazeInterface {
     const prev = this.results.filter(r => r.status === 'complete')[1];
     if (!prev) return;
     this.totalPredictions++;
-    if (prev.color === cur.color) this.correctPredictions++;
+    if (this.nextPredColor === cur.color) {
+      this.correctPredictions++;
+      this.consecutiveErrors[cur.color] = 0; // Resetar erros consecutivos para a cor correta
+      console.log('[BlazeInterface] Previsão correta:', cur.color);
+    } else {
+      this.consecutiveErrors[this.nextPredColor]++;
+      console.log('[BlazeInterface] Previsão incorreta:', { predicted: this.nextPredColor, actual: cur.color, errors: this.consecutiveErrors });
+    }
     
     this.updateTransitionMatrix(prev.color, cur.color);
   }
