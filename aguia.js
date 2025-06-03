@@ -1,53 +1,48 @@
 // ==UserScript==
-// @name         Blaze Double Monitor
+// @name         Blaze Double Grade Visual
 // @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  Monitor de resultados da Blaze em tempo real
-// @author       Seu Nome
+// @version      1.1
+// @description  Exibe resultados da Blaze em grade 3x5 atualizando da esquerda para a direita
+// @author       Você
 // @match        https://blaze.com/*
 // @grant        none
 // ==/UserScript==
 
-(function() {
+(function () {
     'use strict';
 
-    // Injetar estilos CSS para o menu flutuante
     const style = document.createElement('style');
     style.textContent = `
         .blaze-menu {
             position: fixed;
             top: 20px;
             right: 20px;
-            width: 300px;
-            background: rgba(34,34,34,0.92);
-            border-radius: 10px;
+            width: 330px;
+            background: rgba(34,34,34,0.95);
+            border-radius: 12px;
             padding: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            box-shadow: 0 0 15px rgba(0,0,0,0.6);
             color: #fff;
-            z-index: 10000;
             font-family: Arial, sans-serif;
+            z-index: 9999;
         }
         .blaze-menu h3 {
-            margin-top: 0;
+            margin: 0 0 10px;
             text-align: center;
         }
-        .blaze-columns {
+        .blaze-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+        .blaze-cell {
             display: flex;
-            justify-content: space-between;
-        }
-        .blaze-column {
-            width: 30%;
-        }
-        .blaze-column h4 {
-            text-align: center;
-            border-bottom: 1px solid #fff;
-            padding-bottom: 5px;
-        }
-        .blaze-item {
-            text-align: center;
-            margin: 5px 0;
-            padding: 5px;
-            border-radius: 5px;
+            align-items: center;
+            justify-content: center;
+            height: 40px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 6px;
         }
         .color-0 {
             background-color: #fff;
@@ -64,65 +59,62 @@
     `;
     document.head.appendChild(style);
 
-    // Criar o menu flutuante
+    // Criação do menu flutuante
     const menu = document.createElement('div');
     menu.className = 'blaze-menu';
     menu.innerHTML = `
         <h3>Resultados da Blaze</h3>
-        <div class="blaze-columns">
-            <div class="blaze-column" id="col-0">
-                <h4>Branco</h4>
-            </div>
-            <div class="blaze-column" id="col-1">
-                <h4>Vermelho</h4>
-            </div>
-            <div class="blaze-column" id="col-2">
-                <h4>Preto</h4>
-            </div>
-        </div>
+        <div class="blaze-grid" id="blaze-grid"></div>
     `;
     document.body.appendChild(menu);
 
-    // Função para adicionar resultado à coluna correspondente
-    function addResult(color, roll) {
-        const col = document.getElementById(`col-${color}`);
-        if (col) {
-            const item = document.createElement('div');
-            item.className = `blaze-item color-${color}`;
-            item.textContent = roll;
-            col.insertBefore(item, col.children[1]); // Inserir abaixo do título
-            // Limitar a 5 itens por coluna
-            if (col.children.length > 6) {
-                col.removeChild(col.lastChild);
-            }
-        }
+    const grid = document.getElementById('blaze-grid');
+    const maxCells = 15;
+    let results = [];
+
+    // Atualiza a grade visual com os resultados
+    function updateGrid() {
+        grid.innerHTML = '';
+        results.forEach(res => {
+            const div = document.createElement('div');
+            div.className = `blaze-cell color-${res.color}`;
+            div.textContent = res.roll;
+            grid.appendChild(div);
+        });
     }
 
-    // Conectar ao WebSocket da Blaze
+    // Adiciona novo resultado e atualiza a grade
+    function addResult(color, roll) {
+        results.unshift({ color, roll }); // adiciona ao início
+        if (results.length > maxCells) results.pop(); // remove o último se passar de 15
+        updateGrid();
+    }
+
+    // WebSocket para resultados da Blaze
     const ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
 
     ws.onopen = () => {
-        console.log('Conectado ao servidor WebSocket');
+        console.log('[WS] Conectado');
         ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
-        setInterval(() => ws.send('2'), 25000); // Enviar ping a cada 25 segundos
+        setInterval(() => ws.send('2'), 25000); // ping
     };
 
     ws.onmessage = (e) => {
+        const msg = e.data;
+        if (msg === '2') { ws.send('3'); return; }
+        if (!msg.startsWith('42')) return;
+
         try {
-            const m = e.data;
-            if (m === '2') { ws.send('3'); return; }
-            if (m.startsWith('42')) {
-                const j = JSON.parse(m.slice(2));
-                if (j[0] === 'data' && j[1].id === 'double.tick') {
-                    const p = j[1].payload;
-                    addResult(p.color, p.roll);
-                }
+            const data = JSON.parse(msg.slice(2));
+            if (data[0] === 'data' && data[1].id === 'double.tick') {
+                const p = data[1].payload;
+                addResult(p.color, p.roll);
             }
         } catch (err) {
-            console.error('Erro ao processar mensagem:', err);
+            console.error('[WS] Erro ao processar mensagem:', err);
         }
     };
 
-    ws.onerror = (e) => console.error('WebSocket error:', e);
-    ws.onclose = () => console.log('WebSocket fechado');
+    ws.onerror = err => console.error('[WS] Erro:', err);
+    ws.onclose = () => console.warn('[WS] Conexão encerrada');
 })();
