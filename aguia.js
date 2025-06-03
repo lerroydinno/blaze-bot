@@ -1,1 +1,108 @@
-javascript:(function(){const s=document.createElement("style");s.textContent=`#blz-grid-container{position:fixed;bottom:60px;left:10px;background:#111;border-radius:15px;padding:10px;z-index:99999;display:flex;gap:8px}.blz-column{display:flex;flex-direction:column;align-items:center;gap:4px}.blz-prediction{font-size:12px;font-weight:bold;color:white;margin-bottom:5px;text-align:center}.blz-cell{width:35px;height:35px;display:flex;align-items:center;justify-content:center;font-weight:bold;border-radius:8px;color:white;font-size:14px}.blz-red{background-color:#D32F2F}.blz-white{background-color:white;color:#111}.blz-black{background-color:#212121}`;document.head.appendChild(s);const c=document.createElement("div");c.id="blz-grid-container";const cols=[];for(let i=0;i<3;i++){const col=document.createElement("div");col.className="blz-column";const p=document.createElement("div");p.className="blz-prediction";p.innerText="–";col.appendChild(p);for(let j=0;j<5;j++){const cell=document.createElement("div");cell.className="blz-cell";col.appendChild(cell)}cols.push({col:col,pred:p});c.appendChild(col)}document.body.appendChild(c);const h=[];function update(){for(let i=0;i<3;i++){const colHist=h.slice(i*5,(i+1)*5);const colCells=Array.from(cols[i].col.querySelectorAll(".blz-cell"));let r=0,w=0,b=0;colHist.forEach((res,idx)=>{const el=colCells[idx];el.innerText=res.value;el.className="blz-cell";if(res.color==="red"){el.classList.add("blz-red");r++}else if(res.color==="white"){el.classList.add("blz-white");w++}else{el.classList.add("blz-black");b++}});let pred="–";if(r>=b&&r>=w){pred="🔴 "+Math.round((r/5)*100)+"%"}else if(b>=r&&b>=w){pred="⚫ "+Math.round((b/5)*100)+"%"}else{pred="⚪ "+Math.round((w/5)*100)+"%"}cols[i].pred.innerText=pred}}function getColor(n){if(n===0)return"white";return n%2===0?"black":"red"}const ows=window.WebSocket;window.WebSocket=function(url,prot){const ws=new ows(url,prot);ws.addEventListener("message",e=>{try{const d=JSON.parse(e.data);if(d&&d.code==="game_result"&&d.data&&d.data.roll){const n=d.data.roll;const clr=getColor(n);h.unshift({value:n,color:clr});if(h.length>15)h.length=15;update()}}catch(err){}});return ws}})();
+(function () {
+    const results = [[], [], []]; // 3 colunas com até 5 elementos cada
+    const colors = { 0: 'white', 1: 'red', 2: 'black' };
+
+    // Cria o painel
+    const panel = document.createElement('div');
+    panel.style.position = 'fixed';
+    panel.style.top = '10px';
+    panel.style.right = '10px';
+    panel.style.zIndex = '99999';
+    panel.style.background = 'rgba(0,0,0,0.8)';
+    panel.style.padding = '10px';
+    panel.style.borderRadius = '10px';
+    panel.style.display = 'flex';
+    panel.style.flexDirection = 'row';
+    panel.style.gap = '10px';
+    document.body.appendChild(panel);
+
+    function updatePanel() {
+        panel.innerHTML = ''; // limpa
+
+        for (let i = 0; i < 3; i++) {
+            const column = document.createElement('div');
+            column.style.display = 'flex';
+            column.style.flexDirection = 'column';
+            column.style.alignItems = 'center';
+            column.style.color = '#fff';
+
+            // Calcular cor predominante e porcentagem
+            const col = results[i];
+            const freq = { red: 0, black: 0, white: 0 };
+            col.forEach(c => freq[colors[c]]++);
+            const max = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
+            const percent = col.length ? ((max[1] / col.length) * 100).toFixed(1) : '0.0';
+
+            const header = document.createElement('div');
+            header.innerText = `${max[0]} (${percent}%)`;
+            header.style.marginBottom = '5px';
+            column.appendChild(header);
+
+            for (let j = 0; j < 5; j++) {
+                const cell = document.createElement('div');
+                cell.style.width = '30px';
+                cell.style.height = '30px';
+                cell.style.margin = '2px 0';
+                cell.style.borderRadius = '5px';
+                cell.style.backgroundColor = colors[results[i][j]] || 'gray';
+                column.appendChild(cell);
+            }
+
+            panel.appendChild(column);
+        }
+    }
+
+    // Conectar ao WebSocket da Blaze
+    const ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
+
+    let heartbeatInterval;
+
+    ws.onopen = () => {
+        console.log('WebSocket conectado à Blaze');
+        ws.send('40'); // protocolo de handshake
+    };
+
+    ws.onmessage = (event) => {
+        const data = event.data;
+
+        if (data === '3') {
+            ws.send('2'); // resposta ao ping
+            return;
+        }
+
+        if (data.startsWith('42')) {
+            try {
+                const json = JSON.parse(data.slice(2));
+                if (json[0] === 'roulette') {
+                    const { color } = json[1];
+                    if ([0, 1, 2].includes(color)) {
+                        // Adiciona o resultado na primeira coluna (shift para a próxima coluna a cada 5)
+                        results[0].unshift(color);
+                        if (results[0].length > 5) {
+                            results[1].unshift(results[0].pop());
+                            if (results[1].length > 5) {
+                                results[2].unshift(results[1].pop());
+                                if (results[2].length > 5) {
+                                    results[2] = results[2].slice(0, 5);
+                                }
+                            }
+                        }
+                        updatePanel();
+                    }
+                }
+            } catch (e) {
+                console.warn('Erro ao processar mensagem:', e);
+            }
+        }
+
+        // Inicia ping/pong
+        if (data === '40') {
+            heartbeatInterval = setInterval(() => ws.send('2'), 25000);
+        }
+    };
+
+    ws.onclose = () => {
+        console.warn('WebSocket fechado. Recarregue a página.');
+        clearInterval(heartbeatInterval);
+    };
+})();
