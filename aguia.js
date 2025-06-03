@@ -91,13 +91,13 @@
         const column = columns[nextColumnIndex];
         // Adiciona o novo resultado no topo da coluna
         column.unshift({ color, roll });
-        // Remove o último se a coluna tiver mais de 5
+        // Limita a 5 resultados por coluna, removendo o último se necessário
         if (column.length > 5) {
             column.pop();
         }
         // Atualiza apenas a coluna afetada
         updateColumn(nextColumnIndex);
-        // Avança para a próxima coluna
+        // Avança para a próxima coluna em ciclo
         nextColumnIndex = (nextColumnIndex + 1) % 3;
     }
 
@@ -119,7 +119,11 @@
             const data = JSON.parse(msg.slice(2));
             if (data[0] === 'data' && data[1].id === 'double.tick') {
                 const p = data[1].payload;
-                addResult(p.color, p.roll);
+                // Adiciona o resultado apenas se for diferente do último da coluna
+                const lastInColumn = columns[nextColumnIndex][0];
+                if (!lastInColumn || (p.roll !== lastInColumn.roll || p.color !== lastInColumn.color)) {
+                    addResult(p.color, p.roll);
+                }
             }
         } catch (err) {
             console.error('[WS] Erro ao processar mensagem:', err);
