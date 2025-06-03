@@ -1,131 +1,121 @@
+// ==UserScript==
+// @name         Blaze Double Grade Visual
+// @namespace    http://tampermonkey.net/
+// @version      1.2
+// @description  Exibe resultados da Blaze em grade 3x5, preenchendo uma célula por resultado, da esquerda para a direita
+// @author       Você
+// @match        https://blaze.com/*
+// @grant        none
+// ==/UserScript==
+
 (function () {
-  const estiloPainel = `
-    #painelBlaze {
-      position: fixed;
-      top: 100px;
-      right: 20px;
-      z-index: 9999;
-      width: 200px;
-      background-color: rgba(0,0,0,0.9);
-      color: white;
-      font-family: Arial, sans-serif;
-      border-radius: 10px;
-      padding: 10px;
-      box-shadow: 0 0 10px #000;
-    }
-    #painelBlaze h3 {
-      margin: 0 0 10px;
-      font-size: 16px;
-      text-align: center;
-    }
-    #resultado-container {
-      display: flex;
-      flex-direction: row;
-      justify-content: space-between;
-    }
-    .coluna {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-    }
-    .celula {
-      width: 40px;
-      height: 30px;
-      text-align: center;
-      line-height: 30px;
-      border-radius: 5px;
-      font-size: 14px;
-    }
-    #botaoPainel {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      z-index: 10000;
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
-      background-image: url('https://cdn-icons-png.flaticon.com/512/1665/1665731.png');
-      background-size: cover;
-      border: none;
-      cursor: pointer;
-    }
-  `;
+    'use' strict';
 
-  const estilo = document.createElement("style");
-  estilo.innerHTML = estiloPainel;
-  document.head.appendChild(estilo);
-
-  const botao = document.createElement("button");
-  botao.id = "botaoPainel";
-  document.body.appendChild(botao);
-
-  const painel = document.createElement("div");
-  painel.id = "painelBlaze";
-  painel.innerHTML = `
-    <h3>Resultados da Blaze</h3>
-    <div id="resultado-container">
-      <div class="coluna" id="coluna-0"></div>
-      <div class="coluna" id="coluna-1"></div>
-      <div class="coluna" id="coluna-2"></div>
-    </div>
-  `;
-  document.body.appendChild(painel);
-  painel.style.display = "none";
-
-  botao.onclick = () => {
-    painel.style.display = painel.style.display === "none" ? "block" : "none";
-  };
-
-  const resultados = [];
-
-  function getCor(num) {
-    if (num === 0) return "white";
-    if (num >= 1 && num <= 7) return "red";
-    if (num >= 8 && num <= 14) return "black";
-    return "gray";
-  }
-
-  function atualizarGridResultado(novoResultado) {
-    resultados.push(novoResultado);
-    if (resultados.length > 15) resultados.shift();
-
-    for (let col = 0; col < 3; col++) {
-      const coluna = document.getElementById(`coluna-${col}`);
-      coluna.innerHTML = "";
-      for (let lin = 0; lin < 5; lin++) {
-        const idx = lin + col * 5;
-        const valor = resultados[idx];
-        const div = document.createElement("div");
-        div.className = "celula";
-        if (valor !== undefined) {
-          div.textContent = valor;
-          div.style.backgroundColor = getCor(valor);
-          div.style.color = getCor(valor) === "white" ? "black" : "white";
-        } else {
-          div.innerHTML = "&nbsp;";
-          div.style.backgroundColor = "transparent";
+    // Criação do estilo CSS
+    const style = document.createElement('style');
+    style.textContent = `
+        .blaze-menu {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 330px;
+            background: rgba(34,34,34,0.95);
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.6);
+            color: #fff;
+            font-family: Arial, sans-serif;
+            z-index: 9999;
         }
-        coluna.appendChild(div);
-      }
-    }
-  }
-
-  // Intercepta WebSocket para pegar os resultados ao vivo da roleta
-  const OriginalWebSocket = window.WebSocket;
-  window.WebSocket = function (url, protocols) {
-    const socket = new OriginalWebSocket(url, protocols);
-
-    socket.addEventListener("message", function (event) {
-      try {
-        const data = JSON.parse(event.data);
-        if (data && data.type === "roulette" && data.data && data.data.roll) {
-          const numero = data.data.roll;
-          if (!isNaN(numero)) atualizarGridResultado(numero);
+        .blaze-menu h3 {
+            margin: 0 0 10px;
+            text-align: center;
         }
-      } catch (e) {}
-    });
+        .blaze-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+        .blaze-cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 40px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 6px;
+        }
+        .color-0 {
+            background-color: #fff;
+            color: #000;
+        }
+        .color-1 {
+            background-color: #f44336;
+            color: #fff;
+        }
+        .color-2 {
+            background-color: #212121;
+            color: #fff;
+        }
+    `;
+    document.head.appendChild(style);
 
-    return socket;
-  };
-  window.WebSocket.prototype = OriginalWebSocket.prototype;
+    // Criação do menu flutuante
+    const menu = document.createElement('div');
+    menu.className = 'blaze-menu';
+    menu.innerHTML = `
+        <h3>Resultados da Blaze</h3>
+        <div class="blaze-grid" id="blaze-grid"></div>
+    `;
+    document.body.appendChild(menu);
+
+    const grid = document.getElementById('blaze-grid');
+    const maxCells = 15;
+    let results = [];
+
+    // Atualiza a grade visual com os resultados
+    function updateGrid() {
+        grid.innerHTML = '';
+        for (let i = 0; i < maxCells; i++) {
+            const div = document.createElement('div');
+            div.className = `blaze-cell ${results[i] ? `color-${results[i].color}` : 'color-0'}`;
+            div.textContent = results[i] ? results[i].roll : '';
+            grid.appendChild(div);
+        }
+    }
+
+    // Adiciona novo resultado e atualiza a grade
+    function addResult(color, roll) {
+        results.unshift({ color, roll }); // Adiciona novo resultado no início
+        if (results.length > maxCells) results.pop(); // Remove o último se passar de 15
+        updateGrid();
+    }
+
+    // WebSocket para resultados da Blaze
+    const ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
+
+    ws.onopen = () => {
+        console.log('[WS] Conectado');
+        ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
+        setInterval(() => ws.send('2'), 25000); // ping
+    };
+
+    ws.onmessage = (e) => {
+        const msg = e.data;
+        if (msg === '2') { ws.send('3'); return; }
+        if (!msg.startsWith('42')) return;
+
+        try {
+            const data = JSON.parse(msg.slice(2));
+            if (data[0] === 'data' && data[1].id === 'double.tick') {
+                const p = data[1].payload;
+                addResult(p.color, p.roll);
+            }
+        } catch (err) {
+            console.error('[WS] Erro ao processar mensagem:', err);
+        }
+    };
+
+    ws.onerror = err => console.error('[WS] Erro:', err);
+    ws.onclose = () => console.warn('[WS] Conexão encerrada');
 })();
