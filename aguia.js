@@ -43,14 +43,6 @@ class BlazeInterface {
     this.results = [];
     this.processedIds = new Set();
     this.notifiedIds = new Set();
-    this.correctPredictions = 0;
-    this.totalPredictions = 0;
-    this.transitionMatrix = {
-      '0': { '0': 0, '1': 0, '2': 0 },
-      '1': { '0': 0, '1': 0, '2': 0 },
-      '2': { '0': 0, '1': 0, '2': 0 }
-    };
-    this.patternHistory = [];
     this.initMonitorInterface();
   }
 
@@ -88,7 +80,6 @@ class BlazeInterface {
       .color-dot-0{background:#fff;border:1px solid #777}.color-dot-1{background:#f44336}.color-dot-2{background:#212121}  
       .prediction-accuracy{font-size:12px;margin-top:5px;opacity:.7}  
       .prediction-waiting{color:#00e676;text-shadow:0 0 5px rgba(0,230,118,.7)}  
-      .confidence-score{font-size:12px;margin-top:5px;color:#ffd700}
     `;
     const style = document.createElement('style');
     style.textContent = css;
@@ -135,69 +126,15 @@ class BlazeInterface {
     this.ws.doubleTick((d) => this.updateResults(d));
   }
 
-  updateTransitionMatrix(prevColor, currentColor) {
-    if (prevColor !== null && prevColor !== undefined) {
-      this.transitionMatrix[prevColor][currentColor]++;
-      const total = Object.values(this.transitionMatrix[prevColor]).reduce((sum, val) => sum + val, 0);
-      for (let key in this.transitionMatrix[prevColor]) {
-        this.transitionMatrix[prevColor][key] = this.transitionMatrix[prevColor][key] / total;
-      }
-    }
-  }
-
-  detectPatterns(history) {
-    const lastColors = history.slice(0, 5).map(r => r.color);
-    const streak = lastColors.every((c, i, arr) => i === 0 || c === arr[0]) ? lastColors[0] : null;
-    const alternation = lastColors.every((c, i) => i % 2 === 0 ? c === lastColors[0] : c !== lastColors[0]);
-    
-    return {
-      streak: streak ? { color: streak, length: lastColors.length } : null,
-      alternation: alternation,
-      frequency: {
-        branco: lastColors.filter(c => c === 0).length / lastColors.length,
-        vermelho: lastColors.filter(c => c === 1).length / lastColors.length,
-        preto: lastColors.filter(c => c === 2).length / lastColors.length
-      }
-    };
-  }
-
   predictNextColor() {
     if (!this.results.length) return null;
-    const history = this.results.filter(r => r.status === 'complete');
-    if (history.length < 3) return null;
-
     const waiting = this.results.find(r => r.status === 'waiting');
-    const last = history[0];
-    
-    const patterns = this.detectPatterns(history);
-    const frequencies = patterns.frequency;
-    const lastColor = last.color;
-    
-    const probs = this.transitionMatrix[lastColor] || { '0': 0.33, '1': 0.33, '2': 0.33 };
-    
-    if (patterns.streak && patterns.streak.length >= 3) {
-      probs[patterns.streak.color] *= 1.2;
-    }
-    if (patterns.alternation) {
-      const nextInAlternation = lastColor === 0 ? 1 : 0;
-      probs[nextInAlternation] *= 1.1;
-    }
-    
-    probs['0'] *= (1 + frequencies.branco);
-    probs['1'] *= (1 + frequencies.vermelho);
-    probs['2'] *= (1 + frequencies.preto);
-    
-    const total = Object.values(probs).reduce((sum, val) => sum + val, 0);
-    Object.keys(probs).forEach(key => probs[key] /= total);
-    
-    const predictedColor = Object.keys(probs).reduce((a, b) => probs[a] > probs[b] ? a : b);
-    const confidence = Math.round(probs[predictedColor] * 100);
-    
+    const last = this.results.find(r => r.status === 'complete');
+    if (!last) return null;
     return {
-      color: parseInt(predictedColor),
-      colorName: predictedColor === '0' ? 'Branco' : predictedColor === '1' ? 'Vermelho' : 'Preto',
-      isWaiting: Boolean(waiting),
-      confidence: confidence
+      color: last.color,
+      colorName: last.color === 0 ? 'Branco' : (last.color === 1 ? 'Vermelho' : 'Preto'),
+      isWaiting: Boolean(waiting)
     };
   }
 
@@ -207,8 +144,6 @@ class BlazeInterface {
     if (!prev) return;
     this.totalPredictions++;
     if (prev.color === cur.color) this.correctPredictions++;
-    
-    this.updateTransitionMatrix(prev.color, cur.color);
   }
 
   updateResults(d) {
@@ -216,7 +151,7 @@ class BlazeInterface {
     const i = this.results.findIndex(r => (r.id || r.tmp) === id);
     if (i >= 0) this.results[i] = { ...this.results[i], ...d };
     else {
-      if (this.results.length > 50) this.results.pop();
+      if (this.results.length > 5) this.results.pop();
       this.results.unshift({ ...d, tmp: id });
       if (d.status === 'complete') this.updatePredictionStats(d);
     }
@@ -248,7 +183,6 @@ class BlazeInterface {
           <span class="color-dot color-dot-${pred.color}"></span>${pred.colorName}
         </div>
         <div class="prediction-accuracy">Taxa de acerto: ${acc}% (${this.correctPredictions}/${this.totalPredictions})</div>
-        <div class="confidence-score">Confiança da previsão: ${pred.confidence}%</div>
       `;
       this.nextPredColor = pred.color;
     }
@@ -260,6 +194,7 @@ class BlazeInterface {
       this.showNotification(d, win);
     }
 
+    // NOVA ANÁLISE (totalmente separada)
     this.analyzePatterns();
   }
 
@@ -273,22 +208,18 @@ class BlazeInterface {
     setTimeout(() => { n.classList.remove('show'); setTimeout(() => n.remove(), 300); }, 3000);
   }
 
+  // NOVA FUNÇÃO DE PADRÕES
   analyzePatterns() {
     const history = this.results.filter(r => r.status === 'complete');
     if (history.length < 10) return;
 
     const lastColors = history.slice(0, 10).map(r => r.color);
-    const patterns = this.detectPatterns(history);
-    
-    console.log('[Análise Avançada] Últimos 10 resultados:', lastColors);
-    console.log('[Análise Avançada] Frequências:', patterns.frequency);
-    console.log('[Análise Avançada] Transições:', this.transitionMatrix);
-    if (patterns.streak) {
-      console.log(`[Análise Avançada] Sequência detectada: ${patterns.streak.color} (${patterns.streak.length} vezes)`);
-    }
-    if (patterns.alternation) {
-      console.log('[Análise Avançada] Alternância detectada');
-    }
+    const brancoFreq = lastColors.filter(c => c === 0).length;
+    const vermelhoFreq = lastColors.filter(c => c === 1).length;
+    const pretoFreq = lastColors.filter(c => c === 2).length;
+
+    console.log('[Análise] Últimos 10 resultados:', lastColors);
+    console.log(`[Análise] Frequência - Branco: ${brancoFreq}, Vermelho: ${vermelhoFreq}, Preto: ${pretoFreq}`);
   }
 }
 
