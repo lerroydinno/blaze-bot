@@ -1,17 +1,6 @@
-// ==UserScript==
-// @name         Blaze Double Grade Visual
-// @namespace    http://tampermonkey.net/
-// @version      1.2
-// @description  Exibe resultados da Blaze em grade 3x5, preenchendo uma célula por resultado, da esquerda para a direita
-// @author       Você
-// @match        https://blaze.com/*
-// @grant        none
-// ==/UserScript==
-
 (function () {
     'use strict';
 
-    // Criação do estilo CSS
     const style = document.createElement('style');
     style.textContent = `
         .blaze-menu {
@@ -76,18 +65,18 @@
     // Atualiza a grade visual com os resultados
     function updateGrid() {
         grid.innerHTML = '';
-        for (let i = 0; i < maxCells; i++) {
+        results.forEach(res => {
             const div = document.createElement('div');
-            div.className = `blaze-cell ${results[i] ? `color-${results[i].color}` : 'color-0'}`;
-            div.textContent = results[i] ? results[i].roll : '';
+            div.className = `blaze-cell color-${res.color}`;
+            div.textContent = res.roll;
             grid.appendChild(div);
-        }
+        });
     }
 
     // Adiciona novo resultado e atualiza a grade
     function addResult(color, roll) {
-        results.unshift({ color, roll }); // Adiciona novo resultado no início
-        if (results.length > maxCells) results.pop(); // Remove o último se passar de 15
+        results.unshift({ color, roll }); // adiciona ao início
+        if (results.length > maxCells) results.pop(); // remove o último se passar de 15
         updateGrid();
     }
 
