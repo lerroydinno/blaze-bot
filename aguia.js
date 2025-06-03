@@ -1,130 +1,128 @@
-// ==UserScript== // @name         Blaze Column Menu Bot // @namespace    http://tampermonkey.net/ // @version      1.0 // @description  Menu flutuante com 3 colunas verticais e 5 linhas horizontais para exibir resultados da Blaze em tempo real // @author       GPT // @match        ://blaze.com/ // @grant        none // ==/UserScript==
+// ==UserScript==
+// @name         Blaze Double Monitor
+// @namespace    http://tampermonkey.net/
+// @version      1.0
+// @description  Monitor de resultados da Blaze em tempo real
+// @author       Seu Nome
+// @match        https://blaze.com/*
+// @grant        none
+// ==/UserScript==
 
-(function() { 'use strict';
+(function() {
+    'use strict';
 
-// Estilo do painel
-const style = document.createElement('style');
-style.innerHTML = `
-    #blaze-panel {
-        position: fixed;
-        top: 80px;
-        right: 20px;
-        width: 260px;
-        background-color: #111;
-        color: white;
-        border: 2px solid #333;
-        border-radius: 10px;
-        padding: 10px;
-        z-index: 9999;
-        font-family: Arial, sans-serif;
-    }
-    .column {
-        float: left;
-        width: 33%;
-        text-align: center;
-    }
-    .cell {
-        width: 100%;
-        height: 30px;
-        line-height: 30px;
-        margin: 2px 0;
-        border-radius: 5px;
-        color: white;
-    }
-    .red { background-color: #c0392b; }
-    .black { background-color: #000000; }
-    .white { background-color: #ecf0f1; color: #000; }
-    .header {
-        font-size: 14px;
-        font-weight: bold;
-        margin-bottom: 5px;
-    }
-    .clearfix::after {
-        content: "";
-        clear: both;
-        display: table;
-    }
-`;
-document.head.appendChild(style);
-
-const panel = document.createElement('div');
-panel.id = 'blaze-panel';
-panel.innerHTML = `
-    <div class="clearfix">
-        <div class="column"><div class="header" id="head1">-</div><div id="col1"></div></div>
-        <div class="column"><div class="header" id="head2">-</div><div id="col2"></div></div>
-        <div class="column"><div class="header" id="head3">-</div><div id="col3"></div></div>
-    </div>
-`;
-document.body.appendChild(panel);
-
-const history = [];
-
-function updateColumns() {
-    const cols = [[], [], []];
-    for (let i = 0; i < history.length; i++) {
-        cols[i % 3].unshift(history[i]);
-    }
-
-    for (let i = 0; i < 3; i++) {
-        const col = document.getElementById(`col${i+1}`);
-        col.innerHTML = '';
-        for (let j = 0; j < 5; j++) {
-            const color = cols[i][j];
-            const div = document.createElement('div');
-            div.className = `cell ${color || ''}`;
-            div.textContent = color ? color.toUpperCase() : '';
-            col.appendChild(div);
+    // Injetar estilos CSS para o menu flutuante
+    const style = document.createElement('style');
+    style.textContent = `
+        .blaze-menu {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 300px;
+            background: rgba(34,34,34,0.92);
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            color: #fff;
+            z-index: 10000;
+            font-family: Arial, sans-serif;
         }
-        const freq = cols[i].reduce((acc, c) => { acc[c] = (acc[c] || 0) + 1; return acc; }, {});
-        const total = cols[i].length;
-        let maxColor = '-';
-        let maxCount = 0;
-        for (const c in freq) {
-            if (freq[c] > maxCount) {
-                maxCount = freq[c];
-                maxColor = `${c.toUpperCase()} ${(freq[c]/total*100).toFixed(0)}%`;
+        .blaze-menu h3 {
+            margin-top: 0;
+            text-align: center;
+        }
+        .blaze-columns {
+            display: flex;
+            justify-content: space-between;
+        }
+        .blaze-column {
+            width: 30%;
+        }
+        .blaze-column h4 {
+            text-align: center;
+            border-bottom: 1px solid #fff;
+            padding-bottom: 5px;
+        }
+        .blaze-item {
+            text-align: center;
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 5px;
+        }
+        .color-0 {
+            background-color: #fff;
+            color: #000;
+        }
+        .color-1 {
+            background-color: #f44336;
+            color: #fff;
+        }
+        .color-2 {
+            background-color: #212121;
+            color: #fff;
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Criar o menu flutuante
+    const menu = document.createElement('div');
+    menu.className = 'blaze-menu';
+    menu.innerHTML = `
+        <h3>Resultados da Blaze</h3>
+        <div class="blaze-columns">
+            <div class="blaze-column" id="col-0">
+                <h4>Branco</h4>
+            </div>
+            <div class="blaze-column" id="col-1">
+                <h4>Vermelho</h4>
+            </div>
+            <div class="blaze-column" id="col-2">
+                <h4>Preto</h4>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(menu);
+
+    // Função para adicionar resultado à coluna correspondente
+    function addResult(color, roll) {
+        const col = document.getElementById(`col-${color}`);
+        if (col) {
+            const item = document.createElement('div');
+            item.className = `blaze-item color-${color}`;
+            item.textContent = roll;
+            col.insertBefore(item, col.children[1]); // Inserir abaixo do título
+            // Limitar a 5 itens por coluna
+            if (col.children.length > 6) {
+                col.removeChild(col.lastChild);
             }
         }
-        document.getElementById(`head${i+1}`).textContent = maxColor;
     }
-}
 
-function parseColor(number) {
-    if (number === 0) return 'white';
-    if (number >= 1 && number <= 7) return 'red';
-    return 'black';
-}
-
-function connectWebSocket() {
+    // Conectar ao WebSocket da Blaze
     const ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
-    let connected = false;
 
     ws.onopen = () => {
-        console.log('[Blaze Bot] Conectado ao WebSocket');
+        console.log('Conectado ao servidor WebSocket');
+        ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
+        setInterval(() => ws.send('2'), 25000); // Enviar ping a cada 25 segundos
     };
 
-    ws.onmessage = (msg) => {
-        const data = msg.data;
-        if (data.includes("round")) {
-            const match = data.match(/\{"color":(\d+),"roll":(\d+)/);
-            if (match) {
-                const color = parseColor(parseInt(match[1]));
-                history.unshift(color);
-                if (history.length > 15) history.pop();
-                updateColumns();
+    ws.onmessage = (e) => {
+        try {
+            const m = e.data;
+            if (m === '2') { ws.send('3'); return; }
+            if (m.startsWith('42')) {
+                const j = JSON.parse(m.slice(2));
+                if (j[0] === 'data' && j[1].id === 'double.tick') {
+                    const p = j[1].payload;
+                    addResult(p.color, p.roll);
+                }
             }
+        } catch (err) {
+            console.error('Erro ao processar mensagem:', err);
         }
     };
 
-    ws.onerror = () => console.warn('[Blaze Bot] Erro na conexão WebSocket');
-    ws.onclose = () => {
-        console.warn('[Blaze Bot] WebSocket desconectado. Reconectando...');
-        setTimeout(connectWebSocket, 3000);
-    };
-}
-
-connectWebSocket();
-
+    ws.onerror = (e) => console.error('WebSocket error:', e);
+    ws.onclose = () => console.log('WebSocket fechado');
 })();
-
