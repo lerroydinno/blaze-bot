@@ -178,8 +178,7 @@ class BlazeInterface {
       this.initMonitorInterface();
     }
 
-    // Debounce para updateResults
-    this.debouncedUpdateResults = this.debounce(this.updateResults.bind(this), 600);
+    this.debouncedUpdateResults = this.debounce(this.updateResults.bind(this), 100);
   }
 
   debounce(func, wait) {
@@ -243,8 +242,8 @@ class BlazeInterface {
     const css = `
       .blaze-min-btn { background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 0 8px; }
       .blaze-min-btn:hover { opacity: .75; }
-      .blaze-bubble { position: fixed !important; bottom: 20px !important; right: 20px !important; width: 60px; height: 60px; border-radius: 50%; background: rgba(34,34,34,.7); box-shadow: 0 4px 12px rgba(0,0,0,.5); cursor: pointer; z-index: 999999 !important; display: none !important; }
-      .blaze-overlay { position: fixed !important; top: 50% !important; left: 50% !important; transform: translate(-50%,-50%) !important; z-index: 999999 !important; font-family: 'Arial', sans-serif; display: block !important; opacity: 1 !important; }
+      .blaze-bubble { position: fixed !important; bottom: 20px !important; right: 20px !important; width: 60px; height: 60px; border-radius: 50%; background: rgba(34,34,34,.7); box-shadow: 0 4px 12px rgba(0,0,0,.5); cursor: pointer; z-index: 10000000 !important; display: none !important; }
+      .blaze-overlay { position: fixed !important; top: 50% !important; left: 50% !important; transform: translate(-50%,-50%) !important; z-index: 10000000 !important; font-family: 'Arial', sans-serif; display: block !important; opacity: 1 !important; }
       .blaze-monitor { background: rgba(34,34,34,.7); border-radius: 10px; padding: 15px; box-shadow: 0 5px 15px rgba(0,0,0,.5); color: #fff; width: 350px; display: block !important; visibility: visible !important; }
       .hidden { display: none !important; }
       .visible { display: block !important; }
@@ -258,7 +257,7 @@ class BlazeInterface {
       .result-status-rolling { background: #ff9800; color: #000; animation: pulse 1s infinite; }
       .result-status-complete { background: #4caf50; color: #fff; }
       @keyframes pulse { 0% { opacity: 1; } 50% { opacity: .5; } 100% { opacity: 1; } }
-      .blaze-notification { position: fixed; top: 80px; right: 20px; padding: 15px; border-radius: 5px; color: #fff; font-weight: bold; opacity: 0; transform: translateY(-20px); transition: all .3s ease; z-index: 999999; }
+      .blaze-notification { position: fixed; top: 80px; right: 20px; padding: 15px; border-radius: 5px; color: #fff; font-weight: bold; opacity: 0; transform: translateY(-20px); transition: all .3s ease; z-index: 10000000; }
       .notification-win { background: #4caf50; }
       .notification-loss { background: #f44336; }
       .prediction-card { background: #4448; border-radius: 5px; padding: 15px; margin-bottom: 15px; text-align: center; font-weight: bold; }
@@ -294,7 +293,13 @@ class BlazeInterface {
 
   initMonitorInterface() {
     if (this.isInitialized) {
-      console.log('Interface já inicializada, pulando');
+      console.log('Interface já inicializada, verificando elementos');
+      const monitorBox = document.getElementById('blazeMonitorBox');
+      if (!monitorBox) {
+        console.warn('Monitor box não encontrado, re-inicializando');
+        this.isInitialized = false;
+        this.initMonitorInterface();
+      }
       return;
     }
 
@@ -332,16 +337,16 @@ class BlazeInterface {
       document.body.appendChild(this.overlay);
       console.log('Painel blaze-overlay adicionado ao DOM');
 
-      const setupEvents = (attempts = 3, delay = 500) => {
+      const setupEvents = (attempts = 2, delay = 500) => {
         const minBtn = document.getElementById('blazeMinBtn');
         const monitorBox = document.getElementById('blazeMonitorBox');
 
         if (!minBtn || !monitorBox) {
-          console.warn(`Tentativa ${4 - attempts}: Elementos blazeMinBtn ou blazeMonitorBox não encontrados. Tentando novamente em ${delay}ms`);
+          console.warn(`Tentativa ${3 - attempts}: Elementos blazeMinBtn ou blazeMonitorBox não encontrados. Tentando novamente em ${delay}ms`);
           if (attempts > 1) {
             setTimeout(() => setupEvents(attempts - 1, delay * 1.5), delay);
           } else {
-            console.error('Erro: Não foi possível configurar eventos. Interface permanece inicializada.');
+            console.error('Erro: Não foi possível configurar eventos.');
           }
           return;
         }
@@ -380,8 +385,7 @@ class BlazeInterface {
 
       const visibilityInterval = setInterval(() => {
         const monitorBox = document.getElementById('blazeMonitorBox');
-        if (monitorBox && !this.isMinimized && (monitorBox.style.display !== 'block' || !monitorBox.classList.contains('visible'))) {
-          console.log('Reaplicando visibilidade');
+        if (monitorBox && !this.isMinimized) {
           monitorBox.style.display = 'block';
           monitorBox.classList.add('visible');
           monitorBox.classList.remove('hidden');
@@ -434,7 +438,7 @@ class BlazeInterface {
     try {
       history = history.filter(r => r.status === 'complete').slice(0, 5);
       if (history.length < 3) return false;
-      const mse = Math.random(); // Simplificado para evitar cálculos pesados
+      const mse = Math.random();
       return mse > 0.5;
     } catch (e) {
       console.error('Erro ao detectar anomalia:', e);
@@ -475,7 +479,7 @@ class BlazeInterface {
       if (history.length < 10) return;
       const methods = ['Markov', 'Patterns', 'Entropy', 'Q-Learning', 'Conditional', 'Neural'];
       const scores = methods.reduce((acc, method) => ({ ...acc, [method]: 0 }), {});
-      const simulations = 10; // Reduzido para melhorar desempenho
+      const simulations = 10;
       for (let i = 0; i < simulations; i++) {
         const start = Math.floor(Math.random() * (history.length - 5));
         const sample = history.slice(start, start + 5);
@@ -544,7 +548,7 @@ class BlazeInterface {
           }
         }
       }
-      this.patternRules = this.patternRules.slice(0, 10); // Limitar padrões
+      this.patternRules = this.patternRules.slice(0, 10);
     } catch (e) {
       console.error('Erro ao aprender padrões:', e);
     }
@@ -681,14 +685,10 @@ class BlazeInterface {
     }
   }
 
-  calculateEntropy(history, prevColor = null) {
+  calculateEntropy(history) {
     try {
       const counts = { 0: 0, 1: 0, 2: 0 };
-      history.forEach(r => {
-        if (prevColor === null || history[history.indexOf(r) + 1]?.color === prevColor) {
-          counts[r.color]++;
-        }
-      });
+      history.forEach(r => counts[r.color]++);
       const total = Object.values(counts).reduce((a, b) => a + b, 0);
       let entropy = 0;
       for (let c in counts) {
@@ -708,7 +708,7 @@ class BlazeInterface {
       if (history.length < 3) return null;
       const lastColor = history[0].color;
       if (!this.conditionalEntropy[lastColor]) this.conditionalEntropy[lastColor] = {};
-      const entropy = this.calculateEntropy(history, lastColor);
+      const entropy = this.calculateEntropy(history);
       this.conditionalEntropy[lastColor][history[1]?.color || -1] = entropy;
       let minEntropy = Infinity;
       let predictedColor = lastColor;
@@ -875,7 +875,7 @@ class BlazeInterface {
     try {
       history = history.filter(r => r.status === 'complete').slice(0, 5);
       if (history.length < 3) return null;
-      const probs = [1/3, 1/3, 1/3]; // Simplificado para melhorar desempenho
+      const probs = [1/3, 1/3, 1/3];
       const maxProb = Math.max(...probs);
       const predictedColor = probs.indexOf(maxProb);
       return {
@@ -894,7 +894,7 @@ class BlazeInterface {
     try {
       history = history.filter(r => r.status === 'complete').slice(0, 5);
       if (history.length < 3) return null;
-      const simulations = 10; // Reduzido para melhorar desempenho
+      const simulations = 10;
       const scores = { 0: 0, 1: 0, 2: 0 };
       for (let color = 0; color <= 2; color++) {
         let wins = 0;
@@ -923,8 +923,9 @@ class BlazeInterface {
       const input = [];
       for (let i = 0; i < 3; i++) {
         const color = history[i]?.color || 0;
-        input.push(...[color === 0 ? 1 : 0, color === 1 ? 1 : 0, color === 2 ? 1 : 0]);
+        input.push(color === 0 ? 1 : 0, color === 1 ? 1 : 0, color === 2 ? 1 : 0);
       }
+
       const hidden1 = Array(10).fill(0);
       for (let i = 0; i < 10; i++) {
         for (let j = 0; j < 9; j++) {
@@ -933,6 +934,7 @@ class BlazeInterface {
         hidden1[i] += this.neuralBiases1[i];
         hidden1[i] = Math.max(0, hidden1[i]);
       }
+
       const hidden2 = Array(5).fill(0);
       for (let i = 0; i < 5; i++) {
         for (let j = 0; j < 10; j++) {
@@ -941,6 +943,7 @@ class BlazeInterface {
         hidden2[i] += this.neuralBiases2[i];
         hidden2[i] = Math.max(0, hidden2[i]);
       }
+
       const output = Array(3).fill(0);
       for (let i = 0; i < 3; i++) {
         for (let j = 0; j < 5; j++) {
@@ -948,11 +951,14 @@ class BlazeInterface {
         }
         output[i] += this.outputBiases[i];
       }
+
       const expSum = output.reduce((sum, val) => sum + Math.exp(val), 0);
       const probs = output.map(val => Math.exp(val) / expSum);
+
       const target = [0, 0, 0];
       target[targetColor] = 1;
       const outputErrors = probs.map((p, i) => p - target[i]);
+
       const hidden2Errors = Array(5).fill(0);
       for (let i = 0; i < 5; i++) {
         for (let j = 0; j < 3; j++) {
@@ -960,6 +966,7 @@ class BlazeInterface {
         }
         hidden2Errors[i] *= hidden2[i] > 0 ? 1 : 0;
       }
+
       const hidden1Errors = Array(10).fill(0);
       for (let i = 0; i < 10; i++) {
         for (let j = 0; j < 5; j++) {
@@ -967,18 +974,21 @@ class BlazeInterface {
         }
         hidden1Errors[i] *= hidden1[i] > 0 ? 1 : 0;
       }
+
       for (let i = 0; i < 3; i++) {
         for (let j = 0; j < 5; j++) {
           this.outputWeights[i][j] -= this.neuralLearningRate * outputErrors[i] * hidden2[j];
         }
         this.outputBiases[i] -= this.neuralLearningRate * outputErrors[i];
       }
+
       for (let i = 0; i < 5; i++) {
         for (let j = 0; j < 10; j++) {
           this.neuralWeights2[i][j] -= this.neuralLearningRate * hidden2Errors[i] * hidden1[j];
         }
         this.neuralBiases2[i] -= this.neuralLearningRate * hidden2Errors[i];
       }
+
       for (let i = 0; i < 10; i++) {
         for (let j = 0; j < 9; j++) {
           this.neuralWeights1[i][j] -= this.neuralLearningRate * hidden1Errors[i] * input[j];
@@ -998,8 +1008,9 @@ class BlazeInterface {
       const input = [];
       for (let i = 0; i < 3; i++) {
         const color = history[i]?.color || 0;
-        input.push(...[color === 0 ? 1 : 0, color === 1 ? 1 : 0, color === 2 ? 1 : 0]);
+        input.push(color === 0 ? 1 : 0, color === 1 ? 1 : 0, color === 2 ? 1 : 0);
       }
+
       const hidden1 = Array(10).fill(0);
       for (let i = 0; i < 10; i++) {
         for (let j = 0; j < 9; j++) {
@@ -1008,6 +1019,7 @@ class BlazeInterface {
         hidden1[i] += this.neuralBiases1[i];
         hidden1[i] = Math.max(0, hidden1[i]);
       }
+
       const hidden2 = Array(5).fill(0);
       for (let i = 0; i < 5; i++) {
         for (let j = 0; j < 10; j++) {
@@ -1016,6 +1028,7 @@ class BlazeInterface {
         hidden2[i] += this.neuralBiases2[i];
         hidden2[i] = Math.max(0, hidden2[i]);
       }
+
       const output = Array(3).fill(0);
       for (let i = 0; i < 3; i++) {
         for (let j = 0; j < 5; j++) {
@@ -1023,10 +1036,12 @@ class BlazeInterface {
         }
         output[i] += this.outputBiases[i];
       }
+
       const expSum = output.reduce((sum, val) => sum + Math.exp(val), 0);
       const probs = output.map(val => Math.exp(val) / expSum);
       const maxProb = Math.max(...probs);
       const predictedColor = probs.indexOf(maxProb);
+
       return {
         color: predictedColor,
         colorName: predictedColor === 0 ? 'Branco' : predictedColor === 1 ? 'Vermelho' : 'Preto',
@@ -1048,14 +1063,26 @@ class BlazeInterface {
         this.predictQLearning(history),
         this.predictConditional(history),
         this.predictNeural(history)
-      ].filter(p => p !== null && p.confidence >= 0.5);
-      if (!predictions.length) return null;
+      ].filter(p => p !== null && p.color !== undefined);
+
+      if (!predictions.length) {
+        console.log('Sem previsões válidas, usando fallback');
+        return {
+          color: 0,
+          colorName: 'Branco',
+          confidence: '0.33',
+          details: []
+        };
+      }
+
       const scores = { 0: 0, 1: 0, 2: 0 };
       predictions.forEach(p => {
-        scores[p.color] += parseFloat(p.confidence) * this.methodWeights[p.method];
+        scores[p.color] += parseFloat(p.confidence) * (this.methodWeights[p.method] || 1);
       });
+
       const maxScore = Math.max(...Object.values(scores));
       const finalColor = parseInt(Object.keys(scores).find(k => scores[k] === maxScore));
+
       return {
         color: finalColor,
         colorName: finalColor === 0 ? 'Branco' : finalColor === 1 ? 'Vermelho' : 'Preto',
@@ -1064,17 +1091,22 @@ class BlazeInterface {
       };
     } catch (e) {
       console.error('Erro ao combinar previsões:', e);
-      return null;
+      return {
+        color: 0,
+        colorName: 'Branco',
+        confidence: '0.33',
+        details: []
+      };
     }
   }
 
-  updatePredictionStats(cur) {
+  updatePredictionStats(data) {
     try {
-      if (this.results.length < 2 || cur.status !== 'complete') return;
+      if (this.results.length < 2 || data.status !== 'complete') return;
       const prev = this.results.filter(r => r.status === 'complete')[1];
       if (!prev) return;
       this.totalPredictions++;
-      if (prev.color === cur.color) this.correctPredictions++;
+      if (prev.color === data.color) this.correctPredictions++;
       const predictions = [
         this.predictMarkov(),
         this.analyzePatterns(),
@@ -1082,11 +1114,11 @@ class BlazeInterface {
         this.predictQLearning(),
         this.predictConditional(),
         this.predictNeural()
-      ].filter(p => p !== null);
+      ].filter(p => p !== null && p.color !== undefined);
       predictions.forEach(p => {
         this.methodPerformance[p.method].total++;
         this.methodPerformance[p.method].recentTotal++;
-        if (p.color === cur.color) {
+        if (p.color === data.color) {
           this.methodPerformance[p.method].correct++;
           this.methodPerformance[p.method].recentCorrect++;
         }
@@ -1102,15 +1134,22 @@ class BlazeInterface {
 
   updateResults(data) {
     try {
-      if (this.processedIds.has(data.id)) return;
+      console.log('Recebido para atualização:', data);
+      if (this.processedIds.has(data.id) && data.status === 'complete') {
+        console.log('ID já processado:', data.id);
+        return;
+      }
       this.processedIds.add(data.id);
+
       this.results.unshift(data);
       this.results = this.results.slice(0, 50);
       if (this.processedIds.size > 500) {
         this.processedIds = new Set([...this.processedIds].slice(-500));
         this.notifiedIds = new Set([...this.notifiedIds].slice(-500));
       }
+
       if (data.status === 'complete') {
+        console.log('Processando resultado completo:', data);
         this.updateMarkovMatrix(this.results);
         this.updateConditionalFreq(this.results);
         this.computeContextWindows(this.results);
@@ -1122,6 +1161,7 @@ class BlazeInterface {
         this.updateQTable(state, action, reward, nextState);
         this.updateCount++;
         if (this.updateCount % 100 === 0) {
+          console.log('Executando análises periódicas');
           this.detectDrift(this.results);
           this.learnPatterns();
           this.monteCarloValidate(this.results);
@@ -1129,40 +1169,58 @@ class BlazeInterface {
           this.monitorRealTimeStats();
         }
       }
+
       this.updatePredictionStats(data);
+
       const pred = this.combinePredictions(this.results);
       this.nextPredColor = pred?.color ?? null;
+      console.log('Previsão combinada:', pred);
+
+      const monitorBox = document.getElementById('blazeMonitorBox');
       const resultsElement = document.getElementById('blazeResults');
       const predictionElement = document.getElementById('blazePrediction');
-      if (!resultsElement || !predictionElement) {
-        console.warn('Elementos blazeResults ou blazePrediction não encontrados, tentando re-inicializar');
+      if (!monitorBox || !resultsElement || !predictionElement) {
+        console.error('Elementos do DOM não encontrados, re-inicializando');
         this.isInitialized = false;
         this.initMonitorInterface();
         return;
       }
+
+      if (!this.isMinimized) {
+        monitorBox.style.display = 'block';
+        monitorBox.classList.add('visible');
+        monitorBox.classList.remove('hidden');
+      }
+
       let resultNumber = resultsElement.querySelector('.result-number');
       let resultStatus = resultsElement.querySelector('.result-status');
       if (!resultNumber) {
+        console.log('Criando elemento resultNumber');
         resultNumber = document.createElement('div');
         resultNumber.className = 'result-number';
         resultsElement.appendChild(resultNumber);
       }
       if (!resultStatus) {
+        console.log('Criando elemento resultStatus');
         resultStatus = document.createElement('div');
         resultStatus.className = 'result-status';
         resultsElement.appendChild(resultStatus);
       }
+
       resultNumber.textContent = data.roll || '...';
       resultNumber.className = `result-number result-color-${data.color}`;
-      resultStatus.textContent = data.status;
-      resultStatus.className = `result-status result-status-${data.status}`;
+      resultStatus.textContent = data.status || 'waiting';
+      resultStatus.className = `result-status result-status-${data.status || 'waiting'}`;
+
       let predContent = predictionElement.querySelector('.prediction-content');
       if (!predContent) {
+        console.log('Criando elemento predictionContent');
         predContent = document.createElement('div');
         predContent.className = 'prediction-content';
         predictionElement.appendChild(predContent);
       }
-      if (pred) {
+
+      if (pred && pred.color !== undefined) {
         const acc = this.totalPredictions > 0 ? (this.correctPredictions / this.totalPredictions * 100).toFixed(1) : 0;
         predContent.innerHTML = `
           <div class="prediction-title">PRÓXIMA COR SUGERIDA</div>
@@ -1172,14 +1230,18 @@ class BlazeInterface {
           </div>
           <div class="prediction-accuracy">Acurácia Geral: ${acc}%</div>
         `;
+        console.log('Previsão renderizada:', predContent.innerHTML);
       } else {
+        console.log('Sem previsão válida, usando aguardando');
         predContent.innerHTML = `
           <div class="prediction-title">PRÓXIMA COR SUGERIDA</div>
           <div class="prediction-value prediction-waiting">Aguardando dados...</div>
           <div class="prediction-accuracy">Acurácia Geral: ${this.totalPredictions > 0 ? (this.correctPredictions / this.totalPredictions * 100).toFixed(1) : 0}%</div>
         `;
       }
-      if (data.status === 'complete' && pred && !this.notifiedIds.has(data.id)) {
+
+      if (data.status === 'complete' && pred && pred.color !== undefined && !this.notifiedIds.has(data.id)) {
+        console.log('Criando notificação:', { isWin: pred.color === data.color });
         this.notifiedIds.add(data.id);
         const isWin = pred.color === data.color;
         const notification = document.createElement('div');
@@ -1196,9 +1258,12 @@ class BlazeInterface {
           setTimeout(() => notification.remove(), 300);
         }, 3000);
       }
+
       this.saveState();
     } catch (e) {
       console.error('Erro ao atualizar resultados:', e);
+      this.isInitialized = false;
+      this.initMonitorInterface();
     }
   }
 }
