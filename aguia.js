@@ -140,8 +140,9 @@ class BlazeInterface {
       this.transitionMatrix[prevColor][currentColor]++;
       const total = Object.values(this.transitionMatrix[prevColor]).reduce((sum, val) => sum + val, 0);
       for (let key in this.transitionMatrix[prevColor]) {
-        this.transitionMatrix[prevColor][key] = this.transitionMatrix[prevColor][key] / total;
+        this.transitionMatrix[prevColor][key] = this.transitionMatrix[prevColor][key] / total || 0;
       }
+      console.log('[BlazeInterface] Matriz de transição atualizada:', this.transitionMatrix);
     }
   }
 
@@ -150,15 +151,14 @@ class BlazeInterface {
     const streak = lastColors.every((c, i, arr) => i === 0 || c === arr[0]) ? lastColors[0] : null;
     const alternation = lastColors.every((c, i) => i % 2 === 0 ? c === lastColors[0] : c !== lastColors[0]);
     
-    return {
-      streak: streak ? { color: streak, length: lastColors.length } : null,
-      alternation: alternation,
-      frequency: {
-        branco: lastColors.filter(c => c === 0).length / lastColors.length,
-        vermelho: lastColors.filter(c => c === 1).length / lastColors.length,
-        preto: lastColors.filter(c => c === 2).length / lastColors.length
-      }
+    const frequency = {
+      branco: lastColors.filter(c => c === 0).length / lastColors.length,
+      vermelho: lastColors.filter(c => c === 1).length / lastColors.length,
+      preto: lastColors.filter(c => c === 2).length / lastColors.length
     };
+    
+    console.log('[BlazeInterface] Padrões detectados:', { streak, alternation, frequency });
+    return { streak: streak ? { color: streak, length: lastColors.length } : null, alternation, frequency };
   }
 
   predictNextColor() {
@@ -173,25 +173,36 @@ class BlazeInterface {
     const frequencies = patterns.frequency;
     const lastColor = last.color;
     
-    const probs = this.transitionMatrix[lastColor] || { '0': 0.33, '1': 0.33, '2': 0.33 };
+    // Probabilidades base da cadeia de Markov
+    const probs = { ...this.transitionMatrix[lastColor] } || { '0': 0.33, '1': 0.33, '2': 0.33 };
     
+    // Ajustar probabilidades com base em padrões
     if (patterns.streak && patterns.streak.length >= 3) {
-      probs[patterns.streak.color] *= 1.2;
+      probs[patterns.streak.color] = (probs[patterns.streak.color] || 0) * 1.2;
+      console.log('[BlazeInterface] Ajuste por sequência:', patterns.streak);
     }
     if (patterns.alternation) {
       const nextInAlternation = lastColor === 0 ? 1 : 0;
-      probs[nextInAlternation] *= 1.1;
+      probs[nextInAlternation] = (probs[nextInAlternation] || 0) * 1.1;
+      console.log('[BlazeInterface] Ajuste por alternância:', nextInAlternation);
     }
     
-    probs['0'] *= (1 + frequencies.branco);
-    probs['1'] *= (1 + frequencies.vermelho);
-    probs['2'] *= (1 + frequencies.preto);
+    // Incorporar análise de frequência
+    probs['0'] = (probs['0'] || 0) * (1 + frequencies.branco);
+    probs['1'] = (probs['1'] || 0) * (1 + frequencies.vermelho);
+    probs['2'] = (probs['2'] || 0) * (1 + frequencies.preto);
+    console.log('[BlazeInterface] Probabilidades após ajustes:', probs);
     
-    const total = Object.values(probs).reduce((sum, val) => sum + val, 0);
-    Object.keys(probs).forEach(key => probs[key] /= total);
+    // Normalizar probabilidades
+    const total = Object.values(probs).reduce((sum, val) => sum + val, 0) || 1;
+    Object.keys(probs).forEach(key => probs[key] = probs[key] / total);
+    console.log('[BlazeInterface] Probabilidades normalizadas:', probs);
     
+    // Escolher a cor com maior probabilidade
     const predictedColor = Object.keys(probs).reduce((a, b) => probs[a] > probs[b] ? a : b);
     const confidence = Math.round(probs[predictedColor] * 100);
+    
+    console.log('[BlazeInterface] Cor prevista:', predictedColor, 'Confiança:', confidence);
     
     return {
       color: parseInt(predictedColor),
