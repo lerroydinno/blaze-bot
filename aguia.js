@@ -90,14 +90,15 @@
     // Função para adicionar um novo resultado
     function addResult(color, roll) {
         const column = columns[nextColumnIndex];
-        if (column.length > 0) {
-            for (let i = column.length; i > 0; i--) {
-                if (i < 5) column[i] = column[i - 1];
-            }
-            if (column.length >= 5) column.pop();
+        // Adiciona o novo resultado no topo da coluna
+        column.unshift({ color, roll });
+        // Limita a coluna a 5 resultados, removendo o mais antigo se necessário
+        if (column.length > 5) {
+            column.pop();
         }
-        column[0] = { color, roll };
+        // Atualiza a coluna na interface
         updateColumn(nextColumnIndex);
+        // Avança para a próxima coluna em ciclo
         nextColumnIndex = (nextColumnIndex + 1) % 3;
     }
 
