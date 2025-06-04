@@ -62,7 +62,6 @@
     const grid = document.getElementById('blaze-grid');
     const columns = [[], [], []]; // Três colunas, cada uma com até 5 resultados
     let nextColumnIndex = 0; // Índice da próxima coluna a receber um resultado
-    let resultCount = 0; // Contador para rastrear quantos resultados foram adicionados
     let lastResult = null; // Armazena o último resultado processado para evitar duplicatas
 
     // Inicializa a grade com 15 células vazias
@@ -91,19 +90,14 @@
     // Função para adicionar um novo resultado
     function addResult(color, roll) {
         const column = columns[nextColumnIndex];
-        resultCount++; // Incrementa o contador de resultados
-
-        // Só desloca os resultados se o ciclo voltar para a mesma coluna (a cada 3 resultados)
-        if (column.length > 0 && resultCount % 3 === 1) {
-            for (let i = 4; i > 0; i--) {
-                column[i] = column[i - 1];
+        if (column.length > 0) {
+            for (let i = column.length; i > 0; i--) {
+                if (i < 5) column[i] = column[i - 1];
             }
+            if (column.length >= 5) column.pop();
         }
-        // Adiciona o novo resultado na célula 1
         column[0] = { color, roll };
-        // Atualiza a coluna
         updateColumn(nextColumnIndex);
-        // Avança para a próxima coluna em ciclo
         nextColumnIndex = (nextColumnIndex + 1) % 3;
     }
 
