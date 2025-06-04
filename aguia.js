@@ -62,7 +62,6 @@
     const grid = document.getElementById('blaze-grid');
     const columns = [[], [], []]; // Três colunas, cada uma com até 5 resultados
     let nextColumnIndex = 0; // Índice da próxima coluna a receber um resultado
-    let resultCount = 0; // Contador para rastrear quantos resultados foram adicionados
     let lastResult = null; // Armazena o último resultado processado para evitar duplicatas
 
     // Inicializa a grade com 15 células vazias
@@ -75,14 +74,10 @@
     // Função para atualizar uma coluna específica
     function updateColumn(columnIndex) {
         const column = columns[columnIndex];
-        // Garante que a coluna tenha exatamente 5 posições
-        while (column.length < 5) {
-            column.push(null); // Preenche com null se necessário
-        }
         for (let row = 0; row < 5; row++) {
             const cellIndex = row * 3 + columnIndex; // Calcula o índice da célula na grade
             const cell = grid.children[cellIndex];
-            const res = column[row];
+            const res = column[row] || null;
             cell.className = 'blaze-cell'; // Reseta a classe
             cell.textContent = ''; // Reseta o conteúdo
             if (res && res.color !== undefined && res.roll !== undefined) {
@@ -95,10 +90,8 @@
     // Função para adicionar um novo resultado
     function addResult(color, roll) {
         const column = columns[nextColumnIndex];
-        // Incrementa o contador de resultados
-        resultCount++;
-        // Se o ciclo voltar para a mesma coluna (a cada 3 resultados), desloca os resultados
-        if (resultCount > 3 && (resultCount - 1) % 3 === 0) {
+        // Se a coluna já tem um resultado na posição 0, desloca os resultados para baixo
+        if (column[0]) {
             for (let i = 4; i > 0; i--) {
                 column[i] = column[i - 1];
             }
