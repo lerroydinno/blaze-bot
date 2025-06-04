@@ -74,7 +74,7 @@
     // Função para atualizar uma coluna específica
     function updateColumn(columnIndex) {
         const column = columns[columnIndex];
-        // Garante que a coluna tenha exatamente 5 resultados
+        // Garante que a coluna tenha exatamente 5 posições
         while (column.length < 5) {
             column.push(null); // Preenche com null se necessário
         }
@@ -94,13 +94,13 @@
     // Função para adicionar um novo resultado
     function addResult(color, roll) {
         const column = columns[nextColumnIndex];
-        // Adiciona o novo resultado no topo da coluna
-        column.unshift({ color, roll });
-        // Limita a 5 resultados por coluna, removendo o último se necessário
-        if (column.length > 5) {
-            column.pop();
+        // Move todos os resultados existentes para baixo
+        for (let i = 4; i > 0; i--) {
+            column[i] = column[i - 1];
         }
-        // Atualiza apenas a coluna afetada
+        // Adiciona o novo resultado na célula 1
+        column[0] = { color, roll };
+        // Atualiza a coluna
         updateColumn(nextColumnIndex);
         // Avança para a próxima coluna em ciclo
         nextColumnIndex = (nextColumnIndex + 1) % 3;
