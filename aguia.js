@@ -94,12 +94,17 @@
     // Função para adicionar um novo resultado
     function addResult(color, roll) {
         const column = columns[nextColumnIndex];
-        // Move todos os resultados existentes para baixo
-        for (let i = 4; i > 0; i--) {
-            column[i] = column[i - 1];
+        // Se a coluna já tem um resultado na posição 0 e estamos voltando à mesma coluna (ciclo 3 → 1, 6 → 1, etc.),
+        // desloca os resultados para baixo
+        if (column[0] && (nextColumnIndex === 0) && ((columns[0].length + columns[1].length + columns[2].length) % 3 === 0)) {
+            for (let i = 4; i > 0; i--) {
+                column[i] = column[i - 1];
+            }
+            column[0] = { color, roll };
+        } else {
+            // Caso contrário, apenas adiciona na posição 0
+            column[0] = { color, roll };
         }
-        // Adiciona o novo resultado na célula 1
-        column[0] = { color, roll };
         // Atualiza a coluna
         updateColumn(nextColumnIndex);
         // Avança para a próxima coluna em ciclo
