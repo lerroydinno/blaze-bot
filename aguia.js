@@ -1,3 +1,5 @@
+
+window.onload = function () {
 (function () {
     'use strict';
 
@@ -133,3 +135,4 @@
     ws.onerror = err => console.error('[WS] Erro:', err);
     ws.onclose = () => console.warn('[WS] ConexÃ£o encerrada');
 })();
+};
