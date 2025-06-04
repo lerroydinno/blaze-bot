@@ -61,8 +61,8 @@
 
     const grid = document.getElementById('blaze-grid');
     const columns = [[], [], []]; // Três colunas, cada uma com até 5 resultados
-    let nextColumnIndex = 0; // Índice da próxima coluna a receber um resultado
-    let lastResult = null; // Armazena o último resultado processado para evitar duplicatas
+    let nextColumnIndex = 0; // Começa na coluna 0 (coluna 1 visualmente)
+    let lastResult = null; // Armazena o último resultado processado
 
     // Inicializa a grade com 15 células vazias
     for (let i = 0; i < 15; i++) {
@@ -75,11 +75,11 @@
     function updateColumn(columnIndex) {
         const column = columns[columnIndex];
         for (let row = 0; row < 5; row++) {
-            const cellIndex = row * 3 + columnIndex; // Calcula o índice da célula na grade
+            const cellIndex = row * 3 + columnIndex; // Índice correto da célula
             const cell = grid.children[cellIndex];
             const res = column[row] || null;
-            cell.className = 'blaze-cell'; // Reseta a classe
-            cell.textContent = ''; // Reseta o conteúdo
+            cell.className = 'blaze-cell';
+            cell.textContent = '';
             if (res && res.color !== undefined && res.roll !== undefined) {
                 cell.className += ` color-${res.color}`;
                 cell.textContent = res.roll;
@@ -89,17 +89,19 @@
 
     // Função para adicionar um novo resultado
     function addResult(color, roll) {
+        console.log(`Adicionando resultado à coluna ${nextColumnIndex + 1}`); // Log para depuração
         const column = columns[nextColumnIndex];
-        // Adiciona o novo resultado no topo da coluna
+        // Adiciona o novo resultado no topo
         column.unshift({ color, roll });
-        // Limita a coluna a 5 resultados, removendo o mais antigo se necessário
+        // Limita a 5 resultados, removendo o mais antigo
         if (column.length > 5) {
             column.pop();
         }
-        // Atualiza apenas a coluna que recebeu o novo resultado
+        // Atualiza a coluna
         updateColumn(nextColumnIndex);
-        // Avança para a próxima coluna em ciclo
+        // Avança para a próxima coluna
         nextColumnIndex = (nextColumnIndex + 1) % 3;
+        console.log(`Próxima coluna: ${nextColumnIndex + 1}`); // Log para depuração
     }
 
     // Conexão WebSocket com a Blaze
@@ -108,19 +110,19 @@
     ws.onopen = () => {
         console.log('[WS] Conectado');
         ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
-        setInterval(() => ws.send('2'), 25000); // Ping para manter a conexão
+        setInterval(() => ws.send('2'), 25000); // Ping
     };
 
     ws.onmessage = (e) => {
         const msg = e.data;
-        if (msg === '2') { ws.send('3'); return; } // Responde ao ping
-        if (!msg.startsWith('42')) return; // Ignora mensagens irrelevantes
+        if (msg === '2') { ws.send('3'); return; }
+        if (!msg.startsWith('42')) return;
 
         try {
             const data = JSON.parse(msg.slice(2));
             if (data[0] === 'data' && data[1].id === 'double.tick') {
                 const p = data[1].payload;
-                // Verifica se o resultado é diferente do último processado
+                console.log(`Resultado recebido: roll=${p.roll}, color=${p.color}`); // Log
                 if (!lastResult || p.roll !== lastResult.roll || p.color !== lastResult.color) {
                     lastResult = { roll: p.roll, color: p.color };
                     addResult(p.color, p.roll);
