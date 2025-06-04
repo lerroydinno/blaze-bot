@@ -74,13 +74,17 @@
     // Função para atualizar uma coluna específica
     function updateColumn(columnIndex) {
         const column = columns[columnIndex];
+        // Garante que a coluna tenha exatamente 5 resultados
+        while (column.length < 5) {
+            column.push(null); // Preenche com null se necessário
+        }
         for (let row = 0; row < 5; row++) {
             const cellIndex = row * 3 + columnIndex; // Calcula o índice da célula na grade
             const cell = grid.children[cellIndex];
-            const res = column[row] || null;
+            const res = column[row];
             cell.className = 'blaze-cell'; // Reseta a classe
             cell.textContent = ''; // Reseta o conteúdo
-            if (res) {
+            if (res && res.color !== undefined && res.roll !== undefined) {
                 cell.className += ` color-${res.color}`;
                 cell.textContent = res.roll;
             }
