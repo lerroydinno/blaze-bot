@@ -96,7 +96,7 @@
         if (column.length > 5) {
             column.pop();
         }
-        // Atualiza a coluna na interface
+        // Atualiza apenas a coluna que recebeu o novo resultado
         updateColumn(nextColumnIndex);
         // Avança para a próxima coluna em ciclo
         nextColumnIndex = (nextColumnIndex + 1) % 3;
