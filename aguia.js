@@ -62,6 +62,7 @@
     const grid = document.getElementById('blaze-grid');
     const columns = [[], [], []]; // Três colunas, cada uma com até 5 resultados
     let nextColumnIndex = 0; // Índice da próxima coluna a receber um resultado
+    let lastResult = null; // Armazena o último resultado processado para evitar duplicatas
 
     // Inicializa a grade com 15 células vazias
     for (let i = 0; i < 15; i++) {
@@ -119,9 +120,9 @@
             const data = JSON.parse(msg.slice(2));
             if (data[0] === 'data' && data[1].id === 'double.tick') {
                 const p = data[1].payload;
-                // Adiciona o resultado apenas se for diferente do último da coluna
-                const lastInColumn = columns[nextColumnIndex][0];
-                if (!lastInColumn || (p.roll !== lastInColumn.roll || p.color !== lastInColumn.color)) {
+                // Verifica se o resultado é diferente do último processado
+                if (!lastResult || p.roll !== lastResult.roll || p.color !== lastResult.color) {
+                    lastResult = { roll: p.roll, color: p.color };
                     addResult(p.color, p.roll);
                 }
             }
