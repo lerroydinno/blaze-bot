@@ -60,7 +60,8 @@
     document.body.appendChild(menu);
 
     const grid = document.getElementById('blaze-grid');
-    const columns = [[], [], []]; // Três colunas, cada uma com até 5 resultados
+    const columns = [[], [], []]; // Três colunas
+    const maxRows = 5;
     let nextColumnIndex = 0; // Começa na coluna 0 (coluna 1 visualmente)
     let lastResult = null; // Armazena o último resultado processado
 
@@ -87,18 +88,20 @@
         }
     }
 
-    // Função para adicionar um novo resultado
+    // ✅ Correção da função addResult: ciclo correto 1-2-3-1...
     function addResult(color, roll) {
         console.log(`Adicionando resultado à coluna ${nextColumnIndex + 1}`); // Log para depuração
         const column = columns[nextColumnIndex];
-        // Adiciona o novo resultado no topo
-        column.unshift({ color, roll });
-        // Limita a 5 resultados, removendo o mais antigo
-        if (column.length > 5) {
-            column.pop();
+
+        if (column.length < maxRows) {
+            column.push({ color, roll }); // Adiciona no fim da coluna (base)
+        } else {
+            column.shift();              // Remove o mais antigo (do topo)
+            column.push({ color, roll }); // Adiciona na base
         }
-        // Atualiza a coluna
+
         updateColumn(nextColumnIndex);
+
         // Avança para a próxima coluna
         nextColumnIndex = (nextColumnIndex + 1) % 3;
         console.log(`Próxima coluna: ${nextColumnIndex + 1}`); // Log para depuração
