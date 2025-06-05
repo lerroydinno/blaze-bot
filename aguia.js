@@ -104,18 +104,26 @@
         resultCount++; // Incrementa o contador do ciclo
 
         // Calcula a linha com base no número de ciclos completos
+        const cyclePosition = (resultCount - 1) % 3;
         const rowIndex = Math.floor((resultCount - 1) / 3);
+
+        // Garante que o resultado vá para a coluna correta no ciclo
+        if (cyclePosition === 0 && nextColumnIndex !== 0) {
+            nextColumnIndex = 0; // Corrige para coluna 1 no início do ciclo
+        }
         rowCount = Math.max(rowCount, rowIndex); // Atualiza o número de linhas
 
         // Adiciona o resultado na posição correta
         if (!column[rowIndex]) {
             column[rowIndex] = { color, roll };
+        } else {
+            column[rowIndex] = { color, roll }; // Substitui se já existe
         }
 
         // Atualiza a coluna
         updateColumn(nextColumnIndex);
-        // Avança para a próxima coluna
-        nextColumnIndex = (nextColumnIndex + 1) % 3;
+        // Avança para a próxima coluna no ciclo correto
+        nextColumnIndex = cyclePosition; // 0 → 1 → 2 → 0...
         console.log(`Próxima coluna: ${nextColumnIndex + 1}`); // Log para depuração
     }
 
