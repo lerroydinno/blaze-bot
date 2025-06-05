@@ -313,7 +313,7 @@
             // Atualizar a tabela
             const table = document.getElementById('resultsTable');
             const rows = table.getElementsByTagName('tr');
-            const completedResults = this.results.filter(r => r.status === 'complete').slice(0, 60);
+            const completedResults = this.results.filter(r => r.status === 'rolling').slice(0, 60);
 
             // Limpar a tabela (exceto o cabeçalho)
             for (let i = 1; i < rows.length; i++) {
