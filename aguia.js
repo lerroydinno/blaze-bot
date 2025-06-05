@@ -62,7 +62,7 @@
     document.body.appendChild(menu);
 
     const grid = document.getElementById('blaze-grid');
-    const columns = [[], [], []]; // Três colunas sem limite de resultados
+    const columns = [[1], [2], [3]]; // Três colunas sem limite de resultados
     let nextColumnIndex = 0; // Começa na coluna 0 (coluna 1 visualmente)
     let resultCount = 0; // Contador para rastrear o ciclo
     let lastResult = null; // Armazena o último resultado processado
@@ -103,9 +103,12 @@
         const column = columns[nextColumnIndex];
         resultCount++; // Incrementa o contador do ciclo
 
-        // Adiciona o novo resultado no topo da coluna
-        column.push({ color, roll });
-        rowCount = Math.max(rowCount, column.length - 1); // Atualiza o número de linhas
+        // Calcula a linha atual para a coluna com base no ciclo
+        const rowIndex = Math.floor((resultCount - 1) / 3);
+        rowCount = Math.max(rowCount, rowIndex); // Atualiza o número de linhas
+
+        // Adiciona o novo resultado na linha correspondente
+        column[rowIndex] = { color, roll };
 
         // Atualiza a coluna
         updateColumn(nextColumnIndex);
