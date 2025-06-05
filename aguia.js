@@ -1,5 +1,6 @@
+```javascript
 // ==UserScript==
-// @name         Blaze Double Catalogo Flutuante
+// @name         Catalogador double Flutuante
 // @namespace    http://tampermonkey.net/
 // @version      1.0
 // @description  Catálogo flutuante para resultados do Blaze Double
@@ -303,7 +304,7 @@
             const i = this.results.findIndex(r => (r.id || r.tmp) === id);
             if (i >= 0) {
                 this.results[i] = { ...this.results[i], ...d };
-            } else if (d.status === 'complete') {
+            } else if (d.status === 'rolling') {
                 if (this.results.length >= 60) {
                     this.results = []; // Limpar a lista de resultados quando a tabela estiver cheia
                 }
@@ -313,7 +314,7 @@
             // Atualizar a tabela
             const table = document.getElementById('resultsTable');
             const rows = table.getElementsByTagName('tr');
-            const completedResults = this.results.filter(r => r.status === 'complete').slice(0, 60);
+            const completedResults = this.results.filter(r => r.status === 'rolling').slice(0, 60);
 
             // Limpar a tabela (exceto o cabeçalho)
             for (let i = 1; i < rows.length; i++) {
