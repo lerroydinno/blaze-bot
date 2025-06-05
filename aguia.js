@@ -1,15 +1,18 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Catálogo de Resultados - Blaze Double (Flutuante)</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            background-color: #f0f0f0;
-        }
+// ==UserScript==
+// @name         Blaze Double Catalogo Flutuante
+// @namespace    http://tampermonkey.net/
+// @version      1.0
+// @description  Catálogo flutuante para resultados do Blaze Double
+// @match        https://blaze.com/*
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // Injetar CSS
+    const style = document.createElement('style');
+    style.textContent = `
         .blaze-bubble {
             position: fixed;
             bottom: 20px;
@@ -123,236 +126,239 @@
                 font-size: 12px;
             }
         }
-    </style>
-</head>
-<body>
-    <div class="blaze-bubble" id="blazeBubble"></div>
-    <div class="blaze-overlay" id="blazeOverlay" style="display: none;">
-        <div class="blaze-monitor" id="blazeMonitorBox">
-            <h3>Catálogo de Resultados - Blaze Double</h3>
-            <button id="blazeMinBtn" class="blaze-min-btn">−</button>
-            <table id="resultsTable">
-                <tr>
-                    <th>Coluna 1</th>
-                    <th>Coluna 2</th>
-                    <th>Coluna 3</th>
-                    <th>Coluna 4</th>
-                    <th>Coluna 5</th>
-                    <th>Coluna 6</th>
-                </tr>
-                <tr>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                </tr>
-                <tr>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                </tr>
-                <tr>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                </tr>
-                <tr>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                </tr>
-                <tr>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                </tr>
-                <tr>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                </tr>
-                <tr>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                </tr>
-                <tr>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                </tr>
-                <tr>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                </tr>
-                <tr>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                    <td class="empty"></td>
-                </tr>
-            </table>
+    `;
+    document.head.appendChild(style);
+
+    // Injetar HTML
+    const div = document.createElement('div');
+    div.innerHTML = `
+        <div class="blaze-bubble" id="blazeBubble"></div>
+        <div class="blaze-overlay" id="blazeOverlay" style="display: none;">
+            <div class="blaze-monitor" id="blazeMonitorBox">
+                <h3>Catálogo de Resultados - Blaze Double</h3>
+                <button id="blazeMinBtn" class="blaze-min-btn">−</button>
+                <table id="resultsTable">
+                    <tr>
+                        <th>Coluna 1</th>
+                        <th>Coluna 2</th>
+                        <th>Coluna 3</th>
+                        <th>Coluna 4</th>
+                        <th>Coluna 5</th>
+                        <th>Coluna 6</th>
+                    </tr>
+                    <tr>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                    </tr>
+                    <tr>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                    </tr>
+                    <tr>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                    </tr>
+                    <tr>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                    </tr>
+                    <tr>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                    </tr>
+                    <tr>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                    </tr>
+                    <tr>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                    </tr>
+                    <tr>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                    </tr>
+                    <tr>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                    </tr>
+                    <tr>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                    </tr>
+                </table>
+            </div>
         </div>
-    </div>
+    `;
+    document.body.appendChild(div);
 
-    <script>
-        class BlazeWebSocket {
-            constructor() {
-                this.ws = null;
-                this.pingInterval = null;
-                this.onDoubleTickCallback = null;
-            }
-
-            doubleTick(cb) {
-                this.onDoubleTickCallback = cb;
-                this.ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
-
-                this.ws.onopen = () => {
-                    console.log('Conectado ao servidor WebSocket');
-                    this.ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
-                    this.pingInterval = setInterval(() => this.ws.send('2'), 25000);
-                };
-
-                this.ws.onmessage = (e) => {
-                    try {
-                        const m = e.data;
-                        if (m === '2') { this.ws.send('3'); return; }
-                        if (m.startsWith('0') || m === '40') return;
-                        if (m.startsWith('42')) {
-                            const j = JSON.parse(m.slice(2));
-                            if (j[0] === 'data' && j[1].id === 'double.tick') {
-                                const p = j[1].payload;
-                                this.onDoubleTickCallback?.({ id: p.id, color: p.color, roll: p.roll, status: p.status });
-                            }
-                        }
-                    } catch (err) { console.error('Erro ao processar mensagem:', err); }
-                };
-
-                this.ws.onerror = (e) => console.error('WebSocket error:', e);
-                this.ws.onclose = () => { console.log('WS fechado'); clearInterval(this.pingInterval); };
-            }
-
-            close() { this.ws?.close(); }
+    // JavaScript
+    class BlazeWebSocket {
+        constructor() {
+            this.ws = null;
+            this.pingInterval = null;
+            this.onDoubleTickCallback = null;
         }
 
-        class BlazeInterface {
-            constructor() {
-                this.results = [];
-                this.processedIds = new Set();
-                this.initInterface();
-            }
+        doubleTick(cb) {
+            this.onDoubleTickCallback = cb;
+            this.ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
 
-            initInterface() {
-                const bubble = document.getElementById('blazeBubble');
-                const overlay = document.getElementById('blazeOverlay');
-                const minBtn = document.getElementById('blazeMinBtn');
+            this.ws.onopen = () => {
+                console.log('Conectado ao servidor WebSocket');
+                this.ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
+                this.pingInterval = setInterval(() => this.ws.send('2'), 25000);
+            };
 
-                minBtn.addEventListener('click', () => {
-                    overlay.style.display = 'none';
-                    bubble.style.display = 'block';
-                });
-
-                bubble.addEventListener('click', () => {
-                    bubble.style.display = 'none';
-                    overlay.style.display = 'block';
-                });
-
-                this.ws = new BlazeWebSocket();
-                this.ws.doubleTick((d) => this.updateResults(d));
-            }
-
-            updateResults(d) {
-                const id = d.id || `tmp-${Date.now()}-${d.color}-${d.roll}`;
-                const i = this.results.findIndex(r => (r.id || r.tmp) === id);
-                if (i >= 0) {
-                    this.results[i] = { ...this.results[i], ...d };
-                } else if (d.status === 'complete') {
-                    if (this.results.length >= 60) {
-                        this.results = []; // Limpar a lista de resultados quando a tabela estiver cheia
-                    }
-                    this.results.unshift({ ...d, tmp: id });
-                }
-
-                // Atualizar a tabela
-                const table = document.getElementById('resultsTable');
-                const rows = table.getElementsByTagName('tr');
-                const completedResults = this.results.filter(r => r.status === 'complete').slice(0, 60);
-
-                // Limpar a tabela (exceto o cabeçalho)
-                for (let i = 1; i < rows.length; i++) {
-                    for (let j = 0; j < 6; j++) {
-                        rows[i].cells[j].className = 'empty';
-                        rows[i].cells[j].textContent = '';
-                    }
-                }
-
-                // Preencher a tabela: esquerda para direita, baixo para cima
-                completedResults.reverse().forEach((result, index) => {
-                    const rowIndex = 10 - Math.floor(index / 6); // De baixo para cima (10 é a última linha)
-                    const colIndex = index % 6; // Esquerda para direita
-                    if (rowIndex >= 1 && rowIndex < rows.length && colIndex < rows[rowIndex].cells.length) {
-                        const cell = rows[rowIndex].cells[colIndex];
-                        cell.textContent = result.roll ?? '-';
-                        cell.className = result.color === 0 ? 'white' : result.color === 1 ? 'red' : 'black';
-                    }
-                });
-
-                // Atualizar a cor do cabeçalho com base na cor predominante por coluna
-                const headers = rows[0].getElementsByTagName('th');
-                for (let col = 0; col < 6; col++) {
-                    const columnResults = completedResults
-                        .filter((_, index) => index % 6 === col)
-                        .map(r => r.color);
-                    const brancoCount = columnResults.filter(c => c === 0).length;
-                    const vermelhoCount = columnResults.filter(c => c === 1).length;
-                    const pretoCount = columnResults.filter(c => c === 2).length;
-
-                    const maxCount = Math.max(brancoCount, vermelhoCount, pretoCount);
-                    let headerClass = 'default'; // Manter cor padrão se não houver predominância
-                    if (maxCount > 0) {
-                        if (brancoCount === maxCount && brancoCount > vermelhoCount && brancoCount > pretoCount) {
-                            headerClass = 'th-white';
-                        } else if (vermelhoCount === maxCount && vermelhoCount > brancoCount && vermelhoCount > pretoCount) {
-                            headerClass = 'th-red';
-                        } else if (pretoCount === maxCount && pretoCount > brancoCount && pretoCount > vermelhoCount) {
-                            headerClass = 'th-black';
+            this.ws.onmessage = (e) => {
+                try {
+                    const m = e.data;
+                    if (m === '2') { this.ws.send('3'); return; }
+                    if (m.startsWith('0') || m === '40') return;
+                    if (m.startsWith('42')) {
+                        const j = JSON.parse(m.slice(2));
+                        if (j[0] === 'data' && j[1].id === 'double.tick') {
+                            const p = j[1].payload;
+                            this.onDoubleTickCallback?.({ id: p.id, color: p.color, roll: p.roll, status: p.status });
                         }
                     }
-                    headers[col].className = headerClass;
-                }
-            }
+                } catch (err) { console.error('Erro ao processar mensagem:', err); }
+            };
+
+            this.ws.onerror = (e) => console.error('WebSocket error:', e);
+            this.ws.onclose = () => { console.log('WS fechado'); clearInterval(this.pingInterval); };
         }
 
-        new BlazeInterface();
-    </script>
-</body>
-</html>
+        close() { this.ws?.close(); }
+    }
+
+    class BlazeInterface {
+        constructor() {
+            this.results = [];
+            this.processedIds = new Set();
+            this.initInterface();
+        }
+
+        initInterface() {
+            const bubble = document.getElementById('blazeBubble');
+            const overlay = document.getElementById('blazeOverlay');
+            const minBtn = document.getElementById('blazeMinBtn');
+
+            minBtn.addEventListener('click', () => {
+                overlay.style.display = 'none';
+                bubble.style.display = 'block';
+            });
+
+            bubble.addEventListener('click', () => {
+                bubble.style.display = 'none';
+                overlay.style.display = 'block';
+            });
+
+            this.ws = new BlazeWebSocket();
+            this.ws.doubleTick((d) => this.updateResults(d));
+        }
+
+        updateResults(d) {
+            const id = d.id || `tmp-${Date.now()}-${d.color}-${d.roll}`;
+            const i = this.results.findIndex(r => (r.id || r.tmp) === id);
+            if (i >= 0) {
+                this.results[i] = { ...this.results[i], ...d };
+            } else if (d.status === 'complete') {
+                if (this.results.length >= 60) {
+                    this.results = []; // Limpar a lista de resultados quando a tabela estiver cheia
+                }
+                this.results.unshift({ ...d, tmp: id });
+            }
+
+            // Atualizar a tabela
+            const table = document.getElementById('resultsTable');
+            const rows = table.getElementsByTagName('tr');
+            const completedResults = this.results.filter(r => r.status === 'complete').slice(0, 60);
+
+            // Limpar a tabela (exceto o cabeçalho)
+            for (let i = 1; i < rows.length; i++) {
+                for (let j = 0; j < 6; j++) {
+                    rows[i].cells[j].className = 'empty';
+                    rows[i].cells[j].textContent = '';
+                }
+            }
+
+            // Preencher a tabela: esquerda para direita, baixo para cima
+            completedResults.reverse().forEach((result, index) => {
+                const rowIndex = 10 - Math.floor(index / 6); // De baixo para cima (10 é a última linha)
+                const colIndex = index % 6; // Esquerda para direita
+                if (rowIndex >= 1 && rowIndex < rows.length && colIndex < rows[rowIndex].cells.length) {
+                    const cell = rows[rowIndex].cells[colIndex];
+                    cell.textContent = result.roll ?? '-';
+                    cell.className = result.color === 0 ? 'white' : result.color === 1 ? 'red' : 'black';
+                }
+            });
+
+            // Atualizar a cor do cabeçalho com base na cor predominante por coluna
+            const headers = rows[0].getElementsByTagName('th');
+            for (let col = 0; col < 6; col++) {
+                const columnResults = completedResults
+                    .filter((_, index) => index % 6 === col)
+                    .map(r => r.color);
+                const brancoCount = columnResults.filter(c => c === 0).length;
+                const vermelhoCount = columnResults.filter(c => c === 1).length;
+                const pretoCount = columnResults.filter(c => c === 2).length;
+
+                const maxCount = Math.max(brancoCount, vermelhoCount, pretoCount);
+                let headerClass = ''; // Cor padrão se não houver predominância
+                if (maxCount > 0) {
+                    if (brancoCount === maxCount && brancoCount > vermelhoCount && brancoCount > pretoCount) {
+                        headerClass = 'th-white';
+                    } else if (vermelhoCount === maxCount && vermelhoCount > brancoCount && vermelhoCount > pretoCount) {
+                        headerClass = 'th-red';
+                    } else if (pretoCount === maxCount && pretoCount > brancoCount && pretoCount > vermelhoCount) {
+                        headerClass = 'th-black';
+                    }
+                }
+                headers[col].className = headerClass;
+            }
+        }
+    }
+
+    new BlazeInterface();
+})();
