@@ -1,5 +1,3 @@
-
-window.onload = function () {
 (function () {
     'use strict';
 
@@ -52,7 +50,7 @@ window.onload = function () {
     `;
     document.head.appendChild(style);
 
-    // CriaÃ§Ã£o do menu flutuante
+    // Criação do menu flutuante
     const menu = document.createElement('div');
     menu.className = 'blaze-menu';
     menu.innerHTML = `
@@ -62,48 +60,60 @@ window.onload = function () {
     document.body.appendChild(menu);
 
     const grid = document.getElementById('blaze-grid');
-    const columns = [[], [], []]; // TrÃªs colunas, cada uma com atÃ© 5 resultados
-    let nextColumnIndex = 0; // ComeÃ§a na coluna 0 (coluna 1 visualmente)
-    let lastResult = null; // Armazena o Ãºltimo resultado processado
+    const columns = [[], [], []]; // Três colunas, cada uma com até 5 resultados
+    let nextColumnIndex = 0; // Começa na coluna 0 (coluna 1)
+    let resultCount = 0; // Contador para rastrear o ciclo
+    let lastResult = null; // Armazena o último resultado processado
 
-    // Inicializa a grade com 15 cÃ©lulas vazias
+    // Inicializa a grade com 15 células vazias
     for (let i = 0; i < 15; i++) {
         const div = document.createElement('div');
         div.className = 'blaze-cell';
         grid.appendChild(div);
     }
 
-    // FunÃ§Ã£o para atualizar uma coluna especÃ­fica
+    // Função para atualizar uma coluna específica
     function updateColumn(columnIndex) {
-                const column = columns[columnIndex];
-                for (let row = 0; row < 5; row++) {
-                    const cellIndex = row * 3 + columnIndex;
-                    const cell = grid.children[cellIndex];
-                    const res = column[row] || null;
-                    cell.className = 'blaze-cell';
-                    cell.textContent = '';
-                    if (res && res.color !== undefined && res.roll !== undefined) {
-                        cell.className += ` color-${res.color}`;
-                        cell.textContent = res.roll;
-                    }
+        const column = columns[columnIndex];
+        for (let row = 0; row < 5; row++) {
+            const cellIndex = row * 3 + columnIndex; // Índice correto da célula
+            const cell = grid.children[cellIndex];
+            const res = column[row] || null;
+            cell.className = 'blaze-cell';
+            cell.textContent = '';
+            if (res && res.color !== undefined && res.roll !== undefined) {
+                cell.className += ` color-${res.color}`;
+                cell.textContent = res.roll;
+            }
         }
     }
 
-    // FunÃ§Ã£o para adicionar um novo resultado
+    // Função para adicionar um novo resultado
     function addResult(color, roll) {
-                const column = columns[nextColumnIndex];
-                if (column.length > 0) {
-                    for (let i = column.length; i > 0; i--) {
-                        if (i < 5) column[i] = column[i - 1];
-                    }
+        console.log(`Adicionando resultado à coluna ${nextColumnIndex + 1}`); // Log para depuração
+        const column = columns[nextColumnIndex];
+        resultCount++; // Incrementa o contador do ciclo
+
+        // Desloca os resultados apenas se o ciclo voltar à mesma coluna (a cada 3 resultados)
+        if (resultCount > 1 && (resultCount - 1) % 3 === 0 && column.length > 0) {
+            for (let i = column.length; i > 0; i--) {
+                if (i < 5) column[i] = column[i - 1];
+            }
+            if (column.length > 5) column.pop();
+        }
+
+        // Adiciona o novo resultado no topo
+        column.unshift({ color, roll });
+        if (column.length > 5) column.pop(); // Limita a 5 se ultrapassar
+
         // Atualiza a coluna
         updateColumn(nextColumnIndex);
-        // AvanÃ§a para a prÃ³xima coluna
+        // Avança para a próxima coluna
         nextColumnIndex = (nextColumnIndex + 1) % 3;
-        console.log(`PrÃ³xima coluna: ${nextColumnIndex + 1}`); // Log para depuraÃ§Ã£o
+        console.log(`Próxima coluna: ${nextColumnIndex + 1}`); // Log para depuração
     }
 
-    // ConexÃ£o WebSocket com a Blaze
+    // Conexão WebSocket com a Blaze
     const ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
 
     ws.onopen = () => {
@@ -133,6 +143,5 @@ window.onload = function () {
     };
 
     ws.onerror = err => console.error('[WS] Erro:', err);
-    ws.onclose = () => console.warn('[WS] ConexÃ£o encerrada');
+    ws.onclose = () => console.warn('[WS] Conexão encerrada');
 })();
-};
