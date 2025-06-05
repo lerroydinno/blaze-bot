@@ -1,161 +1,358 @@
-(function () {
-    'use strict';
-
-    // Estilo da interface
-    const style = document.createElement('style');
-    style.textContent = `
-        .blaze-menu {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            width: 330px;
-            background: rgba(34,34,34,0.95);
-            border-radius: 12px;
-            padding: 15px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.6);
-            color: #fff;
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catálogo de Resultados - Blaze Double (Flutuante)</title>
+    <style>
+        body {
             font-family: Arial, sans-serif;
-            z-index: 9999;
-            max-height: 80vh;
-            overflow-y: auto;
+            margin: 0;
+            background-color: #f0f0f0;
         }
-        .blaze-menu h3 {
+        .blaze-bubble {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);
+            background-blend-mode: overlay;
+            box-shadow: 0 4px 12px rgba(0,0,0,.5);
+            cursor: pointer;
+            z-index: 10000;
+            display: block;
+        }
+        .blaze-overlay {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 9999;
+            font-family: Arial, sans-serif;
+        }
+        .blaze-monitor {
+            background: rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;
+            background-blend-mode: overlay;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,.5);
+            color: #fff;
+            width: 650px;
+            max-width: 90vw;
+        }
+        .blaze-monitor h3 {
             margin: 0 0 10px;
             text-align: center;
+            font-size: 18px;
         }
-        .blaze-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
+        .blaze-min-btn {
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0 8px;
+            position: absolute;
+            top: 10px;
+            right: 10px;
         }
-        .blaze-cell {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 40px;
-            font-size: 16px;
-            font-weight: bold;
-            border-radius: 6px;
+        .blaze-min-btn:hover {
+            opacity: .75;
         }
-        .color-0 {
+        table {
+            border-collapse: collapse;
+            margin: 20px auto;
             background-color: #fff;
-            color: #000;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
         }
-        .color-1 {
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+            width: 100px;
+            height: 40px;
+            font-size: 14px;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .th-red {
             background-color: #f44336;
-            color: #fff;
+            color: white;
         }
-        .color-2 {
+        .th-black {
             background-color: #212121;
-            color: #fff;
+            color: white;
         }
-    `;
-    document.head.appendChild(style);
-
-    // Criação do menu flutuante
-    const menu = document.createElement('div');
-    menu.className = 'blaze-menu';
-    menu.innerHTML = `
-        <h3>Resultados da Blaze</h3>
-        <div class="blaze-grid" id="blaze-grid"></div>
-    `;
-    document.body.appendChild(menu);
-
-    const grid = document.getElementById('blaze-grid');
-    const columns = [[], [], []]; // Três colunas sem limite de resultados
-    let nextColumnIndex = 0; // Começa na coluna 0 (coluna 1 visualmente)
-    let resultCount = 0; // Contador para rastrear o ciclo
-    let lastResult = null; // Armazena o último resultado processado
-    let rowCount = 0; // Contador de linhas
-
-    // Inicializa a grade com 3 células (uma por coluna)
-    for (let i = 0; i < 3; i++) {
-        const div = document.createElement('div');
-        div.className = 'blaze-cell';
-        grid.appendChild(div);
-    }
-
-    // Função para atualizar uma coluna específica
-    function updateColumn(columnIndex) {
-        const column = columns[columnIndex];
-        // Ajusta o número de células na grade se necessário
-        while (grid.children.length < (rowCount + 1) * 3) {
-            const div = document.createElement('div');
-            div.className = 'blaze-cell';
-            grid.appendChild(div);
+        .th-white {
+            background-color: #ffffff;
+            color: black;
+            border: 1px solid #000;
         }
-        for (let row = 0; row <= rowCount; row++) {
-            const cellIndex = row * 3 + columnIndex; // 0 → coluna 1, 1 → coluna 2, 2 → coluna 3
-            const cell = grid.children[cellIndex];
-            const res = column[row] || null;
-            cell.className = 'blaze-cell';
-            cell.textContent = '';
-            if (res && res.color !== undefined && res.roll !== undefined) {
-                cell.className += ` color-${res.color}`;
-                cell.textContent = res.roll;
+        td {
+            background-color: #f9f9f9;
+        }
+        .red {
+            background-color: #f44336;
+            color: white;
+        }
+        .black {
+            background-color: #212121;
+            color: white;
+        }
+        .white {
+            background-color: #ffffff;
+            color: black;
+            border: 1px solid #000;
+        }
+        .empty {
+            background-color: #e0e0e0;
+        }
+        @media (max-width: 600px) {
+            .blaze-monitor {
+                width: 90vw;
+            }
+            th, td {
+                padding: 8px;
+                width: 50px;
+                height: 30px;
+                font-size: 12px;
             }
         }
-    }
+    </style>
+</head>
+<body>
+    <div class="blaze-bubble" id="blazeBubble"></div>
+    <div class="blaze-overlay" id="blazeOverlay" style="display: none;">
+        <div class="blaze-monitor" id="blazeMonitorBox">
+            <h3>Catálogo de Resultados - Blaze Double</h3>
+            <button id="blazeMinBtn" class="blaze-min-btn">−</button>
+            <table id="resultsTable">
+                <tr>
+                    <th>Coluna 1</th>
+                    <th>Coluna 2</th>
+                    <th>Coluna 3</th>
+                    <th>Coluna 4</th>
+                    <th>Coluna 5</th>
+                    <th>Coluna 6</th>
+                </tr>
+                <tr>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                </tr>
+                <tr>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                </tr>
+                <tr>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                </tr>
+                <tr>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                </tr>
+                <tr>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                </tr>
+                <tr>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                </tr>
+                <tr>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                </tr>
+                <tr>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                </tr>
+                <tr>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                </tr>
+                <tr>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                    <td class="empty"></td>
+                </tr>
+            </table>
+        </div>
+    </div>
 
-    // Função para adicionar um novo resultado
-    function addResult(color, roll) {
-        console.log(`Adicionando resultado à coluna ${nextColumnIndex + 1}`); // Log para depuração
-        const column = columns[nextColumnIndex];
-        resultCount++; // Incrementa o contador do ciclo
+    <script>
+        class BlazeWebSocket {
+            constructor() {
+                this.ws = null;
+                this.pingInterval = null;
+                this.onDoubleTickCallback = null;
+            }
 
-        // Calcula a linha com base no número de ciclos completos
-        const cyclePosition = (resultCount - 1) % 3;
-        const rowIndex = Math.floor((resultCount - 1) / 3);
+            doubleTick(cb) {
+                this.onDoubleTickCallback = cb;
+                this.ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
 
-        // Garante que o resultado vá para a coluna correta no ciclo
-        if (cyclePosition === 0 && nextColumnIndex !== 0) {
-            nextColumnIndex = 0; // Corrige para coluna 1 no início do ciclo
+                this.ws.onopen = () => {
+                    console.log('Conectado ao servidor WebSocket');
+                    this.ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
+                    this.pingInterval = setInterval(() => this.ws.send('2'), 25000);
+                };
+
+                this.ws.onmessage = (e) => {
+                    try {
+                        const m = e.data;
+                        if (m === '2') { this.ws.send('3'); return; }
+                        if (m.startsWith('0') || m === '40') return;
+                        if (m.startsWith('42')) {
+                            const j = JSON.parse(m.slice(2));
+                            if (j[0] === 'data' && j[1].id === 'double.tick') {
+                                const p = j[1].payload;
+                                this.onDoubleTickCallback?.({ id: p.id, color: p.color, roll: p.roll, status: p.status });
+                            }
+                        }
+                    } catch (err) { console.error('Erro ao processar mensagem:', err); }
+                };
+
+                this.ws.onerror = (e) => console.error('WebSocket error:', e);
+                this.ws.onclose = () => { console.log('WS fechado'); clearInterval(this.pingInterval); };
+            }
+
+            close() { this.ws?.close(); }
         }
-        rowCount = Math.max(rowCount, rowIndex); // Atualiza o número de linhas
 
-        // Adiciona o resultado na posição correta
-        if (!column[rowIndex]) {
-            column[rowIndex] = { color, roll };
-        } else {
-            column[rowIndex] = { color, roll }; // Substitui se já existe
-        }
+        class BlazeInterface {
+            constructor() {
+                this.results = [];
+                this.processedIds = new Set();
+                this.initInterface();
+            }
 
-        // Atualiza a coluna
-        updateColumn(nextColumnIndex);
-        // Avança para a próxima coluna no ciclo correto
-        nextColumnIndex = cyclePosition; // 0 → 1 → 2 → 0...
-        console.log(`Próxima coluna: ${nextColumnIndex + 1}`); // Log para depuração
-    }
+            initInterface() {
+                const bubble = document.getElementById('blazeBubble');
+                const overlay = document.getElementById('blazeOverlay');
+                const minBtn = document.getElementById('blazeMinBtn');
 
-    // Conexão WebSocket com a Blaze
-    const ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
+                minBtn.addEventListener('click', () => {
+                    overlay.style.display = 'none';
+                    bubble.style.display = 'block';
+                });
 
-    ws.onopen = () => {
-        console.log('[WS] Conectado');
-        ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
-        setInterval(() => ws.send('2'), 25000); // Ping
-    };
+                bubble.addEventListener('click', () => {
+                    bubble.style.display = 'none';
+                    overlay.style.display = 'block';
+                });
 
-    ws.onmessage = (e) => {
-        const msg = e.data;
-        if (msg === '2') { ws.send('3'); return; }
-        if (!msg.startsWith('42')) return;
+                this.ws = new BlazeWebSocket();
+                this.ws.doubleTick((d) => this.updateResults(d));
+            }
 
-        try {
-            const data = JSON.parse(msg.slice(2));
-            if (data[0] === 'data' && data[1].id === 'double.tick') {
-                const p = data[1].payload;
-                console.log(`Resultado recebido: roll=${p.roll}, color=${p.color}`); // Log
-                if (!lastResult || p.roll !== lastResult.roll || p.color !== lastResult.color) {
-                    lastResult = { roll: p.roll, color: p.color };
-                    addResult(p.color, p.roll);
+            updateResults(d) {
+                const id = d.id || `tmp-${Date.now()}-${d.color}-${d.roll}`;
+                const i = this.results.findIndex(r => (r.id || r.tmp) === id);
+                if (i >= 0) {
+                    this.results[i] = { ...this.results[i], ...d };
+                } else if (d.status === 'complete') {
+                    if (this.results.length >= 60) {
+                        this.results = []; // Limpar a lista de resultados quando a tabela estiver cheia
+                    }
+                    this.results.unshift({ ...d, tmp: id });
+                }
+
+                // Atualizar a tabela
+                const table = document.getElementById('resultsTable');
+                const rows = table.getElementsByTagName('tr');
+                const completedResults = this.results.filter(r => r.status === 'complete').slice(0, 60);
+
+                // Limpar a tabela (exceto o cabeçalho)
+                for (let i = 1; i < rows.length; i++) {
+                    for (let j = 0; j < 6; j++) {
+                        rows[i].cells[j].className = 'empty';
+                        rows[i].cells[j].textContent = '';
+                    }
+                }
+
+                // Preencher a tabela: esquerda para direita, baixo para cima
+                completedResults.reverse().forEach((result, index) => {
+                    const rowIndex = 10 - Math.floor(index / 6); // De baixo para cima (10 é a última linha)
+                    const colIndex = index % 6; // Esquerda para direita
+                    if (rowIndex >= 1 && rowIndex < rows.length && colIndex < rows[rowIndex].cells.length) {
+                        const cell = rows[rowIndex].cells[colIndex];
+                        cell.textContent = result.roll ?? '-';
+                        cell.className = result.color === 0 ? 'white' : result.color === 1 ? 'red' : 'black';
+                    }
+                });
+
+                // Atualizar a cor do cabeçalho com base na cor predominante por coluna
+                const headers = rows[0].getElementsByTagName('th');
+                for (let col = 0; col < 6; col++) {
+                    const columnResults = completedResults
+                        .filter((_, index) => index % 6 === col)
+                        .map(r => r.color);
+                    const brancoCount = columnResults.filter(c => c === 0).length;
+                    const vermelhoCount = columnResults.filter(c => c === 1).length;
+                    const pretoCount = columnResults.filter(c => c === 2).length;
+
+                    const maxCount = Math.max(brancoCount, vermelhoCount, pretoCount);
+                    let headerClass = 'default'; // Manter cor padrão se não houver predominância
+                    if (maxCount > 0) {
+                        if (brancoCount === maxCount && brancoCount > vermelhoCount && brancoCount > pretoCount) {
+                            headerClass = 'th-white';
+                        } else if (vermelhoCount === maxCount && vermelhoCount > brancoCount && vermelhoCount > pretoCount) {
+                            headerClass = 'th-red';
+                        } else if (pretoCount === maxCount && pretoCount > brancoCount && pretoCount > vermelhoCount) {
+                            headerClass = 'th-black';
+                        }
+                    }
+                    headers[col].className = headerClass;
                 }
             }
-        } catch (err) {
-            console.error('[WS] Erro ao processar mensagem:', err);
         }
-    };
 
-    ws.onerror = err => console.error('[WS] Erro:', err);
-    ws.onclose = () => console.warn('[WS] Conexão encerrada');
-})();
+        new BlazeInterface();
+    </script>
+</body>
+</html>
