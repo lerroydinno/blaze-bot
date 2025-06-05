@@ -16,6 +16,8 @@
             color: #fff;
             font-family: Arial, sans-serif;
             z-index: 9999;
+            max-height: 80vh;
+            overflow-y: auto;
         }
         .blaze-menu h3 {
             margin: 0 0 10px;
@@ -60,13 +62,14 @@
     document.body.appendChild(menu);
 
     const grid = document.getElementById('blaze-grid');
-    const columns = [[], [], []]; // Três colunas, cada uma com até 5 resultados
+    const columns = [[], [], []]; // Três colunas sem limite de resultados
     let nextColumnIndex = 0; // Começa na coluna 0 (coluna 1 visualmente)
     let resultCount = 0; // Contador para rastrear o ciclo
     let lastResult = null; // Armazena o último resultado processado
+    let rowCount = 0; // Contador de linhas para adicionar novas células
 
-    // Inicializa a grade com 15 células vazias
-    for (let i = 0; i < 15; i++) {
+    // Inicializa a grade com 3 células (uma por coluna)
+    for (let i = 0; i < 3; i++) {
         const div = document.createElement('div');
         div.className = 'blaze-cell';
         grid.appendChild(div);
@@ -75,10 +78,14 @@
     // Função para atualizar uma coluna específica
     function updateColumn(columnIndex) {
         const column = columns[columnIndex];
-        // Mapeia o índice lógico para a posição visual (0 → coluna 1, 1 → coluna 2, 2 → coluna 3)
-        const visualColumnIndex = columnIndex; // Já está na ordem 1,2,3
-        for (let row = 0; row < 5; row++) {
-            const cellIndex = row * 3 + visualColumnIndex; // Índice correto na grade
+        // Ajusta o número de células na grade se necessário
+        while (grid.children.length < (rowCount + 1) * 3) {
+            const div = document.createElement('div');
+            div.className = 'blaze-cell';
+            grid.appendChild(div);
+        }
+        for (let row = 0; row <= rowCount; row++) {
+            const cellIndex = row * 3 + columnIndex; // Índice correto na grade
             const cell = grid.children[cellIndex];
             const res = column[row] || null;
             cell.className = 'blaze-cell';
@@ -96,21 +103,9 @@
         const column = columns[nextColumnIndex];
         resultCount++; // Incrementa o contador do ciclo
 
-        // Adiciona o novo resultado no topo sem deslocar imediatamente
-        if (column.length === 0 || resultCount % 3 !== 1) {
-            column[0] = { color, roll };
-        } else {
-            // Desloca apenas quando o ciclo volta à mesma coluna (a cada 3 resultados)
-            for (let i = 4; i > 0; i--) {
-                column[i] = column[i - 1];
-            }
-            column[0] = { color, roll };
-        }
-
-        // Limita a 5 resultados, removendo o mais antigo se necessário
-        if (column.length > 5) {
-            column.pop();
-        }
+        // Adiciona o novo resultado no topo da coluna
+        column.push({ color, roll });
+        rowCount = Math.max(rowCount, column.length - 1); // Atualiza o número de linhas
 
         // Atualiza a coluna
         updateColumn(nextColumnIndex);
