@@ -94,17 +94,21 @@
         const column = columns[nextColumnIndex];
         resultCount++; // Incrementa o contador do ciclo
 
-        // Desloca os resultados apenas se o ciclo voltar à mesma coluna (a cada 3 resultados)
-        if (resultCount > 1 && (resultCount - 1) % 3 === 0 && column.length > 0) {
-            for (let i = column.length; i > 0; i--) {
-                if (i < 5) column[i] = column[i - 1];
+        // Adiciona o novo resultado no topo sem deslocar imediatamente
+        if (column.length === 0 || resultCount % 3 !== 1) {
+            column.unshift({ color, roll });
+        } else {
+            // Desloca apenas quando o ciclo volta à mesma coluna (a cada 3 resultados)
+            for (let i = 4; i > 0; i--) {
+                column[i] = column[i - 1];
             }
-            if (column.length > 5) column.pop();
+            column[0] = { color, roll };
         }
 
-        // Adiciona o novo resultado no topo
-        column.unshift({ color, roll });
-        if (column.length > 5) column.pop(); // Limita a 5 se ultrapassar
+        // Limita a 5 resultados, removendo o mais antigo se necessário
+        if (column.length > 5) {
+            column.pop();
+        }
 
         // Atualiza a coluna
         updateColumn(nextColumnIndex);
