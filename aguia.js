@@ -61,7 +61,7 @@
 
     const grid = document.getElementById('blaze-grid');
     const columns = [[], [], []]; // Três colunas, cada uma com até 5 resultados
-    let nextColumnIndex = 0; // Começa na coluna 0 (coluna 1)
+    let nextColumnIndex = 0; // Começa na coluna 0 (coluna 1 visualmente)
     let resultCount = 0; // Contador para rastrear o ciclo
     let lastResult = null; // Armazena o último resultado processado
 
@@ -75,8 +75,10 @@
     // Função para atualizar uma coluna específica
     function updateColumn(columnIndex) {
         const column = columns[columnIndex];
+        // Mapeia os índices para a ordem visual correta: 0 → 0 (coluna 1), 1 → 1 (coluna 2), 2 → 2 (coluna 3)
+        const visualColumnIndex = columnIndex; // Já está na ordem 1,2,3
         for (let row = 0; row < 5; row++) {
-            const cellIndex = row * 3 + columnIndex; // Índice correto da célula
+            const cellIndex = row * 3 + visualColumnIndex; // Índice correto da célula
             const cell = grid.children[cellIndex];
             const res = column[row] || null;
             cell.className = 'blaze-cell';
