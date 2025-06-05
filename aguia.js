@@ -85,7 +85,7 @@
             grid.appendChild(div);
         }
         for (let row = 0; row <= rowCount; row++) {
-            const cellIndex = row * 3 + columnIndex; // Índice correto na grade
+            const cellIndex = row * 3 + columnIndex; // Índice correto: 0 → coluna 1, 1 → coluna 2, 2 → coluna 3
             const cell = grid.children[cellIndex];
             const res = column[row] || null;
             cell.className = 'blaze-cell';
