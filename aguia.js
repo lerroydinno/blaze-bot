@@ -1,4 +1,3 @@
-```javascript
 // ==UserScript==
 // @name         Blaze Double Catalogo Flutuante
 // @namespace    http://tampermonkey.net/
@@ -363,4 +362,3 @@
 
     new BlazeInterface();
 })();
-```
