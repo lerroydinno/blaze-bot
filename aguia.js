@@ -1,7 +1,8 @@
+```javascript
 // ==UserScript==
 // @name         Blaze Double Catalogo Flutuante
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  Catálogo flutuante para resultados do Blaze Double
 // @match        https://blaze.com/*
 // @grant        none
@@ -42,19 +43,19 @@
             padding: 15px;
             box-shadow: 0 5px 15px rgba(0,0,0,.5);
             color: #fff;
-            width: 650px;
-            max-width: 90vw;
+            width: 100%;
+            max-width: 360px; /* Reduzido para caber em telas móveis */
         }
         .blaze-monitor h3 {
             margin: 0 0 10px;
             text-align: center;
-            font-size: 18px;
+            font-size: 16px; /* Reduzido para melhor proporção */
         }
         .blaze-min-btn {
             background: transparent;
             border: none;
             color: #fff;
-            font-size: 20px;
+            font-size: 18px; /* Reduzido para proporção */
             cursor: pointer;
             padding: 0 8px;
             position: absolute;
@@ -66,18 +67,18 @@
         }
         table {
             border-collapse: collapse;
-            margin: 20px auto;
+            margin: 10px auto;
             background-color: #fff;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
             width: 100%;
         }
         th, td {
             border: 1px solid #ddd;
-            padding: 10px;
+            padding: 6px;
             text-align: center;
-            width: 100px;
-            height: 40px;
-            font-size: 14px;
+            width: 50px; /* Reduzido para caber em telas móveis */
+            height: 30px; /* Reduzido para proporção */
+            font-size: 12px; /* Reduzido para legibilidade */
         }
         th {
             background-color: #4CAF50;
@@ -115,15 +116,22 @@
         .empty {
             background-color: #e0e0e0;
         }
-        @media (max-width: 600px) {
+        @media (max-width: 400px) {
             .blaze-monitor {
-                width: 90vw;
+                max-width: 90vw;
+                padding: 10px;
             }
             th, td {
-                padding: 8px;
-                width: 50px;
-                height: 30px;
-                font-size: 12px;
+                padding: 4px;
+                width: 40px;
+                height: 25px;
+                font-size: 10px;
+            }
+            .blaze-monitor h3 {
+                font-size: 14px;
+            }
+            .blaze-min-btn {
+                font-size: 16px;
             }
         }
     `;
@@ -172,7 +180,7 @@
                     </tr>
                     <tr>
                         <td class="empty"></td>
-                        <td class="empty"></td>
+                        <td class="td"></td>
                         <td class="empty"></td>
                         <td class="empty"></td>
                         <td class="empty"></td>
@@ -303,7 +311,7 @@
             const i = this.results.findIndex(r => (r.id || r.tmp) === id);
             if (i >= 0) {
                 this.results[i] = { ...this.results[i], ...d };
-            } else if (d.status === 'complete') {
+            } else if (d.status === 'rolling' || d.status === 'complete') {
                 if (this.results.length >= 60) {
                     this.results = []; // Limpar a lista de resultados quando a tabela estiver cheia
                 }
@@ -313,7 +321,7 @@
             // Atualizar a tabela
             const table = document.getElementById('resultsTable');
             const rows = table.getElementsByTagName('tr');
-            const completedResults = this.results.filter(r => r.status === 'complete').slice(0, 60);
+            const validResults = this.results.filter(r => r.status === 'rolling' || r.status === 'complete').slice(0, 60);
 
             // Limpar a tabela (exceto o cabeçalho)
             for (let i = 1; i < rows.length; i++) {
@@ -324,7 +332,7 @@
             }
 
             // Preencher a tabela: esquerda para direita, baixo para cima
-            completedResults.reverse().forEach((result, index) => {
+            validResults.reverse().forEach((result, index) => {
                 const rowIndex = 10 - Math.floor(index / 6); // De baixo para cima (10 é a última linha)
                 const colIndex = index % 6; // Esquerda para direita
                 if (rowIndex >= 1 && rowIndex < rows.length && colIndex < rows[rowIndex].cells.length) {
@@ -337,7 +345,7 @@
             // Atualizar a cor do cabeçalho com base na cor predominante por coluna
             const headers = rows[0].getElementsByTagName('th');
             for (let col = 0; col < 6; col++) {
-                const columnResults = completedResults
+                const columnResults = validResults
                     .filter((_, index) => index % 6 === col)
                     .map(r => r.color);
                 const brancoCount = columnResults.filter(c => c === 0).length;
@@ -362,3 +370,4 @@
 
     new BlazeInterface();
 })();
+```
