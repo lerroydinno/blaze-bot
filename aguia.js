@@ -303,7 +303,7 @@
             const i = this.results.findIndex(r => (r.id || r.tmp) === id);
             if (i >= 0) {
                 this.results[i] = { ...this.results[i], ...d };
-            } else if (d.status === 'complete') {
+            } else if (d.status === 'rolling') {
                 if (this.results.length >= 60) {
                     this.results = []; // Limpar a lista de resultados quando a tabela estiver cheia
                 }
