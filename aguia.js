@@ -1,364 +1,237 @@
-// ==UserScript==
-// @name         Blaze Double Catalogo Flutuante
-// @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  Catálogo flutuante para resultados do Blaze Double
-// @match        https://blaze.com/*
-// @grant        none
-// ==/UserScript==
+(async () => {
+  // Prevenir múltiplas execuções do script
+  if (window.doubleGameInjected) {
+    console.log("Script já em execução!");
+    return;
+  }
+  window.doubleGameInjected = true;
 
-(function() {
-    'use strict';
+  // Adicionar estilos CSS
+  const style = document.createElement("style");
+  style.textContent = `
+    .dg-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 320px;
+      background-color: #1f2937;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+      font-family: Arial, sans-serif;
+      z-index: 999999;
+      max-height: 90vh;
+      overflow-y: auto;
+      color: #f3f4f6;
+    }
+    .dg-header {
+      background-color: #111827;
+      color: #f3f4f6;
+      padding: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .dg-header h1 {
+      margin: 0;
+      font-size: 16px;
+      flex: 1;
+      text-align: center;
+    }
+    .dg-close-btn, .dg-drag-handle {
+      background: none;
+      border: none;
+      color: #f3f4f6;
+      cursor: pointer;
+      font-size: 16px;
+      width: 30px;
+      text-align: center;
+    }
+    .dg-content {
+      padding: 15px;
+      background-image: url('https://t.me/i/userpic/320/chefe00blaze.jpg');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      position: relative;
+    }
+    .dg-content::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(31, 41, 55, 0.85);
+      z-index: -1;
+    }
+    .dg-section {
+      margin-bottom: 15px;
+      background-color: #111827c9;
+      border-radius: 6px;
+      padding: 10px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      position: relative;
+      z-index: 1;
+    }
+    .dg-section-title {
+      font-weight: bold;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    .dg-btn {
+      padding: 6px 10px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      font-size: 12px;
+      color: #f3f4f6;
+      background-color: #3b82f6;
+      width: 100%;
+      margin-top: 10px;
+    }
+    .dg-result {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-weight: bold;
+      margin: 0 auto;
+      border: 2px solid;
+    }
+    .dg-white {
+      background-color: #f3f4f6;
+      color: #1f2937;
+      border-color: #d1d5db;
+    }
+    .dg-red {
+      background-color: #dc2626;
+      color: #f3f4f6;
+      border-color: #b91c1c;
+    }
+    .dg-black {
+      background-color: #000;
+      color: #f3f4f6;
+      border-color: #4b5563;
+    }
+    .dg-floating-image {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+      z-index: 999998;
+      transition: transform 0.2s;
+      border: 3px solid #3b82f6;
+    }
+    .dg-floating-image:hover {
+      transform: scale(1.05);
+    }
+  `;
+  document.head.appendChild(style);
 
-    // Injetar CSS
-    const style = document.createElement('style');
-    style.textContent = `
-        .blaze-bubble {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);
-            background-blend-mode: overlay;
-            box-shadow: 0 4px 12px rgba(0,0,0,.5);
-            cursor: pointer;
-            z-index: 10000;
-            display: block;
-        }
-        .blaze-overlay {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 9999;
-            font-family: Arial, sans-serif;
-        }
-        .blaze-monitor {
-            background: rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;
-            background-blend-mode: overlay;
-            border-radius: 10px;
-            padding: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,.5);
-            color: #fff;
-            width: 100%;
-            max-width: 360px;
-        }
-        .blaze-monitor h3 {
-            margin: 0 0 10px;
-            text-align: center;
-            font-size: 18px;
-        }
-        .blaze-min-btn {
-            background: transparent;
-            border: none;
-            color: #fff;
-            font-size: 20px;
-            cursor: pointer;
-            padding: 0 8px;
-            position: absolute;
-            top: 10px;
-            right: 10px;
-        }
-        .blaze-min-btn:hover {
-            opacity: .75;
-        }
-        table {
-            border-collapse: collapse;
-            margin: 20px auto;
-            background-color: #fff;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            width: 100%;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 10px;
-            text-align: center;
-            width: 50px;
-            height: 40px;
-            font-size: 14px;
-        }
-        th {
-            background-color: #4CAF50;
-            color: white;
-        }
-        .th-red {
-            background-color: #f44336;
-            color: white;
-        }
-        .th-black {
-            background-color: #212121;
-            color: white;
-        }
-        .th-white {
-            background-color: #ffffff;
-            color: black;
-            border: 1px solid #000;
-        }
-        td {
-            background-color: #f9f9f9;
-        }
-        .red {
-            background-color: #f44336;
-            color: white;
-        }
-        .black {
-            background-color: #212121;
-            color: white;
-        }
-        .white {
-            background-color: #ffffff;
-            color: black;
-            border: 1px solid #000;
-        }
-        .empty {
-            background-color: #e0e0e0;
-        }
-        @media (max-width: 600px) {
-            .blaze-monitor {
-                width: 90vw;
-            }
-            th, td {
-                padding: 8px;
-                width: 40px;
-                height: 30px;
-                font-size: 12px;
-            }
-        }
-    `;
-    document.head.appendChild(style);
+  // Criar painel flutuante
+  const panel = document.createElement("div");
+  panel.className = "dg-container";
+  panel.id = "double-game-panel";
+  panel.style.display = "none";
+  panel.innerHTML = `
+    <div class="dg-header">
+      <div class="dg-drag-handle">⋮⋮</div>
+      <h1>Blaze Bot I.A</h1>
+      <button class="dg-close-btn" id="dg-close">×</button>
+    </div>
+    <div class="dg-content">
+      <div class="dg-section">
+        <div class="dg-section-title">Previsão da Próxima Cor</div>
+        <div class="dg-result" id="prediction">?</div>
+        <button class="dg-btn" id="generate-prediction">Gerar Previsão</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(panel);
 
-    // Injetar HTML
-    const div = document.createElement('div');
-    div.innerHTML = `
-        <div class="blaze-bubble" id="blazeBubble"></div>
-        <div class="blaze-overlay" id="blazeOverlay" style="display: none;">
-            <div class="blaze-monitor" id="blazeMonitorBox">
-                <h3>Catálogo de Resultados - Blaze Double</h3>
-                <button id="blazeMinBtn" class="blaze-min-btn">−</button>
-                <table id="resultsTable">
-                    <tr>
-                        <th>Coluna 1</th>
-                        <th>Coluna 2</th>
-                        <th>Coluna 3</th>
-                        <th>Coluna 4</th>
-                        <th>Coluna 5</th>
-                        <th>Coluna 6</th>
-                    </tr>
-                    <tr>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                    </tr>
-                    <tr>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                    </tr>
-                    <tr>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                    </tr>
-                    <tr>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                    </tr>
-                    <tr>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                    </tr>
-                    <tr>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                    </tr>
-                    <tr>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                    </tr>
-                    <tr>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                    </tr>
-                    <tr>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                    </tr>
-                    <tr>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                        <td class="empty"></td>
-                    </tr>
-                </table>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(div);
+  // Criar imagem flutuante
+  const floatingImage = document.createElement("img");
+  floatingImage.src = "https://t.me/i/userpic/320/chefe00blaze.jpg";
+  floatingImage.className = "dg-floating-image";
+  floatingImage.id = "dg-float-img";
+  floatingImage.onclick = () => {
+    panel.style.display = "block";
+    floatingImage.style.display = "none";
+  };
+  document.body.appendChild(floatingImage);
 
-    // JavaScript
-    class BlazeWebSocket {
-        constructor() {
-            this.ws = null;
-            this.pingInterval = null;
-            this.onDoubleTickCallback = null;
-        }
+  // Fechar painel
+  document.getElementById("dg-close").onclick = () => {
+    panel.style.display = "none";
+    floatingImage.style.display = "block";
+  };
 
-        doubleTick(cb) {
-            this.onDoubleTickCallback = cb;
-            this.ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
+  // Funcionalidade de arrastar painel
+  const dragHandle = panel.querySelector(".dg-drag-handle");
+  let isDragging = false;
+  let offsetX, offsetY;
 
-            this.ws.onopen = () => {
-                console.log('Conectado ao servidor WebSocket');
-                this.ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
-                this.pingInterval = setInterval(() => this.ws.send('2'), 25000);
-            };
+  dragHandle.onmousedown = (e) => {
+    e.preventDefault();
+    isDragging = true;
+    offsetX = e.clientX - panel.offsetLeft;
+    offsetY = e.clientY - panel.offsetTop;
+  };
 
-            this.ws.onmessage = (e) => {
-                try {
-                    const m = e.data;
-                    if (m === '2') { this.ws.send('3'); return; }
-                    if (m.startsWith('0') || m === '40') return;
-                    if (m.startsWith('42')) {
-                        const j = JSON.parse(m.slice(2));
-                        if (j[0] === 'data' && j[1].id === 'double.tick') {
-                            const p = j[1].payload;
-                            this.onDoubleTickCallback?.({ id: p.id, color: p.color, roll: p.roll, status: p.status });
-                        }
-                    }
-                } catch (err) { console.error('Erro ao processar mensagem:', err); }
-            };
+  document.onmousemove = (e) => {
+    if (isDragging) {
+      panel.style.left = `${e.clientX - offsetX}px`;
+      panel.style.top = `${e.clientY - offsetY}px`;
+    }
+  };
 
-            this.ws.onerror = (e) => console.error('WebSocket error:', e);
-            this.ws.onclose = () => { console.log('WS fechado'); clearInterval(this.pingInterval); };
-        }
+  document.onmouseup = () => {
+    isDragging = false;
+  };
 
-        close() { this.ws?.close(); }
+  // Determinar cor com base no hash
+  function getColorByHash(hash) {
+    const colorValue = parseInt(hash.substring(0, 8), 16) % 15;
+    if (colorValue === 0) return { name: "Branco", class: "dg-white" };
+    if (colorValue >= 1 && colorValue <= 7) return { name: "Vermelho", class: "dg-red" };
+    return { name: "Preto", class: "dg-black" };
+  }
+
+  // Obter hash mais recente da API do Blaze
+  async function getLatestHash() {
+    try {
+      const response = await fetch("https://blaze.com/api/roulette_games/recent");
+      const data = await response.json();
+      return data?.[0]?.hash || null;
+    } catch (error) {
+      console.error("Erro ao obter hash:", error);
+      return null;
+    }
+  }
+
+  // Prever a próxima cor
+  async function predictColor() {
+    const predictionElement = document.getElementById("prediction");
+    predictionElement.textContent = "?";
+    predictionElement.className = "dg-result";
+
+    const hash = await getLatestHash();
+    if (!hash) {
+      predictionElement.textContent = "Erro";
+      return;
     }
 
-    class BlazeInterface {
-        constructor() {
-            this.results = [];
-            this.processedIds = new Set();
-            this.initInterface();
-        }
+    const result = getColorByHash(hash);
+    predictionElement.textContent = result.name;
+    predictionElement.classList.add(result.class);
+  }
 
-        initInterface() {
-            const bubble = document.getElementById('blazeBubble');
-            const overlay = document.getElementById('blazeOverlay');
-            const minBtn = document.getElementById('blazeMinBtn');
-
-            minBtn.addEventListener('click', () => {
-                overlay.style.display = 'none';
-                bubble.style.display = 'block';
-            });
-
-            bubble.addEventListener('click', () => {
-                bubble.style.display = 'none';
-                overlay.style.display = 'block';
-            });
-
-            this.ws = new BlazeWebSocket();
-            this.ws.doubleTick((d) => this.updateResults(d));
-        }
-
-        updateResults(d) {
-            const id = d.id || `tmp-${Date.now()}-${d.color}-${d.roll}`;
-            const i = this.results.findIndex(r => (r.id || r.tmp) === id);
-            if (i >= 0) {
-                this.results[i] = { ...this.results[i], ...d };
-            } else if (d.status === 'rolling') {
-                if (this.results.length >= 60) {
-                    this.results = []; // Limpar a lista de resultados quando a tabela estiver cheia
-                }
-                this.results.unshift({ ...d, tmp: id });
-            }
-
-            // Atualizar a tabela
-            const table = document.getElementById('resultsTable');
-            const rows = table.getElementsByTagName('tr');
-            const completedResults = this.results.filter(r => r.status === 'complete').slice(0, 60);
-
-            // Limpar a tabela (exceto o cabeçalho)
-            for (let i = 1; i < rows.length; i++) {
-                for (let j = 0; j < 6; j++) {
-                    rows[i].cells[j].className = 'empty';
-                    rows[i].cells[j].textContent = '';
-                }
-            }
-
-            // Preencher a tabela: esquerda para direita, baixo para cima
-            completedResults.reverse().forEach((result, index) => {
-                const rowIndex = 10 - Math.floor(index / 6); // De baixo para cima (10 é a última linha)
-                const colIndex = index % 6; // Esquerda para direita
-                if (rowIndex >= 1 && rowIndex < rows.length && colIndex < rows[rowIndex].cells.length) {
-                    const cell = rows[rowIndex].cells[colIndex];
-                    cell.textContent = result.roll ?? '-';
-                    cell.className = result.color === 0 ? 'white' : result.color === 1 ? 'red' : 'black';
-                }
-            });
-
-            // Atualizar a cor do cabeçalho com base na cor predominante por coluna
-            const headers = rows[0].getElementsByTagName('th');
-            for (let col = 0; col < 6; col++) {
-                const columnResults = completedResults
-                    .filter((_, index) => index % 6 === col)
-                    .map(r => r.color);
-                const brancoCount = columnResults.filter(c => c === 0).length;
-                const vermelhoCount = columnResults.filter(c => c === 1).length;
-                const pretoCount = columnResults.filter(c => c === 2).length;
-
-                const maxCount = Math.max(brancoCount, vermelhoCount, pretoCount);
-                let headerClass = ''; // Cor padrão se não houver predominância
-                if (maxCount > 0) {
-                    if (brancoCount === maxCount && brancoCount > vermelhoCount && brancoCount > pretoCount) {
-                        headerClass = 'th-white';
-                    } else if (vermelhoCount === maxCount && vermelhoCount > brancoCount && vermelhoCount > pretoCount) {
-                        headerClass = 'th-red';
-                    } else if (pretoCount === maxCount && pretoCount > brancoCount && pretoCount > vermelhoCount) {
-                        headerClass = 'th-black';
-                    }
-                }
-                headers[col].className = headerClass;
-            }
-        }
-    }
-
-    new BlazeInterface();
+  // Associar evento ao botão de previsão
+  document.getElementById("generate-prediction").onclick = predictColor;
 })();
