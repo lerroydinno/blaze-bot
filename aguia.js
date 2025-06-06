@@ -1,12 +1,10 @@
 (async () => {
-  // Prevenir múltiplas execuções do script
   if (window.doubleGameInjected) {
     console.log("Script já em execução!");
     return;
   }
   window.doubleGameInjected = true;
 
-  // Adicionar estilos CSS
   const style = document.createElement("style");
   style.textContent = `
     .dg-container { position: fixed; top: 20px; right: 20px; width: 320px; background-color: #1f2937; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.5); font-family: Arial,sans-serif; z-index: 999999; max-height: 90vh; overflow-y: auto; color: #f3f4f6; }
@@ -27,7 +25,6 @@
   `;
   document.head.appendChild(style);
 
-  // Criar painel flutuante
   const panel = document.createElement("div");
   panel.className = "dg-container";
   panel.id = "double-game-panel";
@@ -48,24 +45,22 @@
   `;
   document.body.appendChild(panel);
 
-  // Criar imagem flutuante
-  const floatingImage = document.createElement("img");
-  floatingImage.src = "https://t.me/i/userpic/320/chefe00blaze.jpg";
-  floatingImage.className = "dg-floating-image";
-  floatingImage.id = "dg-float-img";
-  floatingImage.onclick = () => {
-    panel.style.display = "block";
-    floatingImage.style.display = "none";
-  };
-  document.body.appendChild(floatingImage);
-
-  // Fechar painel
   document.getElementById("dg-close").onclick = () => {
     panel.style.display = "none";
-    floatingImage.style.display = "block";
+    document.getElementById("dg-float-img").style.display = "block";
   };
 
-  // Funcionalidade de arrastar painel
+  const img = document.createElement("img");
+  img.src = "https://t.me/i/userpic/320/chefe00blaze.jpg";
+  img.className = "dg-floating-image";
+  img.id = "dg-float-img";
+  img.onclick = () => {
+    panel.style.display = "block";
+    img.style.display = "none";
+  };
+  document.body.appendChild(img);
+
+  // Drag funcional
   const dragHandle = panel.querySelector(".dg-drag-handle");
   let offsetX = 0, offsetY = 0;
   dragHandle.onmousedown = function (e) {
@@ -79,7 +74,6 @@
     document.onmouseup = () => (document.onmousemove = document.onmouseup = null);
   };
 
-  // Determinar cor com base no hash
   function getColorByHash(hash) {
     const colorValue = parseInt(hash.substring(0, 8), 16) % 15;
     if (colorValue === 0) return { name: "Branco", class: "dg-white" };
@@ -87,49 +81,28 @@
     return { name: "Preto", class: "dg-black" };
   }
 
-  // Obter hash mais recente da API do Blaze
   async function getLatestHash() {
     try {
-      const response = await fetch("https://blaze.com/api/roulette_games/recent", {
-        method: "GET",
-        headers: { "Accept": "application/json" }
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
+      const res = await fetch("https://blaze.com/api/roulette_games/recent");
+      const data = await res.json();
       return data?.[0]?.hash || null;
-    } catch (error) {
-      console.error("Erro ao obter hash:", error);
+    } catch (err) {
+      console.error("Erro ao obter hash:", err);
       return null;
     }
   }
 
-  // Prever a próxima cor
   async function predictColor() {
-    const predictionElement = document.getElementById("prediction");
-    if (!predictionElement) {
-      console.error("Elemento de previsão não encontrado!");
-      return;
-    }
-
-    predictionElement.textContent = "?";
-    predictionElement.className = "dg-result"; // Resetar classes
-
+    const predictionEl = document.getElementById("prediction");
+    predictionEl.textContent = "?";
+    predictionEl.className = "dg-result";
     const hash = await getLatestHash();
-    if (!hash) {
-      predictionElement.textContent = "Erro";
-      return;
-    }
+    if (!hash) return (predictionEl.textContent = "Erro");
 
     const result = getColorByHash(hash);
-    predictionElement.textContent = result.name;
-    predictionElement.classList.add(result.class);
+    predictionEl.textContent = result.name;
+    predictionEl.classList.add(result.class);
   }
 
-  // Associar evento ao botão de previsão
-  const generateButton = document.getElementById("generate-prediction");
-  if (generateButton) {
-    generateButton.onclick = predictColor;
-  } else {
-    console.error("Botão de previsão não encontrado!");
-  }
+  document.getElementById("generate-prediction").onclick = predictColor;
 })();
