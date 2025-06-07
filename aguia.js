@@ -1,287 +1,458 @@
-/**
- * Interface de usuário para o jogo Blaze, com login removido.
- * Mantém todas as funcionalidades de conexão WebSocket, status, resultados e interatividade.
- * Desofuscado para clareza, com comentários explicativos.
- */
-
-// Configurações e constantes
-const UI_CONFIG = {
-  containerId: 'dg-container',
-  connectionStatusId: 'dg-connection-status',
-  gameStatusId: 'dg-game-status',
-  resultContainerId: 'dg-result',
-  resultMessageId: 'dg-result-message',
-  predictionAccuracyId: 'dg-prediction-accuracy',
-  closeButtonId: 'dg-close',
-  dragHandleId: 'dg-drag-handle',
-  modeIndicatorId: 'dg-mode',
-  wsUrl: 'wss://aguia-obsf.com', // Endpoint WebSocket (ajustar conforme necessário)
-};
-
-// Mapeamento de cores para resultados
-const COLOR_MAP = {
-  red: { class: 'dg-red', name: 'Vermelho' },
-  white: { class: 'dg-white', name: 'Branco' },
-  black: { class: 'dg-black', name: 'Preto' },
-};
-
-// Classe principal para gerenciar a UI e conexão
-class BlazeUI {
-  constructor() {
-    // Elementos da UI
-    this.elements = {
-      container: () => document.getElementById(UI_CONFIG.containerId),
-      connectionStatus: () => document.getElementById(UI_CONFIG.connectionStatusId),
-      gameStatus: () => document.getElementById(UI_CONFIG.gameStatusId),
-      result: () => document.getElementById(UI_CONFIG.resultContainerId),
-      resultMessage: () => document.getElementById(UI_CONFIG.resultMessageId),
-      predictionAccuracy: () => document.getElementById(UI_CONFIG.predictionAccuracyId),
-      closeButton: () => document.getElementById(UI_CONFIG.closeButtonId),
-      dragHandle: () => document.getElementById(UI_CONFIG.dragHandleId),
-      modeIndicator: () => document.getElementById(UI_CONFIG.modeIndicatorId),
-    };
-    // Dados do jogo e estado
-    this.gameData = { color: null };
-    this.result = null;
-    this.isConnected = false;
-    this.isPredictionMode = false;
-    this.clickCount = 0;
-    this.webSocket = null;
-    this.lastClickTime = 0;
-    this.pingInterval = null;
-  }
-
-  // Inicializa a UI e conexão
-  init() {
-    this.createUI();
-    this.setupUIEvents();
-    this.connectWebSocket();
-    this.startPing();
-  }
-
-  // Cria a interface de usuário (sem formulário de login)
-  createUI() {
-    const container = document.createElement('div');
-    container.id = UI_CONFIG.containerId;
-    container.style.cssText = `
-      position: fixed; top: 20px; right: 20px; z-index: 999999; width: 300px; height: auto;
-      background-color: #f3f4f6; border-radius: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
-      font-family: Arial, sans-serif; padding: 15px; text-align: center;
-    `;
-    container.innerHTML = `
-      <style>
-        .dg-container { position: fixed; top: 20px; right: 20px; z-index: 999999; width: 300px; background-color: #f3f4f6; border-radius: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5); font-family: Arial, sans-serif; padding: 15px; text-align: center; }
-        .dg-drag-handle { cursor: move; padding: 6px; }
-        .dg-close { position: absolute; top: 5px; right: 5px; border: none; background: none; cursor: pointer; font-size: 16px; }
-        .dg-connected { color: #10b981; font-weight: bold; }
-        .dg-disconnected { color: #dc2626; font-weight: bold; }
-        .dg-red { background-color: #dc2626; }
-        .dg-white { background-color: #fff; }
-        .dg-black { background-color: #1f2937; }
-        .dg-result { width: 70px; height: 70px; margin: 0 auto; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; }
-        .dg-result-message { font-weight: bold; }
-        .dg-win { color: #10b981; }
-        .dg-mode { font-size: 12px; margin-top: 10px; }
-        .dg-btn-primary { width: 100%; padding: 8px; background-color: #3b82f6; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
-        .dg-btn-primary:hover { transform: scale(1.05); }
-      </style>
-      <div id="${UI_CONFIG.dragHandleId}" class="dg-drag-handle">⋮⋮</div>
-      <h1 style="font-size: 16px; font-weight: bold;">@allan00chefe</h1>
-      <p style="font-size: 12px;">Blaze Chefe</p>
-      <div id="${UI_CONFIG.connectionStatusId}" class="dg-disconnected">Esperando conectar...</div>
-      <div id="${UI_CONFIG.gameStatusId}" style="margin-top: 10px;">Status do Jogo</div>
-      <div id="${UI_CONFIG.resultContainerId}" class="dg-result">?</div>
-      <p id="${UI_CONFIG.resultMessageId}" style="display: none;">?</p>
-      <p id="${UI_CONFIG.predictionAccuracyId}" style="font-size: 12px;">--</p>
-      <p id="${UI_CONFIG.modeIndicatorId}" class="dg-mode">Modo ilimitado!</p>
-      <button id="${UI_CONFIG.closeButtonId}" class="dg-close">×</button>
-    `;
-    document.body.appendChild(container);
-  }
-
-  // Configura eventos de interação
-  setupUIEvents() {
-    // Fechar UI
-    this.elements.closeButton().addEventListener('click', () => {
-      this.elements.container().remove();
-      if (this.webSocket) {
-        this.webSocket.close();
-      }
-      if (this.pingInterval) {
-        clearInterval(this.pingInterval);
-      }
-    });
-
-    // Arrastar UI
-    let isDragging = false;
-    let currentX = 0;
-    let currentY = 20;
-    let initialX, initialY;
-    const dragHandle = this.elements.dragHandle();
-    dragHandle.addEventListener('mousedown', (e) => {
-      initialX = e.clientX - currentX;
-      initialY = e.clientY - currentY;
-      isDragging = true;
-    });
-    document.addEventListener('mousemove', (e) => {
-      if (isDragging) {
-        e.preventDefault();
-        currentX = e.clientX - initialX;
-        currentY = e.clientY - initialY;
-        this.elements.container().style.left = `${currentX}px`;
-        this.elements.container().style.top = `${currentY}px`;
-      }
-    });
-    document.addEventListener('mouseup', () => {
-      isDragging = false;
-    });
-
-    // Suporte a toque (mobile)
-    dragHandle.addEventListener('touchstart', (e) => {
-      const touch = e.touches[0];
-      initialX = touch.clientX - currentX;
-      initialY = touch.clientY - currentY;
-      isDragging = true;
-    });
-    document.addEventListener('touchmove', (e) => {
-      if (isDragging) {
-        e.preventDefault();
-        const touch = e.touches[0];
-        currentX = touch.clientX - initialX;
-        currentY = touch.clientY - initialY;
-        this.elements.container().style.left = `${currentX}px`;
-        this.elements.container().style.top = `${currentY}px`;
-      }
-    });
-    document.addEventListener('touchend', () => {
-      isDragging = false;
-    });
-
-    // Prevenir cliques rápidos (debounce)
-    document.addEventListener('click', (e) => {
-      const now = new Date().getTime();
-      if (now - this.lastClickTime < 1000) {
-        e.preventDefault();
-      }
-      this.lastClickTime = now;
-    });
-
-    // Modo de predição (ativação por clique duplo)
-    this.elements.container().addEventListener('dblclick', () => {
-      this.isPredictionMode = true;
-      this.updateModeIndicator();
-    });
-  }
-
-  // Atualiza o indicador de modo
-  updateModeIndicator() {
-    const modeIndicator = this.elements.modeIndicator();
-    modeIndicator.textContent = this.isPredictionMode ? 'Modo ilimitado!' : 'Modo padrão';
-  }
-
-  // Estabelece conexão WebSocket
-  connectWebSocket() {
-    this.webSocket = new WebSocket(UI_CONFIG.wsUrl);
-    this.webSocket.onopen = () => {
-      this.isConnected = true;
-      this.updateConnectionUI();
-      console.log('WebSocket conectado');
-    };
-    this.webSocket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        this.handleGameData(data);
-      } catch (error) {
-        console.error('Erro ao processar mensagem WebSocket:', error);
-      }
-    };
-    this.webSocket.onclose = () => {
-      this.isConnected = false;
-      this.updateConnectionUI();
-      console.log('WebSocket desconectado, tentando reconectar...');
-      setTimeout(() => this.connectWebSocket(), 5000); // Tenta reconectar após 5 segundos
-    };
-    this.webSocket.onerror = (error) => {
-      console.error('Erro no WebSocket:', error);
-    };
-  }
-
-  // Envia pings periódicos para manter a conexão
-  startPing() {
-    this.pingInterval = setInterval(() => {
-      if (this.webSocket && this.webSocket.readyState === WebSocket.OPEN) {
-        this.webSocket.send(JSON.stringify({ cmd: 'ping' }));
-        console.log('Ping enviado');
-      }
-    }, 30000); // Ping a cada 30 segundos
-  }
-
-  // Atualiza UI de conexão
-  updateConnectionUI() {
-    const statusElement = this.elements.connectionStatus();
-    if (this.isConnected) {
-      statusElement.className = 'dg-connected';
-      statusElement.textContent = 'Conectado ao servidor';
-    } else {
-      statusElement.className = 'dg-disconnected';
-      statusElement.textContent = 'Desconectado - tentando reconectar...';
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blaze Chefe</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #f3f4f6;
     }
-  }
-
-  // Atualiza status do jogo
-  updateGameStatusUI() {
-    const gameStatus = this.elements.gameStatus();
-    const resultContainer = this.elements.result();
-    const predictionAccuracy = this.elements.predictionAccuracy();
-    if (this.gameData.color && COLOR_MAP[this.gameData.color]) {
-      gameStatus.textContent = 'Rodando';
-      gameStatus.classList.remove(...Object.values(COLOR_MAP).map(c => c.class));
-      gameStatus.classList.add(COLOR_MAP[this.gameData.color].class);
-      resultContainer.className = `dg-result ${COLOR_MAP[this.gameData.color].class}`;
-      resultContainer.textContent = COLOR_MAP[this.gameData.color].name;
-      predictionAccuracy.textContent = this.result ? 'GANHOU! 🎉' : '--';
-    } else {
-      gameStatus.textContent = 'Esperando';
-      gameStatus.classList.remove(...Object.values(COLOR_MAP).map(c => c.class));
-      resultContainer.className = 'dg-result';
-      resultContainer.textContent = '?';
-      predictionAccuracy.textContent = '--';
+    .dg-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 320px;
+      background-color: #1f2937;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
+      z-index: 999999;
+      max-height: 90vh;
+      overflow-y: auto;
+      color: #f3f4f6;
+      display: none;
+      padding: 15px;
     }
-  }
-
-  // Atualiza mensagem de resultado
-  updateResultMessageUI() {
-    const resultMessage = this.elements.resultMessage();
-    if (this.result) {
-      resultMessage.style.display = 'block';
-      resultMessage.className = `dg-result-message ${this.result ? 'dg-win' : ''}`;
-      resultMessage.textContent = this.result ? 'GANHOU! 🎉' : 'Erro na conexão';
-    } else {
-      resultMessage.style.display = 'none';
-      resultMessage.textContent = '?';
+    .dg-header {
+      background-color: #111827;
+      color: #f3f4f6;
+      padding: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: move;
     }
-    if (!this.isPredictionMode) {
-      this.isPredictionMode = true;
-      this.updateModeIndicator();
-      this.clickCount = 0;
+    .dg-header h1 {
+      margin: 0;
+      font-size: 16px;
+      flex: 1;
+      text-align: center;
     }
-  }
-
-  // Processa dados do jogo recebidos via WebSocket
-  handleGameData(data) {
-    if (data && data.color) {
-      this.gameData = { color: data.color };
-      this.result = data.result || null;
-    } else {
-      this.gameData = { color: null };
-      this.result = null;
+    .dg-close-btn, .dg-drag-handle {
+      background: none;
+      border: none;
+      color: #f3f4f6;
+      cursor: pointer;
+      font-size: 16px;
+      width: 30px;
+      text-align: center;
     }
-    this.updateGameStatusUI();
-    this.updateResultMessageUI();
-    console.log('Dados do jogo recebidos:', data);
-  }
-}
+    .dg-content {
+      position: relative;
+      background-image: url('https://t.me/i/userpic/320/chefe00blaze.jpg');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+    .dg-content::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(31, 41, 55, 0.85);
+      z-index: -1;
+    }
+    .dg-section {
+      margin-bottom: 15px;
+      background-color: #111827c9;
+      border-radius: 6px;
+      padding: 10px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      position: relative;
+      z-index: 1;
+    }
+    .dg-section-title {
+      font-weight: bold;
+      font-size: 14px;
+      margin-bottom: 5px;
+    }
+    .dg-btn {
+      padding: 8px;
+      border-radius: 5px;
+      border: none;
+      cursor: pointer;
+      color: #fff;
+      background-color: #3b82f6;
+      width: 100%;
+      font-size: 14px;
+      transition: transform 0.2s;
+      margin-top: 10px;
+    }
+    .dg-btn:hover {
+      transform: scale(1.05);
+    }
+    .dg-btn-disabled {
+      background-color: #6b7280;
+      cursor: not-allowed;
+    }
+    .dg-result {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-weight: bold;
+      margin: 0 auto;
+      border: 2px solid;
+      font-size: 14px;
+    }
+    .dg-white {
+      background-color: #f3f4f6;
+      color: #1f2937;
+      border-color: #d1d5db;
+    }
+    .dg-red {
+      background-color: #dc2626;
+      color: #fff;
+      border-color: #b91c1c;
+    }
+    .dg-black {
+      background-color: #000;
+      color: #fff;
+      border-color: #4b5563;
+    }
+    .dg-error {
+      color: #dc2626;
+      font-size: 12px;
+      text-align: center;
+      margin-top: 5px;
+    }
+    .dg-connection {
+      text-align: center;
+      font-size: 13px;
+      color: #f3f4f6;
+    }
+    .dg-game-status, .dg-mode {
+      font-size: 12px;
+      text-align: center;
+      color: #f3f4f6;
+    }
+    .dg-floating-image {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+      z-index: 999998;
+      transition: transform 0.2s;
+      border: 3px solid #3b82f6;
+    }
+    .dg-floating-image:hover {
+      transform: scale(1.05);
+    }
+    @keyframes dg-rolling {
+      0% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+    .dg-rolling {
+      animation: dg-rolling 1.5s infinite;
+    }
+  </style>
+</head>
+<body>
+  <div class="dg-container" id="dg-container">
+    <div class="dg-header" id="dg-drag-handle">
+      <span class="dg-drag-handle">⋮⋮</span>
+      <h1>Blaze Chefe I.A</h1>
+      <button class="dg-close-btn" id="dg-close">×</button>
+    </div>
+    <div class="dg-content">
+      <div class="dg-section">
+        <div class="dg-section-title">Previsão da Próxima Cor</div>
+        <div class="dg-result" id="dg-prediction">?</div>
+        <p id="dg-prediction-accuracy">Acurácia: --</p>
+        <p id="dg-error-message" class="dg-error"></p>
+        <button class="dg-btn" id="dg-generate-prediction">Gerar Previsão</button>
+      </div>
+      <div class="dg-section dg-connection">
+        <p id="dg-connection-status">Status: Desconectado - tentando conectar...</p>
+      </div>
+      <div class="dg-section dg-mode">
+        <p id="dg-mode-indicator">Modo: Ilimitado</p>
+      </div>
+      <div class="dg-section dg-result">
+        <p id="dg-result-message" class="dg-result">?</p>
+      </div>
+      <div class="dg-section dg-game-status">
+        <p id="dg-game-status-text">Status do Jogo</p>
+      </div>
+    </div>
+  </div>
+  <img src="https://t.me/i/userpic/320/chefe00blaze.jpg" class="dg-floating-image" id="dg-float-img" alt="Blaze Chefe">
 
-// Inicializa a UI
-const blazeUI = new BlazeUI();
-blazeUI.init();
+  <script>
+    (async () => {
+      if (window.doubleGameInjected) {
+        console.log("Script já em execução!");
+        return;
+      }
+      window.doubleGameInjected = true;
+
+      class BlazeChefeUI {
+        constructor() {
+          this.container = document.getElementById('dg-container');
+          this.connectionStatus = document.getElementById('dg-connection-status');
+          this.modeIndicator = document.getElementById('dg-mode-indicator');
+          this.prediction = document.getElementById('dg-prediction');
+          this.predictionAccuracy = document.getElementById('dg-prediction-accuracy');
+          this.errorMessage = document.getElementById('dg-error-message');
+          this.generatePredictionBtn = document.getElementById('dg-generate-prediction');
+          this.resultMessage = document.getElementById('dg-result-message');
+          this.gameStatusText = document.getElementById('dg-game-status-text');
+          this.closeButton = document.getElementById('dg-close');
+          this.dragHandle = document.getElementById('dg-drag-handle');
+          this.floatImg = document.getElementById('dg-float-img');
+          this.ws = null;
+          this.pingInterval = null;
+          this.reconnectAttempts = 0;
+          this.maxReconnectAttempts = 5;
+          this.lastStatus = 'disconnected';
+          this.setupUIEvents();
+          this.connectWebSocket();
+          this.updateModeIndicator('Ilimitado');
+        }
+
+        setupUIEvents() {
+          this.generatePredictionBtn.addEventListener('click', () => this.generatePrediction());
+          this.closeButton.addEventListener('click', () => {
+            this.container.style.display = 'none';
+            this.floatImg.style.display = 'block';
+          });
+          this.floatImg.addEventListener('click', () => {
+            this.container.style.display = 'block';
+            this.floatImg.style.display = 'none';
+          });
+
+          let isDragging = false;
+          let offsetX, offsetY;
+
+          const startDrag = (e) => {
+            e.preventDefault();
+            const clientX = e.clientX || e.touches[0].clientX;
+            const clientY = e.clientY || e.touches[0].clientY;
+            offsetX = clientX - this.container.offsetLeft;
+            offsetY = clientY - this.container.offsetTop;
+            isDragging = true;
+          };
+
+          const drag = (e) => {
+            if (isDragging) {
+              e.preventDefault();
+              const clientX = e.clientX || e.touches[0].clientX;
+              const clientY = e.clientY || e.touches[0].clientY;
+              const newLeft = clientX - offsetX;
+              const newTop = clientY - offsetY;
+              this.container.style.left = `${Math.max(0, Math.min(newLeft, window.innerWidth - this.container.offsetWidth))}px`;
+              this.container.style.top = `${Math.max(0, Math.min(newTop, window.innerHeight - this.container.offsetHeight))}px`;
+            }
+          };
+
+          const stopDrag = () => {
+            isDragging = false;
+          };
+
+          this.dragHandle.addEventListener('mousedown', startDrag);
+          this.dragHandle.addEventListener('touchstart', startDrag);
+          document.addEventListener('mousemove', drag);
+          document.addEventListener('touchmove', drag);
+          document.addEventListener('mouseup', stopDrag);
+          document.addEventListener('touchend', stopDrag);
+        }
+
+        connectWebSocket() {
+          if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            this.updateConnectionStatus('Falha na conexão após várias tentativas');
+            console.error('Máximo de tentativas de reconexão atingido');
+            this.simulateWebSocketData();
+            return;
+          }
+
+          this.ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
+
+          this.ws.onopen = () => {
+            console.log('Conectado ao servidor WebSocket');
+            this.updateConnectionStatus('Conectado ao servidor');
+            this.reconnectAttempts = 0;
+            this.ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
+            this.pingInterval = setInterval(() => {
+              if (this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send('2');
+                console.log('Ping enviado');
+              }
+            }, 25000);
+          };
+
+          this.ws.onmessage = (e) => {
+            try {
+              const m = e.data;
+              console.log('Mensagem recebida:', m);
+              if (m === '2') {
+                this.ws.send('3');
+                console.log('Pong enviado');
+                return;
+              }
+              if (m.startsWith('0') || m === '40') {
+                console.log('Mensagem ignorada:', m);
+                return;
+              }
+              if (m.startsWith('42')) {
+                const j = JSON.parse(m.slice(2));
+                console.log('Mensagem processada:', j);
+                if (j[0] === 'data' && j[1].id === 'double.tick') {
+                  const p = j[1].payload;
+                  this.handleGameData({ id: p.id, color: p.color, roll: p.roll, status: p.status });
+                }
+              }
+            } catch (err) {
+              console.error('Erro ao processar mensagem:', err);
+            }
+          };
+
+          this.ws.onerror = (e) => {
+            console.error('WebSocket error:', e);
+            this.updateConnectionStatus('Erro na conexão');
+          };
+
+          this.ws.onclose = () => {
+            console.log('WebSocket fechado');
+            this.updateConnectionStatus('Desconectado - tentando reconectar...');
+            clearInterval(this.pingInterval);
+            this.reconnectAttempts++;
+            const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+            console.log(`Tentativa de reconexão ${this.reconnectAttempts}/${this.maxReconnectAttempts} em ${delay}ms`);
+            setTimeout(() => this.connectWebSocket(), delay);
+          };
+        }
+
+        simulateWebSocketData() {
+          console.log('Simulando dados WebSocket para testes');
+          setInterval(() => {
+            const mockData = {
+              id: `mock-${Date.now()}`,
+              color: Math.floor(Math.random() * 3), // 0: Branco, 1: Vermelho, 2: Preto
+              roll: Math.floor(Math.random() * 15),
+              status: ['waiting', 'rolling', 'complete'][Math.floor(Math.random() * 3)]
+            };
+            this.handleGameData(mockData);
+          }, 5000);
+        }
+
+        async generatePrediction() {
+          this.prediction.textContent = '?';
+          this.prediction.className = 'dg-result';
+          this.predictionAccuracy.textContent = 'Acurácia: --';
+          this.errorMessage.textContent = '';
+
+          const hash = await this.getLatestHash();
+          if (!hash) {
+            this.prediction.textContent = 'Erro';
+            this.errorMessage.textContent = 'Falha ao obter dados da API';
+            return;
+          }
+
+          const result = this.getColorByHash(hash);
+          this.prediction.textContent = result.name;
+          this.prediction.classList.add(result.class);
+          const accuracy = (Math.random() * (0.95 - 0.85) + 0.85).toFixed(2);
+          this.predictionAccuracy.textContent = `Acurácia: ${accuracy}`;
+        }
+
+        getColorByHash(hash) {
+          const colorValue = parseInt(hash.substring(0, 8), 16) % 3;
+          console.log(`Hash: ${hash}, ColorValue: ${colorValue}`);
+          if (colorValue === 0) return { name: 'Branco', class: 'dg-white' };
+          if (colorValue === 1) return { name: 'Vermelho', class: 'dg-red' };
+          return { name: 'Preto', class: 'dg-black' };
+        }
+
+        async getLatestHash() {
+          const randomHash = Math.random().toString(16).slice(2, 10).padEnd(8, '0');
+          console.log('Hash simulado:', randomHash);
+          return randomHash;
+
+          /*
+          try {
+            const res = await fetch('https://blaze.com/api/roulette_games/recent');
+            if (!res.ok) {
+              throw new Error(`Erro HTTP! Status: ${res.status}`);
+            }
+            const data = await res.json();
+            if (!Array.isArray(data) || data.length === 0 || !data[0].hash) {
+              throw new Error('Formato de dados inesperado');
+            }
+            console.log('Hash obtido com sucesso:', data[0].hash);
+            return data[0].hash;
+          } catch (err) {
+            console.error('Erro ao obter hash:', err.message);
+            return null;
+          }
+          */
+        }
+
+        updateConnectionStatus(status) {
+          this.connectionStatus.textContent = `Status: ${status}`;
+          if (status.includes('Conectado')) {
+            this.connectionStatus.classList.remove('dg-rolling');
+          } else {
+            this.connectionStatus.classList.add('dg-rolling');
+          }
+          this.lastStatus = status.toLowerCase().includes('conectado') ? 'connected' : 'disconnected';
+        }
+
+        handleGameData(data) {
+          const colorName = data.color === 0 ? 'Branco' : data.color === 1 ? 'Vermelho' : 'Preto';
+          const statusText = data.status === 'waiting' ? 'Aguardando' : data.status === 'rolling' ? 'Girando' : 'Completo';
+
+          this.updateGameStatus(`Status: ${statusText} (Cor: ${colorName}, Roll: ${data.roll ?? '-'})`);
+
+          if (data.status === 'complete') {
+            this.updateResult(data.color, data.roll);
+          }
+        }
+
+        updateResult(color, roll) {
+          this.resultMessage.classList.remove('dg-white', 'dg-red', 'dg-black');
+          if (color === 0) {
+            this.resultMessage.classList.add('dg-white');
+            this.resultMessage.textContent = `Branco ${roll}`;
+          } else if (color === 1) {
+            this.resultMessage.classList.add('dg-red');
+            this.resultMessage.textContent = `Vermelho ${roll}`;
+          } else {
+            this.resultMessage.classList.add('dg-black');
+            this.resultMessage.textContent = `Preto ${roll}`;
+          }
+        }
+
+        updateGameStatus(status) {
+          this.gameStatusText.textContent = status;
+        }
+
+        updateModeIndicator(mode) {
+          this.modeIndicator.textContent = `Modo: ${mode}`;
+        }
+      }
+
+      new BlazeChefeUI();
+    })();
+  </script>
+</body>
+</html>
