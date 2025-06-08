@@ -92,7 +92,7 @@
     if (el && seed) el.textContent = seed;
   }
 
-  // Interceptação real do WebSocket com debug
+  // WebSocket interceptor com suporte a eventos tipo "42[...]"
   const OriginalWebSocket = window.WebSocket;
   window.WebSocket = function (url, protocols) {
     const ws = new OriginalWebSocket(url, protocols);
@@ -100,26 +100,24 @@
     ws.addEventListener('message', (event) => {
       const data = event.data;
 
-      if (typeof data === 'string') {
-        if (data.includes('roulette_next')) {
-          console.log('[Interceptado] Mensagem da Blaze contendo "roulette_next":', data);
+      // Apenas mensagens do tipo Socket.IO (ex: 42["roulette_next", {...}])
+      if (typeof data === 'string' && data.startsWith('42')) {
+        try {
+          const payload = JSON.parse(data.slice(2)); // Remove o "42" e parseia
+          const eventName = payload[0];
+          const eventData = payload[1];
 
-          try {
-            const jsonStart = data.indexOf('{');
-            const jsonStr = data.slice(jsonStart);
-            const payload = JSON.parse(jsonStr);
-
-            // Caso venha como payload.message.seed
-            const seed = payload?.message?.seed || payload?.data?.seed || null;
+          if (eventName === 'roulette_next') {
+            const seed = eventData?.seed;
             if (seed) {
-              console.log('[✔] Seed encontrada:', seed);
+              console.log('[✔] Seed da próxima rodada:', seed);
               updateNextSeed(seed);
             } else {
-              console.log('[⚠️] Nenhuma seed encontrada na estrutura:', payload);
+              console.warn('[⚠️] Evento "roulette_next" recebido mas sem seed:', eventData);
             }
-          } catch (e) {
-            console.warn('[Erro ao parsear JSON]:', e);
           }
+        } catch (e) {
+          console.warn('[Erro ao parsear evento Socket.IO]:', e);
         }
       }
     });
