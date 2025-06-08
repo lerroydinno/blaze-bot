@@ -1,61 +1,120 @@
+<script>
+// === Painel flutuante original preservado ===
 (function () {
-  // === Painel ===
-  const panel = document.createElement("div");
-  panel.id = "blaze-panel";
-  panel.style = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 9999;
-    background: #111;
-    color: #fff;
-    padding: 10px 15px;
-    font-family: Arial, sans-serif;
-    font-size: 14px;
-    border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0,0,0,0.5);
-  `;
-  panel.innerHTML = `
-    <strong>Próxima Hash:</strong><br>
-    <span id="nextSeed">Carregando...</span><br><br>
-    <button id="btnSalvarHash" style="background:#222;color:#fff;padding:4px 10px;border:none;border-radius:6px;">Salvar .txt</button>
-  `;
-  document.body.appendChild(panel);
+  // Cria botão flutuante
+  const btn = document.createElement('img');
+  btn.src = 'https://i.imgur.com/7bHht0v.png';
+  Object.assign(btn.style, {
+    position: 'fixed',
+    bottom: '20px',
+    right: '20px',
+    width: '50px',
+    height: '50px',
+    zIndex: '9999',
+    cursor: 'pointer'
+  });
 
-  const spanSeed = document.getElementById("nextSeed");
-  const btnSalvar = document.getElementById("btnSalvarHash");
-  let ultimaSeed = "";
+  // Cria painel
+  const painel = document.createElement('div');
+  Object.assign(painel.style, {
+    position: 'fixed',
+    bottom: '80px',
+    right: '20px',
+    width: '320px',
+    maxHeight: '500px',
+    overflowY: 'auto',
+    backgroundColor: '#111',
+    color: '#fff',
+    borderRadius: '10px',
+    padding: '10px',
+    boxShadow: '0 0 10px rgba(0,0,0,0.5)',
+    zIndex: '9999',
+    display: 'none',
+    fontFamily: 'monospace',
+    fontSize: '14px'
+  });
 
-  btnSalvar.onclick = () => {
-    if (!ultimaSeed) {
-      alert("Nenhuma hash capturada ainda.");
-      return;
-    }
-    const blob = new Blob([ultimaSeed], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "hash_blaze.txt";
-    a.click();
-    URL.revokeObjectURL(url);
+  // Título e botão minimizar
+  const header = document.createElement('div');
+  header.innerHTML = `<b>📊 Blaze Hash Tracker</b>`;
+  const minimizar = document.createElement('span');
+  minimizar.innerText = '✖';
+  Object.assign(minimizar.style, {
+    float: 'right',
+    cursor: 'pointer',
+    color: 'red'
+  });
+  minimizar.onclick = () => painel.style.display = 'none';
+  header.appendChild(minimizar);
+  painel.appendChild(header);
+
+  // Logs
+  const logs = document.createElement('div');
+  painel.appendChild(logs);
+
+  // Botão exportar hashes
+  const exportar = document.createElement('button');
+  exportar.innerText = "📄 Exportar Hashes";
+  Object.assign(exportar.style, {
+    background: "#333",
+    color: "#fff",
+    border: "1px solid #888",
+    padding: "5px",
+    borderRadius: "5px",
+    marginTop: "10px",
+    cursor: "pointer",
+    width: "100%"
+  });
+  painel.appendChild(exportar);
+
+  // Adiciona elementos
+  document.body.appendChild(btn);
+  document.body.appendChild(painel);
+
+  // Alternar painel
+  btn.onclick = () => {
+    painel.style.display = painel.style.display === 'none' ? 'block' : 'none';
   };
 
-  async function fetchSeed() {
-    try {
-      const res = await fetch("https://api-gaming.blaze.bet.br/roulette/game"); // ajustar se necessário
-      const json = await res.json();
-      const seed = json?.next?.seed || json?.data?.seed;
-      if (seed && seed !== ultimaSeed) {
-        ultimaSeed = seed;
-        localStorage.setItem("ultima_hash", seed);
-        spanSeed.textContent = seed;
-        console.log("✅ Nova hash coletada:", seed);
-      }
-    } catch (e) {
-      console.log("⚠️ Erro ao buscar hash via HTTP", e);
-    }
+  // === Função principal de captura de hash ===
+  let savedData = JSON.parse(localStorage.getItem("blaze_hashes") || "[]");
+
+  function saveHash(data) {
+    const time = new Date().toLocaleString();
+    savedData.push({ time, ...data });
+    localStorage.setItem("blaze_hashes", JSON.stringify(savedData));
+
+    const item = document.createElement('div');
+    item.innerText = `${time} | ${data.numero} | ${data.cor} | ${data.seed}`;
+    logs.prepend(item);
   }
 
-  setInterval(fetchSeed, 2000);
-  fetchSeed();
+  // Conexão WebSocket com Blaze
+  const ws = new WebSocket("wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket");
+
+  ws.onmessage = (msg) => {
+    if (typeof msg.data !== "string") return;
+
+    if (msg.data.includes("roulette")) {
+      const match = msg.data.match(/"roll":(\d+).*?"color":(\d).*?"seed":"(.*?)"/);
+      if (match) {
+        const [_, number, color, seed] = match;
+        const cor = color == "0" ? "preto" : color == "1" ? "vermelho" : "branco";
+        saveHash({ numero: number, cor, seed });
+        console.log("🔥 Hash capturada:", seed);
+      }
+    }
+  };
+
+  // Exportar como .txt
+  exportar.onclick = () => {
+    const texto = savedData.map(e => `${e.time} | ${e.numero} | ${e.cor} | ${e.seed}`).join("\n");
+    const blob = new Blob([texto], { type: "text/plain" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "blaze_hashes.txt";
+    a.click();
+  };
+
 })();
+</script>
