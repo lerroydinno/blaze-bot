@@ -1,4 +1,5 @@
 (function () {
+  // === Painel ===
   const panel = document.createElement("div");
   panel.id = "blaze-panel";
   panel.style = `
@@ -39,32 +40,22 @@
     URL.revokeObjectURL(url);
   };
 
-  // Interceptar WebSocket após conexão já iniciada
-  const openWs = new Set();
-
-  const originalSend = WebSocket.prototype.send;
-  WebSocket.prototype.send = function (...args) {
-    if (!openWs.has(this)) {
-      this.addEventListener("message", (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          // Verifica seed dentro do objeto, mesmo fora do evento "roulette_next"
-          if (typeof data === "object" && data && data[1]?.seed) {
-            const seed = data[1].seed;
-            if (seed && seed.length > 5) {
-              ultimaSeed = seed;
-              localStorage.setItem("ultima_hash", seed);
-              spanSeed.textContent = seed;
-            }
-          }
-
-        } catch (e) {
-          // ignora erro de parse
-        }
-      });
-      openWs.add(this);
+  async function fetchSeed() {
+    try {
+      const res = await fetch("https://api-gaming.blaze.bet.br/roulette/game"); // ajustar se necessário
+      const json = await res.json();
+      const seed = json?.next?.seed || json?.data?.seed;
+      if (seed && seed !== ultimaSeed) {
+        ultimaSeed = seed;
+        localStorage.setItem("ultima_hash", seed);
+        spanSeed.textContent = seed;
+        console.log("✅ Nova hash coletada:", seed);
+      }
+    } catch (e) {
+      console.log("⚠️ Erro ao buscar hash via HTTP", e);
     }
-    return originalSend.apply(this, args);
-  };
+  }
+
+  setInterval(fetchSeed, 2000);
+  fetchSeed();
 })();
