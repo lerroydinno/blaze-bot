@@ -1,5 +1,4 @@
 (function () {
-  // === Criar painel flutuante ===
   const panel = document.createElement("div");
   panel.id = "blaze-panel";
   panel.style = `
@@ -17,55 +16,55 @@
   `;
   panel.innerHTML = `
     <strong>Próxima Hash:</strong><br>
-    <span id="nextSeed">Carregando...</span>
+    <span id="nextSeed">Carregando...</span><br><br>
+    <button id="btnSalvarHash" style="background:#222;color:#fff;padding:4px 10px;border:none;border-radius:6px;">Salvar .txt</button>
   `;
   document.body.appendChild(panel);
 
-  // === Função para salvar hash no localStorage e como .txt ===
-  function salvarHash(hash) {
-    try {
-      localStorage.setItem('ultima_hash', hash);
+  const spanSeed = document.getElementById("nextSeed");
+  const btnSalvar = document.getElementById("btnSalvarHash");
+  let ultimaSeed = "";
 
-      const blob = new Blob([hash], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'hash_blaze.txt';
-      a.style.display = 'none';
-
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error("Erro ao salvar hash:", e);
+  btnSalvar.onclick = () => {
+    if (!ultimaSeed) {
+      alert("Nenhuma hash capturada ainda.");
+      return;
     }
-  }
-
-  // === Captura WebSocket para interceptar a hash ===
-  const WebSocketOriginal = window.WebSocket;
-  window.WebSocket = function (...args) {
-    const ws = new WebSocketOriginal(...args);
-
-    ws.addEventListener('message', (event) => {
-      try {
-        const data = JSON.parse(event.data);
-
-        // Verifica se é a próxima rodada
-        if (Array.isArray(data) && data[0] === 'roulette_next') {
-          const seed = data[1]?.seed;
-          if (seed) {
-            document.getElementById('nextSeed').textContent = seed;
-            salvarHash(seed); // Salva e baixa
-          }
-        }
-      } catch (e) {
-        // Ignora erros de parsing
-      }
-    });
-
-    return ws;
+    const blob = new Blob([ultimaSeed], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "hash_blaze.txt";
+    a.click();
+    URL.revokeObjectURL(url);
   };
-  window.WebSocket.prototype = WebSocketOriginal.prototype;
+
+  // Interceptar WebSocket após conexão já iniciada
+  const openWs = new Set();
+
+  const originalSend = WebSocket.prototype.send;
+  WebSocket.prototype.send = function (...args) {
+    if (!openWs.has(this)) {
+      this.addEventListener("message", (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          // Verifica seed dentro do objeto, mesmo fora do evento "roulette_next"
+          if (typeof data === "object" && data && data[1]?.seed) {
+            const seed = data[1].seed;
+            if (seed && seed.length > 5) {
+              ultimaSeed = seed;
+              localStorage.setItem("ultima_hash", seed);
+              spanSeed.textContent = seed;
+            }
+          }
+
+        } catch (e) {
+          // ignora erro de parse
+        }
+      });
+      openWs.add(this);
+    }
+    return originalSend.apply(this, args);
+  };
 })();
