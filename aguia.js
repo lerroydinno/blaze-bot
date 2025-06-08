@@ -52,8 +52,8 @@
       margin-bottom: 5px;
     }
     .prediction-value {
-      font-size: 18px;
-      font-weight: bold;
+      font-size: 12px;
+      word-break: break-word;
     }
   `;
   document.head.appendChild(style);
@@ -66,9 +66,9 @@
       <button id="minimizeBtn">−</button>
     </div>
     <div class="menu-content" id="menuContent">
-      <div class="prediction-card" id="blazeHashDisplay">
+      <div class="prediction-card">
         <div class="prediction-title">Próxima Seed</div>
-        <div class="prediction-value" id="lastHashValue" style="font-size:12px;word-break:break-all">-</div>
+        <div class="prediction-value" id="nextSeed">Carregando...</div>
       </div>
     </div>
   `;
@@ -87,32 +87,31 @@
     content.style.display = content.style.display === 'none' ? 'block' : 'none';
   });
 
-  function showUpcomingSeed(seed) {
-    const hashDiv = document.getElementById('lastHashValue');
-    if (hashDiv) hashDiv.textContent = seed;
+  function updateNextSeed(seed) {
+    const el = document.getElementById('nextSeed');
+    if (el && seed) el.textContent = seed;
   }
 
-  const originalWebSocket = window.WebSocket;
-  window.WebSocket = function (...args) {
-    const socket = new originalWebSocket(...args);
-    const originalSend = socket.send;
+  const OriginalWebSocket = window.WebSocket;
+  window.WebSocket = function (url, protocols) {
+    const socket = new OriginalWebSocket(url, protocols);
 
-    socket.send = function (...sendArgs) {
-      return originalSend.apply(this, sendArgs);
-    };
+    socket.addEventListener('message', (event) => {
+      const data = event.data;
 
-    socket.addEventListener('message', function (event) {
-      try {
-        const msg = JSON.parse(event.data);
-        if (Array.isArray(msg)) {
-          const [type, data] = msg;
-
-          if (type === 'roulette_next' && data?.seed) {
-            showUpcomingSeed(data.seed);
+      if (typeof data === 'string' && data.includes('roulette_next')) {
+        try {
+          const jsonStart = data.indexOf('{');
+          if (jsonStart > -1) {
+            const jsonStr = data.slice(jsonStart);
+            const payload = JSON.parse(jsonStr);
+            if (payload?.message?.seed) {
+              updateNextSeed(payload.message.seed);
+            }
           }
+        } catch (err) {
+          // Ignorar erros de parsing
         }
-      } catch (e) {
-        // ignorar mensagens inválidas
       }
     });
 
