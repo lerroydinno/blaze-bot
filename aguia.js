@@ -1,127 +1,71 @@
 (function () {
-  const style = document.createElement('style');
-  style.innerHTML = `
-    .floating-menu {
-      position: fixed;
-      top: 50px;
-      right: 20px;
-      width: 260px;
-      background-color: #1c1c1e;
-      color: white;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.5);
-      font-family: Arial, sans-serif;
-      z-index: 9999;
-    }
-    .menu-header {
-      background-color: #2c2c2e;
-      padding: 10px;
-      border-top-left-radius: 10px;
-      border-top-right-radius: 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .menu-header h4 {
-      margin: 0;
-      font-size: 16px;
-    }
-    .menu-content {
-      padding: 10px;
-      display: block;
-    }
-    .menu-toggle {
-      position: fixed;
-      top: 10px;
-      right: 20px;
-      width: 40px;
-      height: 40px;
-      background-image: url('https://i.imgur.com/6Z8bZpT.png');
-      background-size: cover;
-      cursor: pointer;
-      z-index: 10000;
-    }
-    .prediction-card {
-      background-color: #2c2c2e;
-      padding: 10px;
-      border-radius: 8px;
-      margin-bottom: 10px;
-    }
-    .prediction-title {
-      font-size: 14px;
-      margin-bottom: 5px;
-    }
-    .prediction-value {
-      font-size: 12px;
-      word-break: break-word;
-    }
+  // === Criar painel flutuante ===
+  const panel = document.createElement("div");
+  panel.id = "blaze-panel";
+  panel.style = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    background: #111;
+    color: #fff;
+    padding: 10px 15px;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
   `;
-  document.head.appendChild(style);
-
-  const menu = document.createElement('div');
-  menu.className = 'floating-menu';
-  menu.innerHTML = `
-    <div class="menu-header">
-      <h4>Bot Blaze</h4>
-      <button id="minimizeBtn">−</button>
-    </div>
-    <div class="menu-content" id="menuContent">
-      <div class="prediction-card">
-        <div class="prediction-title">Próxima Seed</div>
-        <div class="prediction-value" id="nextSeed">Carregando...</div>
-      </div>
-    </div>
+  panel.innerHTML = `
+    <strong>Próxima Hash:</strong><br>
+    <span id="nextSeed">Carregando...</span>
   `;
-  document.body.appendChild(menu);
+  document.body.appendChild(panel);
 
-  const toggleButton = document.createElement('div');
-  toggleButton.className = 'menu-toggle';
-  document.body.appendChild(toggleButton);
+  // === Função para salvar hash no localStorage e como .txt ===
+  function salvarHash(hash) {
+    try {
+      localStorage.setItem('ultima_hash', hash);
 
-  toggleButton.addEventListener('click', () => {
-    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
-  });
+      const blob = new Blob([hash], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
 
-  document.getElementById('minimizeBtn').addEventListener('click', () => {
-    const content = document.getElementById('menuContent');
-    content.style.display = content.style.display === 'none' ? 'block' : 'none';
-  });
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'hash_blaze.txt';
+      a.style.display = 'none';
 
-  function updateNextSeed(seed) {
-    const el = document.getElementById('nextSeed');
-    if (el && seed) el.textContent = seed;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Erro ao salvar hash:", e);
+    }
   }
 
-  // WebSocket interceptor com suporte a eventos tipo "42[...]"
-  const OriginalWebSocket = window.WebSocket;
-  window.WebSocket = function (url, protocols) {
-    const ws = new OriginalWebSocket(url, protocols);
+  // === Captura WebSocket para interceptar a hash ===
+  const WebSocketOriginal = window.WebSocket;
+  window.WebSocket = function (...args) {
+    const ws = new WebSocketOriginal(...args);
 
     ws.addEventListener('message', (event) => {
-      const data = event.data;
+      try {
+        const data = JSON.parse(event.data);
 
-      // Apenas mensagens do tipo Socket.IO (ex: 42["roulette_next", {...}])
-      if (typeof data === 'string' && data.startsWith('42')) {
-        try {
-          const payload = JSON.parse(data.slice(2)); // Remove o "42" e parseia
-          const eventName = payload[0];
-          const eventData = payload[1];
-
-          if (eventName === 'roulette_next') {
-            const seed = eventData?.seed;
-            if (seed) {
-              console.log('[✔] Seed da próxima rodada:', seed);
-              updateNextSeed(seed);
-            } else {
-              console.warn('[⚠️] Evento "roulette_next" recebido mas sem seed:', eventData);
-            }
+        // Verifica se é a próxima rodada
+        if (Array.isArray(data) && data[0] === 'roulette_next') {
+          const seed = data[1]?.seed;
+          if (seed) {
+            document.getElementById('nextSeed').textContent = seed;
+            salvarHash(seed); // Salva e baixa
           }
-        } catch (e) {
-          console.warn('[Erro ao parsear evento Socket.IO]:', e);
         }
+      } catch (e) {
+        // Ignora erros de parsing
       }
     });
 
     return ws;
   };
+  window.WebSocket.prototype = WebSocketOriginal.prototype;
 })();
