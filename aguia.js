@@ -92,29 +92,38 @@
     if (el && seed) el.textContent = seed;
   }
 
+  // Interceptação real do WebSocket com debug
   const OriginalWebSocket = window.WebSocket;
   window.WebSocket = function (url, protocols) {
-    const socket = new OriginalWebSocket(url, protocols);
+    const ws = new OriginalWebSocket(url, protocols);
 
-    socket.addEventListener('message', (event) => {
+    ws.addEventListener('message', (event) => {
       const data = event.data;
 
-      if (typeof data === 'string' && data.includes('roulette_next')) {
-        try {
-          const jsonStart = data.indexOf('{');
-          if (jsonStart > -1) {
+      if (typeof data === 'string') {
+        if (data.includes('roulette_next')) {
+          console.log('[Interceptado] Mensagem da Blaze contendo "roulette_next":', data);
+
+          try {
+            const jsonStart = data.indexOf('{');
             const jsonStr = data.slice(jsonStart);
             const payload = JSON.parse(jsonStr);
-            if (payload?.message?.seed) {
-              updateNextSeed(payload.message.seed);
+
+            // Caso venha como payload.message.seed
+            const seed = payload?.message?.seed || payload?.data?.seed || null;
+            if (seed) {
+              console.log('[✔] Seed encontrada:', seed);
+              updateNextSeed(seed);
+            } else {
+              console.log('[⚠️] Nenhuma seed encontrada na estrutura:', payload);
             }
+          } catch (e) {
+            console.warn('[Erro ao parsear JSON]:', e);
           }
-        } catch (err) {
-          // Ignorar erros de parsing
         }
       }
     });
 
-    return socket;
+    return ws;
   };
 })();
