@@ -8,7 +8,7 @@
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  function getRollColor(hash) {
+  function getRollColor(hash, corReal) {
     if (hash.length < 64) {
       console.warn("Hash com menos de 64 caracteres:", hash);
       return { cor: "PRETO", numero: 8 };
@@ -20,17 +20,18 @@
     };
 
     const sum = hash.slice(0, 64).split('').reduce((acc, char) => acc + hexToDecimal(char), 0);
-    console.log("Hash:", hash.slice(0, 64), "Soma:", sum);
+    console.log(`Hash: ${hash.slice(0, 64)}, Soma: ${sum}, Cor Real: ${corReal}`);
 
+    // Intervalos ajustáveis (exemplo inicial)
+    if (sum >= 330 && sum <= 340) return { cor: "VERMELHO", numero: sum % 7 + 1 };
+    if (sum >= 341 && sum <= 349) return { cor: "PRETO", numero: sum % 7 + 8 };
     if (sum === 350) return { cor: "BRANCO", numero: 0 };
-    if (sum >= 338 && sum <= 340) return { cor: "VERMELHO", numero: sum % 7 + 1 };
-    if (sum >= 345 && sum <= 360 && sum !== 350) return { cor: "PRETO", numero: sum % 7 + 8 };
-    return { cor: "PRETO", numero: 8 };
+    return { cor: "PRETO", numero: 8 }; // Padrão
   }
 
-  async function gerarPrevisao(seed, hist = []) {
+  async function gerarPrevisao(seed, hist = [], corReal) {
     const novaHash = await sha256(seed);
-    const previsao = getRollColor(novaHash);
+    const previsao = getRollColor(novaHash, corReal);
     const confianca = 100;
     const aposta = calcularAposta(confianca);
     return { ...previsao, confianca: confianca.toFixed(2), aposta };
@@ -90,7 +91,6 @@
 
   carregarHistoricoLocal();
 
-  // Criação do painel
   const painel = document.createElement("div");
   painel.id = "painel_previsao";
   painel.style.position = "fixed";
@@ -167,7 +167,7 @@
 
   document.getElementById('btn_prever').onclick = async () => {
     if (lastHash && lastHash !== "indefinido") {
-      const previsao = await gerarPrevisao(lastHash, coresAnteriores);
+      const previsao = await gerarPrevisao(lastHash, coresAnteriores, "DESCONHECIDO");
       document.getElementById('previsao_texto').innerText = `🔮 Próxima: ${previsao.cor} (${previsao.numero})\n🎯 Confiança: ${previsao.confianca}%\n💰 Apostar: ${previsao.aposta}x`;
     }
   };
@@ -191,7 +191,7 @@
       const hash = ultimo.hash || ultimo.server_seed || "indefinido";
 
       if (!document.getElementById(`log_${hash}`) && hash !== "indefinido") {
-        const previsao = await gerarPrevisao(hash, coresAnteriores);
+        const previsao = await gerarPrevisao(hash, coresAnteriores, cor);
         updatePainel(cor, numero, hash, previsao);
         historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash};${previsao.cor};${previsao.confianca}%\n`;
         salvarHistoricoLocal();
