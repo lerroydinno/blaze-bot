@@ -147,6 +147,7 @@ class BlazeInterface {
     this.results = [];
     this.processedIds = new Set();
     this.notifiedIds = new Set();
+    this.latestHash = null; // Armazena o hash mais recente
     this.initMonitorInterface();
   }
 
@@ -183,6 +184,7 @@ class BlazeInterface {
       .color-dot-0{background:#fff;border:1px solid #777}.color-dot-1{background:#f44336}.color-dot-2{background:#212121}
       .prediction-accuracy{font-size:12px;margin-top:5px;opacity:.7}
       .prediction-waiting{color:#00e676;text-shadow:0 0 5px rgba(0,230,118,.7)}
+      .result-hash{font-size:12px;opacity:.7;word-break:break-all;margin-top:5px}
     `;
     const style = document.createElement('style');
     style.textContent = css;
@@ -210,7 +212,6 @@ class BlazeInterface {
 
     const monitorBox = document.getElementById('blazeMonitorBox');
     
-    // Centralizar o menu na tela
     const centerMenu = () => {
       const windowWidth = window.innerWidth;
       const windowHeight = window.innerHeight;
@@ -220,9 +221,9 @@ class BlazeInterface {
       monitorBox.style.top = `${(windowHeight - menuHeight) / 2}px`;
     };
     
-    centerMenu(); // Centraliza inicialmente
-    window.addEventListener('resize', centerMenu); // Re-centraliza ao redimensionar a janela
-    makeDraggable(monitorBox); // Torna o menu arrastável
+    centerMenu();
+    window.addEventListener('resize', centerMenu);
+    makeDraggable(monitorBox);
 
     document.getElementById('blazeMinBtn').addEventListener('click', () => {
       monitorBox.style.display = 'none';
@@ -232,7 +233,7 @@ class BlazeInterface {
     this.bubble.addEventListener('click', () => {
       this.bubble.style.display = 'none';
       monitorBox.style.display = 'block';
-      centerMenu(); // Re-centraliza ao restaurar
+      centerMenu();
     });
 
     this.results = [];
@@ -275,6 +276,11 @@ class BlazeInterface {
       if (d.status === 'complete') this.updatePredictionStats(d);
     }
 
+    // Armazena o hash mais recente (se for um hash)
+    if (isHash(d.id)) {
+      this.latestHash = d.id;
+    }
+
     const r = this.results[0];
     const rDiv = document.getElementById('blazeResults');
     if (rDiv && r) {
@@ -288,6 +294,7 @@ class BlazeInterface {
         <div class="result-number result-color-${r.color}">${r.roll ?? '-'}</div>
         <div>${r.color === 0 ? 'Branco' : r.color === 1 ? 'Vermelho' : 'Preto'}</div>
         <div class="result-status ${stCls}">${stTxt}</div>
+        ${this.latestHash ? `<div class="result-hash">Hash: ${this.latestHash}</div>` : ''}
       `;
     }
 
