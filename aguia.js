@@ -1,12 +1,4 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Blaze Bot I.A</title>
-</head>
-<body>
-<script>
-(async function () {
+(async () => {
   const apiURL = "https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
 
   async function sha256(message) {
@@ -17,7 +9,7 @@
   }
 
   function getRollColor(hash) {
-    // Verifica se o hash tem 64 caracteres
+    // Verifica se o hash tem pelo menos 64 caracteres
     if (hash.length < 64) {
       console.warn("Hash com menos de 64 caracteres:", hash);
       return { cor: "PRETO", numero: 8 }; // Padrão caso o hash seja inválido
@@ -39,9 +31,53 @@
     return { cor: "PRETO", numero: 8 }; // Padrão para casos fora dos intervalos
   }
 
+  function analisarSequencias(hist) {
+    if (hist.length < 4) return null;
+    const ultimas = hist.slice(-4);
+    if (ultimas.every(c => c === "PRETO")) return "VERMELHO";
+    if (ultimas.every(c => c === "VERMELHO")) return "PRETO";
+    if (ultimas[ultimas.length - 1] === "BRANCO") return "PRETO";
+    return null;
+  }
+
+  function calcularIntervaloBranco(hist) {
+    let ultPos = -1, intervalos = [];
+    hist.forEach((cor, i) => {
+      if (cor === "BRANCO") {
+        if (ultPos !== -1) intervalos.push(i - ultPos);
+        ultPos = i;
+      }
+    });
+    const media = intervalos.length ? intervalos.reduce((a, b) => a + b) / intervalos.length : 0;
+    const ultimaBranco = hist.lastIndexOf("BRANCO");
+    const desdeUltimo = ultimaBranco !== -1 ? hist.length - ultimaBranco : hist.length;
+    return { media, desdeUltimo };
+  }
+
+  let lookupPrefix = {};
+
+  function atualizarLookup(hash, cor) {
+    const prefix = hash.slice(0, 2);
+    if (!lookupPrefix[prefix]) lookupPrefix[prefix] = { BRANCO: 0, VERMELHO: 0, PRETO: 0 };
+    lookupPrefix[prefix][cor]++;
+  }
+
+  function reforcoPrefixo(hash) {
+    const prefix = hash.slice(0, 2);
+    const dados = lookupPrefix[prefix];
+    if (!dados) return {};
+    const total = dados.BRANCO + dados.VERMELHO + dados.PRETO;
+    return {
+      BRANCO: ((dados.BRANCO / total) * 100).toFixed(2),
+      VERMELHO: ((dados.VERMELHO / total) * 100).toFixed(2),
+      PRETO: ((dados.PRETO / total) * 100).toFixed(2)
+    };
+  }
+
   async function gerarPrevisao(seed, hist = []) {
     const novaHash = await sha256(seed);
     const previsao = getRollColor(novaHash);
+    // Remove lógicas de confiança baseadas em padrões (analisarSequencias, etc.), mantendo apenas a soma
     const confianca = 100; // Confiança fixa para a lógica determinística
     const aposta = calcularAposta(confianca);
     return { ...previsao, confianca: confianca.toFixed(2), aposta };
@@ -89,7 +125,9 @@
       const partes = l.split(";");
       if (partes.length >= 4) {
         const cor = partes[1];
+        const hash = partes[3];
         coresAnteriores.push(cor);
+        atualizarLookup(hash, cor); // Mantido para consistência, mas não usado na previsão
       }
     });
   }
@@ -173,27 +211,16 @@
 
   setInterval(async () => {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // Timeout de 5 segundos
-      const res = await fetch(apiURL, { signal: controller.signal });
-      clearTimeout(timeoutId);
-
-      if (!res.ok) {
-        throw new Error(`HTTP error! Status: ${res.status} ${res.statusText}`);
-      }
-
+      const res = await fetch(apiURL);
       const data = await res.json();
-      if (!data || !data[0]) {
-        throw new Error("Resposta da API vazia ou inválida");
-      }
-
       const ultimo = data[0];
       const corNum = Number(ultimo.color);
       const cor = corNum === 0 ? "BRANCO" : corNum <= 7 ? "VERMELHO" : "PRETO";
       const numero = ultimo.roll;
-      const hash = ultimo.hex || ultimo.hash || ultimo.server_seed || "indefinido";
+      const hash = ultimo.hash || ultimo.server_seed || "indefinido";
 
-      if (!document.getElementById(`log_${hash}`) && hash !== "indefinido" && hash.length >= 64) {
+      if (!document.getElementById(`log_${hash}`) && hash !== "indefinido") {
+        atualizarLookup(hash, cor);
         const previsao = await gerarPrevisao(hash, coresAnteriores);
         updatePainel(cor, numero, hash, previsao);
         historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash};${previsao.cor};${previsao.confianca}%\n`;
@@ -204,12 +231,7 @@
         document.getElementById('historico_resultados').innerHTML += `<div id="log_${hash}">${cor} (${numero})</div>`;
       }
     } catch (e) {
-      if (e.name === 'AbortError') {
-        console.error("Erro ao buscar API: Requisição abortada por timeout");
-      } else {
-        console.error("Erro ao buscar API:", e.message);
-      }
-      document.getElementById('resultado_cor').innerText = `🎯 Erro: Falha ao buscar dados da API`;
+      console.error("Erro ao buscar API:", e);
     }
   }, 8000);
 
@@ -233,18 +255,13 @@
 
   const originalFetch = window.fetch;
   window.fetch = async (...args) => {
-    try {
-      const response = await originalFetch(...args);
-      const clone = response.clone();
-      clone.text().then(text => {
-        console.log("[Interceptação Fetch] URL:", args[0]);
-        console.log("[Interceptação Fetch] Resposta:", text);
-      });
-      return response;
-    } catch (e) {
-      console.error("[Interceptação Fetch] Erro:", e);
-      throw e;
-    }
+    const response = await originalFetch(...args);
+    const clone = response.clone();
+    clone.text().then(text => {
+      console.log("[Interceptação Fetch] URL:", args[0]);
+      console.log("[Interceptação Fetch] Resposta:", text);
+    });
+    return response;
   };
 
   const originalOpen = XMLHttpRequest.prototype.open;
@@ -263,6 +280,3 @@
     return originalSend.apply(this, args);
   };
 })();
-</script>
-</body>
-</html>
