@@ -44,18 +44,14 @@ function makeDraggable(element) {
   let initialX;
   let initialY;
 
-  element.style.position = 'fixed'; // Necessário para mover o elemento
-  element.style.cursor = 'move'; // Indica que o elemento é arrastável
+  element.style.position = 'fixed';
+  element.style.cursor = 'move';
 
   const dragStart = (e) => {
-    // Ignora se o clique for no botão de minimizar
     if (e.target.id === 'blazeMinBtn') return;
-
     initialX = e.clientX || e.touches[0].clientX;
     initialY = e.clientY || e.touches[0].clientY;
     isDragging = true;
-
-    // Previne comportamento padrão em dispositivos móveis
     e.preventDefault();
   };
 
@@ -72,7 +68,6 @@ function makeDraggable(element) {
       let newLeft = element.offsetLeft + currentX;
       let newTop = element.offsetTop + currentY;
 
-      // Limita o movimento para dentro da janela
       newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - element.offsetWidth));
       newTop = Math.max(0, Math.min(newTop, window.innerHeight - element.offsetHeight));
 
@@ -85,12 +80,9 @@ function makeDraggable(element) {
     isDragging = false;
   };
 
-  // Eventos de mouse
   element.addEventListener('mousedown', dragStart);
   document.addEventListener('mousemove', drag);
   document.addEventListener('mouseup', dragEnd);
-
-  // Eventos de toque (para dispositivos móveis)
   element.addEventListener('touchstart', dragStart);
   document.addEventListener('touchmove', drag);
   document.addEventListener('touchend', dragEnd);
@@ -165,8 +157,7 @@ class BlazeInterface {
       .blaze-bubble{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;
         background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);
         box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:none;}
-      .blaze-overlay{position:fixed;top:50%;left:50%;transform:none; /* Removido transform para permitir arrastar */
-        z-index:9999;font-family:'Arial',sans-serif;}
+      .blaze-overlay{position:fixed;}
       .blaze-monitor{background:rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;
         background-blend-mode:overlay;border-radius:10px;padding:15px;
         box-shadow:0 5px 15px rgba(0,0,0,.5);color:#fff;width:300px}
@@ -218,6 +209,19 @@ class BlazeInterface {
     document.body.appendChild(this.overlay);
 
     const monitorBox = document.getElementById('blazeMonitorBox');
+    
+    // Centralizar o menu na tela
+    const centerMenu = () => {
+      const windowWidth = window.innerWidth;
+      const windowHeight = window.innerHeight;
+      const menuWidth = monitorBox.offsetWidth;
+      const menuHeight = monitorBox.offsetHeight;
+      monitorBox.style.left = `${(windowWidth - menuWidth) / 2}px`;
+      monitorBox.style.top = `${(windowHeight - menuHeight) / 2}px`;
+    };
+    
+    centerMenu(); // Centraliza inicialmente
+    window.addEventListener('resize', centerMenu); // Re-centraliza ao redimensionar a janela
     makeDraggable(monitorBox); // Torna o menu arrastável
 
     document.getElementById('blazeMinBtn').addEventListener('click', () => {
@@ -228,6 +232,7 @@ class BlazeInterface {
     this.bubble.addEventListener('click', () => {
       this.bubble.style.display = 'none';
       monitorBox.style.display = 'block';
+      centerMenu(); // Re-centraliza ao restaurar
     });
 
     this.results = [];
