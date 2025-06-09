@@ -9,10 +9,9 @@
   }
 
   function getRollColor(hash) {
-    // Verifica se o hash tem pelo menos 64 caracteres
     if (hash.length < 64) {
       console.warn("Hash com menos de 64 caracteres:", hash);
-      return { cor: "PRETO", numero: 8 }; // Padrão caso o hash seja inválido
+      return { cor: "PRETO", numero: 8 };
     }
 
     const hexToDecimal = char => {
@@ -20,65 +19,19 @@
       return { 'a': 10, 'b': 11, 'c': 12, 'd': 13, 'e': 14, 'f': 15 }[char.toLowerCase()];
     };
 
-    // Soma os valores decimais dos 64 caracteres
     const sum = hash.slice(0, 64).split('').reduce((acc, char) => acc + hexToDecimal(char), 0);
-    console.log("Hash:", hash.slice(0, 64), "Soma:", sum); // Depuração
+    console.log("Hash:", hash.slice(0, 64), "Soma:", sum);
 
-    // Determina a cor e número com base na soma
     if (sum === 350) return { cor: "BRANCO", numero: 0 };
-    if (sum >= 338 && sum <= 340) return { cor: "VERMELHO", numero: sum % 7 + 1 }; // Números 1-7
-    if (sum >= 345 && sum <= 360 && sum !== 350) return { cor: "PRETO", numero: sum % 7 + 8 }; // Números 8-14
-    return { cor: "PRETO", numero: 8 }; // Padrão para casos fora dos intervalos
-  }
-
-  function analisarSequencias(hist) {
-    if (hist.length < 4) return null;
-    const ultimas = hist.slice(-4);
-    if (ultimas.every(c => c === "PRETO")) return "VERMELHO";
-    if (ultimas.every(c => c === "VERMELHO")) return "PRETO";
-    if (ultimas[ultimas.length - 1] === "BRANCO") return "PRETO";
-    return null;
-  }
-
-  function calcularIntervaloBranco(hist) {
-    let ultPos = -1, intervalos = [];
-    hist.forEach((cor, i) => {
-      if (cor === "BRANCO") {
-        if (ultPos !== -1) intervalos.push(i - ultPos);
-        ultPos = i;
-      }
-    });
-    const media = intervalos.length ? intervalos.reduce((a, b) => a + b) / intervalos.length : 0;
-    const ultimaBranco = hist.lastIndexOf("BRANCO");
-    const desdeUltimo = ultimaBranco !== -1 ? hist.length - ultimaBranco : hist.length;
-    return { media, desdeUltimo };
-  }
-
-  let lookupPrefix = {};
-
-  function atualizarLookup(hash, cor) {
-    const prefix = hash.slice(0, 2);
-    if (!lookupPrefix[prefix]) lookupPrefix[prefix] = { BRANCO: 0, VERMELHO: 0, PRETO: 0 };
-    lookupPrefix[prefix][cor]++;
-  }
-
-  function reforcoPrefixo(hash) {
-    const prefix = hash.slice(0, 2);
-    const dados = lookupPrefix[prefix];
-    if (!dados) return {};
-    const total = dados.BRANCO + dados.VERMELHO + dados.PRETO;
-    return {
-      BRANCO: ((dados.BRANCO / total) * 100).toFixed(2),
-      VERMELHO: ((dados.VERMELHO / total) * 100).toFixed(2),
-      PRETO: ((dados.PRETO / total) * 100).toFixed(2)
-    };
+    if (sum >= 338 && sum <= 340) return { cor: "VERMELHO", numero: sum % 7 + 1 };
+    if (sum >= 345 && sum <= 360 && sum !== 350) return { cor: "PRETO", numero: sum % 7 + 8 };
+    return { cor: "PRETO", numero: 8 };
   }
 
   async function gerarPrevisao(seed, hist = []) {
     const novaHash = await sha256(seed);
     const previsao = getRollColor(novaHash);
-    // Remove lógicas de confiança baseadas em padrões (analisarSequencias, etc.), mantendo apenas a soma
-    const confianca = 100; // Confiança fixa para a lógica determinística
+    const confianca = 100;
     const aposta = calcularAposta(confianca);
     return { ...previsao, confianca: confianca.toFixed(2), aposta };
   }
@@ -127,7 +80,6 @@
         const cor = partes[1];
         const hash = partes[3];
         coresAnteriores.push(cor);
-        atualizarLookup(hash, cor); // Mantido para consistência, mas não usado na previsão
       }
     });
   }
@@ -138,13 +90,22 @@
 
   carregarHistoricoLocal();
 
+  // Criação do painel
   const painel = document.createElement("div");
   painel.id = "painel_previsao";
-  painel.style = `
-    position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
-    z-index: 99999; background: #000000cc; border: 2px solid limegreen; border-radius: 20px;
-    color: limegreen; padding: 20px; font-family: monospace; text-align: center; width: 360px;
-  `;
+  painel.style.position = "fixed";
+  painel.style.top = "60px";
+  painel.style.left = "50%";
+  painel.style.transform = "translateX(-50%)";
+  painel.style.zIndex = "100000";
+  painel.style.background = "#000000cc";
+  painel.style.border = "2px solid limegreen";
+  painel.style.borderRadius = "20px";
+  painel.style.color = "limegreen";
+  painel.style.padding = "20px";
+  painel.style.fontFamily = "monospace";
+  painel.style.textAlign = "center";
+  painel.style.width = "360px";
   painel.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <h3 style="margin:0;">Blaze<br>Bot I.A</h3>
@@ -158,18 +119,28 @@
     <button id="btn_baixar" style="margin-top:5px;">⬇️ Baixar CSV</button>
     <div id="historico_resultados" style="margin-top:10px;max-height:100px;overflow:auto;text-align:left;font-size:12px;"></div>
   `;
+
   document.body.appendChild(painel);
+  console.log("Painel criado");
 
   const icone = document.createElement("div");
   icone.id = "icone_flutuante";
-  icone.style = `
-    display: none; position: fixed; bottom: 20px; right: 20px; z-index: 99999;
-    width: 60px; height: 60px; border-radius: 50%;
-    background-image: url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg');
-    background-size: cover; background-repeat: no-repeat; background-position: center;
-    border: 2px solid limegreen; box-shadow: 0 0 10px limegreen, 0 0 20px limegreen inset;
-    cursor: pointer; animation: neonPulse 1s infinite;
-  `;
+  icone.style.display = "none";
+  icone.style.position = "fixed";
+  icone.style.bottom = "20px";
+  icone.style.right = "20px";
+  icone.style.zIndex = "99999";
+  icone.style.width = "60px";
+  icone.style.height = "60px";
+  icone.style.borderRadius = "50%";
+  icone.style.backgroundImage = "url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg')";
+  icone.style.backgroundSize = "cover";
+  icone.style.backgroundRepeat = "no-repeat";
+  icone.style.backgroundPosition = "center";
+  icone.style.border = "2px solid limegreen";
+  icone.style.boxShadow = "0 0 10px limegreen, 0 0 20px limegreen inset";
+  icone.style.cursor = "pointer";
+  icone.style.animation = "neonPulse 1s infinite";
   document.body.appendChild(icone);
 
   const estilo = document.createElement("style");
@@ -220,7 +191,6 @@
       const hash = ultimo.hash || ultimo.server_seed || "indefinido";
 
       if (!document.getElementById(`log_${hash}`) && hash !== "indefinido") {
-        atualizarLookup(hash, cor);
         const previsao = await gerarPrevisao(hash, coresAnteriores);
         updatePainel(cor, numero, hash, previsao);
         historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash};${previsao.cor};${previsao.confianca}%\n`;
@@ -235,7 +205,6 @@
     }
   }, 8000);
 
-  // === INTERCEPTAÇÃO AVANÇADA ===
   const OriginalWebSocket = window.WebSocket;
   window.WebSocket = function (...args) {
     const ws = new OriginalWebSocket(...args);
