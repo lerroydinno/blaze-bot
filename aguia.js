@@ -5,15 +5,12 @@ function isHash(str) {
 
 // Função para salvar o hash
 function saveHash(hash) {
-  // Salva no localStorage
   let savedHashes = JSON.parse(localStorage.getItem('savedHashes') || '[]');
   if (!savedHashes.includes(hash)) {
     savedHashes.push(hash);
     localStorage.setItem('savedHashes', JSON.stringify(savedHashes));
     console.log(`[Blaze] Hash salvo no localStorage: ${hash}`);
   }
-
-  // Salva em um arquivo
   try {
     const blob = new Blob([hash + '\n'], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -34,9 +31,69 @@ function findHashInObject(obj) {
     if (typeof obj[key] === 'string' && isHash(obj[key])) {
       saveHash(obj[key]);
     } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-      findHashInObject(obj[key]); // Recursão para objetos aninhados
+      findHashInObject(obj[key]);
     }
   }
+}
+
+// Função para tornar um elemento arrastável
+function makeDraggable(element) {
+  let isDragging = false;
+  let currentX;
+  let currentY;
+  let initialX;
+  let initialY;
+
+  element.style.position = 'fixed'; // Necessário para mover o elemento
+  element.style.cursor = 'move'; // Indica que o elemento é arrastável
+
+  const dragStart = (e) => {
+    // Ignora se o clique for no botão de minimizar
+    if (e.target.id === 'blazeMinBtn') return;
+
+    initialX = e.clientX || e.touches[0].clientX;
+    initialY = e.clientY || e.touches[0].clientY;
+    isDragging = true;
+
+    // Previne comportamento padrão em dispositivos móveis
+    e.preventDefault();
+  };
+
+  const drag = (e) => {
+    if (isDragging) {
+      e.preventDefault();
+      const clientX = e.clientX || e.touches[0].clientX;
+      const clientY = e.clientY || e.touches[0].clientY;
+      currentX = clientX - initialX;
+      currentY = clientY - initialY;
+      initialX = clientX;
+      initialY = clientY;
+
+      let newLeft = element.offsetLeft + currentX;
+      let newTop = element.offsetTop + currentY;
+
+      // Limita o movimento para dentro da janela
+      newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - element.offsetWidth));
+      newTop = Math.max(0, Math.min(newTop, window.innerHeight - element.offsetHeight));
+
+      element.style.left = `${newLeft}px`;
+      element.style.top = `${newTop}px`;
+    }
+  };
+
+  const dragEnd = () => {
+    isDragging = false;
+  };
+
+  // Eventos de mouse
+  element.addEventListener('mousedown', dragStart);
+  document.addEventListener('mousemove', drag);
+  document.addEventListener('mouseup', dragEnd);
+
+  // Eventos de toque (para dispositivos móveis)
+  element.addEventListener('touchstart', dragStart);
+  document.addEventListener('touchmove', drag);
+  document.addEventListener('touchend', dragEnd);
 }
 
 class BlazeWebSocket {
@@ -66,13 +123,11 @@ class BlazeWebSocket {
         if (m.startsWith('0') || m === '40') return;
         if (m.startsWith('42')) {
           const j = JSON.parse(m.slice(2));
-          // Procura hashes na mensagem inteira
           findHashInObject(j);
-          // Verifica especificamente o campo 'id' do payload
           if (j[0] === 'data' && j[1].id === 'double.tick') {
             const p = j[1].payload;
             if (isHash(p.id)) {
-              saveHash(p.id); // Salva o id se for um hash
+              saveHash(p.id);
             }
             this.onDoubleTickCallback?.({ id: p.id, color: p.color, roll: p.roll, status: p.status });
           }
@@ -110,7 +165,7 @@ class BlazeInterface {
       .blaze-bubble{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;
         background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);
         box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:none;}
-      .blaze-overlay{position:fixed;top50%;left:50%;transform:translate(-50%,-50%);
+      .blaze-overlay{position:fixed;top:50%;left:50%;transform:none; /* Removido transform para permitir arrastar */
         z-index:9999;font-family:'Arial',sans-serif;}
       .blaze-monitor{background:rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;
         background-blend-mode:overlay;border-radius:10px;padding:15px;
@@ -162,14 +217,17 @@ class BlazeInterface {
     `;
     document.body.appendChild(this.overlay);
 
+    const monitorBox = document.getElementById('blazeMonitorBox');
+    makeDraggable(monitorBox); // Torna o menu arrastável
+
     document.getElementById('blazeMinBtn').addEventListener('click', () => {
-      document.getElementById('blazeMonitorBox').style.display = 'none';
+      monitorBox.style.display = 'none';
       this.bubble.style.display = 'block';
     });
 
     this.bubble.addEventListener('click', () => {
       this.bubble.style.display = 'none';
-      document.getElementById('blazeMonitorBox').style.display = 'block';
+      monitorBox.style.display = 'block';
     });
 
     this.results = [];
@@ -279,7 +337,7 @@ class BlazeInterface {
 
 new BlazeInterface();
 
-// Função para recuperar hashes salvos (opcional)
+// Função para recuperar hashes salvos
 function getSavedHashes() {
   return JSON.parse(localStorage.getItem('savedHashes') || '[]');
 }
