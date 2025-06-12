@@ -1,18 +1,58 @@
 (async function () {
   const apiURL = "https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
 
-  async function sha256(message) {
+  // Função HMAC-SHA256
+  async function hmacSha256(message, key) {
+    const keyBuffer = new TextEncoder().encode(key);
     const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      keyBuffer,
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    const signature = await crypto.subtle.sign("HMAC", cryptoKey, msgBuffer);
+    const hashArray = Array.from(new Uint8Array(signature));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  function getRollColor(hash) {
+  // Array TILES do código original
+  const TILES = [
+    { number: 0, color: "white" },
+    { number: 1, color: "black" },
+    { number: 2, color: "red" },
+    { number: 3, color: "black" },
+    { number: 4, color: "red" },
+    { number: 5, color: "black" },
+    { number: 6, color: "red" },
+    { number: 7, color: "black" },
+    { number: 8, color: "red" },
+    { number: 9, color: "black" },
+    { number: 10, color: "red" },
+    { number: 11, color: "black" },
+    { number: 12, color: "red" },
+    { number: 13, color: "black" },
+    { number: 14, color: "red" },
+    { number: 15, color: "black" },
+  ];
+
+  function getRollFromHash(hash) {
     const number = parseInt(hash.slice(0, 8), 16) % 15;
-    if (number === 0) return { cor: "BRANCO", numero: 0 };
-    if (number <= 7) return { cor: "VERMELHO", numero: number };
-    return { cor: "PRETO", numero: number };
+    const tile = TILES.find(t => t.number === number);
+    return {
+      cor: tile.color === "white" ? "BRANCO" : tile.color === "red" ? "VERMELHO" : "PRETO",
+      numero: tile.number
+    };
+  }
+
+  function generateChain(serverSeed, amount, clientSeed) {
+    const chain = [];
+    for (let i = 0; i < amount; i++) {
+      const hash = hmacSha256(String(i), serverSeed + clientSeed);
+      chain.push(getRollFromHash(hash));
+    }
+    return chain;
   }
 
   function analisarSequencias(hist) {
@@ -58,9 +98,9 @@
     };
   }
 
-  async function gerarPrevisao(seed, hist = []) {
-    const novaHash = await sha256(seed);
-    const previsao = getRollColor(novaHash);
+  async function gerarPrevisao(serverSeed, clientSeed, hist = []) {
+    const novaHash = await hmacSha256("0", serverSeed + clientSeed); // Simula o próximo roll
+    const previsao = getRollFromHash(novaHash);
     const recente = hist.slice(-100);
     const ocorrencias = recente.filter(c => c === previsao.cor).length;
     let confianca = recente.length ? ((ocorrencias / recente.length) * 100) : 0;
@@ -128,6 +168,8 @@
   let historicoCSV = "Data;Cor;Número;Hash;Previsão;Confiança\n";
   let lastHash = "";
   let coresAnteriores = [];
+  let lastServerSeed = ""; // Para armazenar a última semente do servidor
+  let clientSeed = "0000000000000002ae806364fc13b3cd5276e8c19dbcd39d871edd"; // Exemplo fixo
 
   carregarHistoricoLocal();
 
@@ -188,8 +230,8 @@
   document.getElementById('btn_baixar').onclick = downloadCSV;
 
   document.getElementById('btn_prever').onclick = async () => {
-    if (lastHash && lastHash !== "indefinido") {
-      const previsao = await gerarPrevisao(lastHash, coresAnteriores);
+    if (lastServerSeed && lastServerSeed !== "indefinido") {
+      const previsao = await gerarPrevisao(lastServerSeed, clientSeed, coresAnteriores);
       document.getElementById('previsao_texto').innerText = `🔮 Próxima: ${previsao.cor} (${previsao.numero})\n🎯 Confiança: ${previsao.confianca}%\n💰 Apostar: ${previsao.aposta}x`;
     }
   };
@@ -214,7 +256,9 @@
 
       if (!document.getElementById(`log_${hash}`) && hash !== "indefinido") {
         atualizarLookup(hash, cor);
-        const previsao = await gerarPrevisao(hash, coresAnteriores);
+        const serverSeed = hash; // Usar o hash como semente do servidor
+        lastServerSeed = serverSeed;
+        const previsao = await gerarPrevisao(serverSeed, clientSeed, coresAnteriores);
         updatePainel(cor, numero, hash, previsao);
         historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash};${previsao.cor};${previsao.confianca}%\n`;
         salvarHistoricoLocal();
@@ -227,9 +271,8 @@
       console.error("Erro ao buscar API:", e);
     }
   }, 8000);
-// === INTERCEPTAÇÃO AVANÇADA ===
 
-  // Interceptar WebSocket
+  // Interceptação WebSocket, Fetch e XMLHttpRequest (mantidas como no original)
   const OriginalWebSocket = window.WebSocket;
   window.WebSocket = function (...args) {
     const ws = new OriginalWebSocket(...args);
@@ -247,7 +290,6 @@
     return ws;
   };
 
-  // Interceptar Fetch API
   const originalFetch = window.fetch;
   window.fetch = async (...args) => {
     const response = await originalFetch(...args);
@@ -259,7 +301,6 @@
     return response;
   };
 
-  // Interceptar XMLHttpRequest
   const originalOpen = XMLHttpRequest.prototype.open;
   const originalSend = XMLHttpRequest.prototype.send;
 
@@ -274,4 +315,5 @@
       console.log("[Interceptação XHR] Resposta:", this.responseText);
     });
     return originalSend.apply(this, args);
-  };})();
+  };
+})();
