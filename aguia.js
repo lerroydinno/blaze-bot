@@ -17,28 +17,27 @@
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  // Array TILES do código original
+  // Array TILES ajustado para as regras corretas
   const TILES = [
     { number: 0, color: "white" },
-    { number: 1, color: "black" },
+    { number: 1, color: "red" },
     { number: 2, color: "red" },
-    { number: 3, color: "black" },
+    { number: 3, color: "red" },
     { number: 4, color: "red" },
-    { number: 5, color: "black" },
+    { number: 5, color: "red" },
     { number: 6, color: "red" },
-    { number: 7, color: "black" },
-    { number: 8, color: "red" },
+    { number: 7, color: "red" },
+    { number: 8, color: "black" },
     { number: 9, color: "black" },
-    { number: 10, color: "red" },
+    { number: 10, color: "black" },
     { number: 11, color: "black" },
-    { number: 12, color: "red" },
+    { number: 12, color: "black" },
     { number: 13, color: "black" },
-    { number: 14, color: "red" },
-    { number: 15, color: "black" },
+    { number: 14, color: "black" },
   ];
 
   function getRollFromHash(hash) {
-    const number = parseInt(hash.slice(0, 8), 16) % 15;
+    const number = parseInt(hash.slice(0, 8), 16) % 15; // Garante que o número esteja entre 0 e 14
     const tile = TILES.find(t => t.number === number);
     return {
       cor: tile.color === "white" ? "BRANCO" : tile.color === "red" ? "VERMELHO" : "PRETO",
@@ -249,7 +248,7 @@
       const res = await fetch(apiURL);
       const data = await res.json();
       const ultimo = data[0];
-      const corNum = Number(ultimo.color);
+      const corNum = Number(ultimo.color); // 0 = branco, 1-7 = vermelho, 8-14 = preto
       const cor = corNum === 0 ? "BRANCO" : corNum <= 7 ? "VERMELHO" : "PRETO";
       const numero = ultimo.roll;
       const hash = ultimo.hash || ultimo.server_seed || "indefinido";
