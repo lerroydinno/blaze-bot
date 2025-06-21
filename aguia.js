@@ -1,387 +1,226 @@
-(async function () {
-  // Verificar se o DOM está carregado
-  if (document.readyState === "loading") {
-    console.log("[Bot] Aguardando carregamento do DOM...");
-    await new Promise(resolve => document.addEventListener("DOMContentLoaded", resolve));
-  }
-  console.log("[Bot] DOM carregado, inicializando...");
-
-  // Definição das tiles
-  const TILES = [
-    { number: 0, color: "white" },
-    { number: 1, color: "black" },
-    { number: 2, color: "red" },
-    { number: 3, color: "black" },
-    { number: 4, color: "red" },
-    { number: 5, color: "black" },
-    { number: 6, color: "red" },
-    { number: 7, color: "black" },
-    { number: 8, color: "red" },
-    { number: 9, color: "black" },
-    { number: 10, color: "red" },
-    { number: 11, color: "black" },
-    { number: 12, color: "red" },
-    { number: 13, color: "black" },
-    { number: 14, color: "red" },
-    { number: 15, color: "black" },
-  ];
-
-  const apiURL = "https://blaze.bet.br/api/singleplayer-originals/originals/roulette_games/recent/1";
-  const clientSeed = "000000000000000000003cb64e12cac9432e002a3930bd84d044390ec352b1f8";
-  const terminalSeed = "41bf80956355675cc47c0dfa2a39d2dfb58b14e401263d59688e1d91cc24e6dd";
-  const chainLength = 100;
-
-  // Função para gerar hash SHA256
-  async function sha256(message) {
-    try {
-      const msgBuffer = new TextEncoder().encode(message);
-      const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    } catch (e) {
-      console.error("[Bot] Erro ao gerar SHA256:", e);
-      return "";
-    }
+class BlazeWebSocket {
+  constructor() {
+    this.ws = null;
+    this.pingInterval = null;
+    this.onDoubleTickCallback = null;
   }
 
-  // Gerar cadeia de seeds
-  async function generateSeedChain(terminalSeed, amount) {
-    console.log("[Bot] Gerando cadeia de seeds...");
-    let chain = [terminalSeed];
-    for (let i = 1; i < amount; i++) {
-      const nextSeed = await sha256(chain[chain.length - 1]);
-      chain.push(nextSeed);
-    }
-    const reversedChain = chain.reverse();
-    console.log("[Bot] Cadeia gerada com", reversedChain.length, "seeds.");
-    return reversedChain;
-  }
+  doubleTick(cb) {
+    this.onDoubleTickCallback = cb;
+    this.ws = new WebSocket('wss://api-gaming.blaze.bet.br/replication/?EIO=3&transport=websocket');
 
-  // Calcular resultado da rodada usando HMAC-SHA256
-  async function calculateRoll(seed, clientSeed) {
-    try {
-      const keyBuffer = new TextEncoder().encode(seed);
-      const msgBuffer = new TextEncoder().encode(clientSeed);
-      const hmacKey = await crypto.subtle.importKey(
-        "raw",
-        keyBuffer,
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"]
-      );
-      const hashBuffer = await crypto.subtle.sign("HMAC", hmacKey, msgBuffer);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-      const n = parseInt(hashHex, 16) % 15;
-      const tile = TILES.find(t => t.number === n);
-      return { number: tile.number, color: tile.color, hash: hashHex };
-    } catch (e) {
-      console.error("[Bot] Erro ao calcular roll:", e);
-      return { number: 0, color: "white", hash: "" };
-    }
-  }
-
-  // Função para obter cor e número a partir da hash da API
-  function getRollColor(hash) {
-    const number = parseInt(hash.slice(0, 8), 16) % 15;
-    const tile = TILES.find(t => t.number === number);
-    return { cor: tile.color.toUpperCase(), numero: number };
-  }
-
-  // Análise de sequências
-  function analisarSequencias(hist) {
-    if (hist.length < 4) return null;
-    const ultimas = hist.slice(-4);
-    if (ultimas.every(c => c === "PRETO")) return "VERMELHO";
-    if (ultimas.every(c => c === "VERMELHO")) return "PRETO";
-    if (ultimas[ultimas.length - 1] === "BRANCO") return "PRETO";
-    return null;
-  }
-
-  // Calcular intervalo entre brancos
-  function calcularIntervaloBranco(hist) {
-    let ultPos = -1, intervalos = [];
-    hist.forEach((cor, i) => {
-      if (cor === "BRANCO") {
-        if (ultPos !== -1) intervalos.push(i - ultPos);
-        ultPos = i;
-      }
-    });
-    Filipe José de Azevedo
-    const media = intervalos.length ? intervalos.reduce((a, b) => a + b) / intervalos.length : 0;
-    const ultimaBranco = hist.lastIndexOf("BRANCO");
-    const desdeUltimo = ultimaBranco !== -1 ? hist.length - ultimaBranco : hist.length;
-    return { media, desdeUltimo };
-  }
-
-  let lookupPrefix = {};
-  function atualizarLookup(hash, cor) {
-    const prefix = hash.slice(0, 2);
-    if (!lookupPrefix[prefix]) lookupPrefix[prefix] = { BRANCO: 0, VERMELHO: 0, PRETO: 0 };
-    lookupPrefix[prefix][cor]++;
-  }
-
-  function reforcoPrefixo(hash) {
-    const prefix = hash.slice(0, 2);
-    const dados = lookupPrefix[prefix];
-    if (!dados) return {};
-    const total = dados.BRANCO + dados.VERMELHO + dados.PRETO;
-    return {
-      BRANCO: ((dados.BRANCO / total) * 100).toFixed(2),
-      VERMELHO: ((dados.VERMELHO / total) * 100).toFixed(2),
-      PRETO: ((dados.PRETO / total) * 100).toFixed(2)
+    this.ws.onopen = () => {
+      console.log('Conectado ao servidor WebSocket');
+      this.ws.send('422["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]');
+      this.pingInterval = setInterval(() => this.ws.send('2'), 25000);
     };
+
+    this.ws.onmessage = (e) => {
+      try {
+        const m = e.data;
+        if (m === '2') { this.ws.send('3'); return; }
+        if (m.startsWith('0') || m === '40') return;
+        if (m.startsWith('42')) {
+          const j = JSON.parse(m.slice(2));
+          if (j[0] === 'data' && j[1].id === 'double.tick') {
+            const p = j[1].payload;
+            this.onDoubleTickCallback?.({ id: p.id, color: p.color, roll: p.roll, status: p.status });
+          }
+        }
+      } catch (err) { console.error('Erro ao processar mensagem:', err); }
+    };
+
+    this.ws.onerror = (e) => console.error('WebSocket error:', e);
+    this.ws.onclose = () => { console.log('WS fechado'); clearInterval(this.pingInterval); };
   }
 
-  async function gerarPrevisao(seed, hist = []) {
-    const roll = await calculateRoll(seed, clientSeed);
-    const recente = hist.slice(-100);
-    const ocorrencias = recente.filter(c => c === roll.color.toUpperCase()).length;
-    let confianca = recente.length ? ((ocorrencias / recente.length) * 100) : 0;
-    const sugestaoSequencia = analisarSequencias(hist);
-    if (sugestaoSequencia === roll.color.toUpperCase()) confianca += 10;
-    if (roll.color.toUpperCase() === "BRANCO") {
-      const { media, desdeUltimo } = calcularIntervaloBranco(hist);
-      if (desdeUltimo >= media * 0.8) confianca += 10;
-    }
-    const reforco = reforcoPrefixo(roll.hash);
-    if (reforco[roll.color.toUpperCase()]) confianca += parseFloat(reforco[roll.color.toUpperCase()]) / 10;
-    const aposta = calcularAposta(confianca);
-    return { ...roll, confianca: Math.min(100, confianca.toFixed(2)), aposta };
+  close() { this.ws?.close(); }
+}
+
+class BlazeInterface {
+  constructor() {
+    this.nextPredColor = null;
+    this.results = [];
+    this.processedIds = new Set();
+    this.notifiedIds = new Set();
+    this.initMonitorInterface();
   }
 
-  function calcularAposta(confianca) {
-    const base = 1;
-    if (confianca < 60) return 0;
-    if (confianca < 70) return base;
-    if (confianca < 80) return base * 2;
-    if (confianca < 90) return base * 4;
-    return base * 8;
-  }
-
-  function updatePainel(cor, numero, hash, previsao) {
-    const resultadoCor = document.getElementById('resultado_cor');
-    const resultadoHash = document.getElementById('resultado_hash');
-    const previsaoTexto = document.getElementById('previsao_texto');
-    const historicoResultados = document.getElementById('historico_resultados');
-    if (!resultadoCor || !resultadoHash || !previsaoTexto || !historicoResultados) {
-      console.error("[Bot] Erro: Elementos do painel não encontrados!");
-      return;
-    }
-    resultadoCor.innerText = `🎯 Resultado: ${cor} (${numero})`;
-    resultadoHash.innerText = `Hash: ${hash.slice(0, 16)}...`;
-    previsaoTexto.innerText = `🔮 Próxima: ${previsao.color.toUpperCase()} (${previsao.number})\n🎯 Confiança: ${previsao.confianca}%\n💰 Apostar: ${previsao.aposta}x`;
-    previsaoTexto.style.color = previsao.confianca >= 90 ? "yellow" : "limegreen";
-    historicoResultados.innerHTML += `<div>${cor} (${numero}) - <span style="font-size:10px">${hash.slice(0, 16)}...</span></div>`;
-  }
-
-  function downloadCSV() {
-    const blob = new Blob([historicoCSV], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `double_historico_${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function salvarHistoricoLocal() {
-    localStorage.setItem("historico_double", historicoCSV);
-  }
-
-  function carregarHistoricoLocal() {
-    const salvo = localStorage.getItem("historico_double");
-    if (salvo) historicoCSV = salvo;
-  }
-
-  function processarCSV(text) {
-    const linhas = text.trim().split("\n").slice(1);
-    linhas.forEach(l => {
-      const partes = l.split(";");
-      if (partes.length >= 4) {
-        const cor = partes[1];
-        const hash = partes[3];
-        coresAnteriores.push(cor);
-        atualizarLookup(hash, cor);
-      }
-    });
-  }
-
-  let historicoCSV = "Data;Cor;Número;Hash;Previsão;Confiança\n";
-  let lastHash = "";
-  let coresAnteriores = [];
-  let seedChain = [];
-  let chainIndex = 0;
-
-  // Inicializar cadeia de seeds
-  console.log("[Bot] Inicializando cadeia de seeds...");
-  generateSeedChain(terminalSeed, chainLength).then(chain => {
-    seedChain = chain;
-    console.log("[Bot] Cadeia inicializada com sucesso!");
-  }).catch(e => console.error("[Bot] Erro ao gerar cadeia de seeds:", e));
-
-  carregarHistoricoLocal();
-
-  // Criar interface
-  console.log("[Bot] Criando painel flutuante...");
-  try {
-    const painel = document.createElement("div");
-    painel.id = "painel_previsao";
-    painel.style = `
-      position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
-      z-index: 99999; background: #000000cc; border: 2px solid limegreen; border-radius: 20px;
-      color: limegreen; padding: 20px; font-family: monospace; text-align: center; width: 360px;
+  injectGlobalStyles() {
+    const css = `  
+      .blaze-min-btn{background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;padding:0 8px}  
+      .blaze-min-btn:hover{opacity:.75}  
+      .blaze-bubble{position:fixed;bottom:20px;right:20px;width:60px;height:60px;border-radius:50%;  
+        background:url('https://aguia-gold.com/static/logo_blaze.jpg') center/cover no-repeat, rgba(34,34,34,.92);  
+        box-shadow:0 4px 12px rgba(0,0,0,.5);cursor:pointer;z-index:10000;display:none;}  
+      .blaze-overlay{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);  
+        z-index:9999;font-family:'Arial',sans-serif;}  
+      .blaze-monitor{background:rgba(34,34,34,.92) url('https://aguia-gold.com/static/logo_blaze.jpg') center/contain no-repeat;  
+        background-blend-mode:overlay;border-radius:10px;padding:15px;  
+        box-shadow:0 5px 15px rgba(0,0,0,.5);color:#fff;width:300px}  
+      .blaze-monitor h3{margin:0 0 10px;text-align:center;font-size:18px}  
+      .result-card{background:#4448;border-radius:5px;padding:10px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}  
+      .result-number{font-size:24px;font-weight:bold}  
+      .result-color-0{color:#fff;background:linear-gradient(45deg,#fff,#ddd);-webkit-background-clip:text;-webkit-text-fill-color:transparent}  
+      .result-color-1{color:#f44336}.result-color-2{color:#0F1923}  
+      .result-status{padding:5px 10px;border-radius:3px;font-size:12px;font-weight:bold;text-transform:uppercase}  
+      .result-status-waiting{background:#ffc107;color:#000}  
+      .result-status-rolling{background:#ff9800;color:#000;animation:pulse 1s infinite}  
+      .result-status-complete{background:#4caf50;color:#fff}  
+      @keyframes pulse{0%{opacity:1}50%{opacity:.5}100%{opacity:1}}  
+      .blaze-notification{position:fixed;top:80px;right:20px;padding:15px;border-radius:5px;  
+        color:#fff;font-weight:bold;opacity:0;transform:translateY(-20px);  
+        transition:all .3s ease;z-index:10000}  
+      .blaze-notification.show{opacity:1;transform:translateY(0)}  
+      .notification-win{background:#4caf50}.notification-loss{background:#f44336}  
+      .prediction-card{background:#4448;border-radius:5px;padding:15px;margin-bottom:15px;text-align:center;font-weight:bold}  
+      .prediction-title{font-size:14px;opacity:.8;margin-bottom:5px}  
+      .prediction-value{font-size:18px;font-weight:bold;display:flex;align-items:center;justify-content:center}  
+      .color-dot{width:24px;height:24px;border-radius:50%;display:inline-block;margin-right:10px}  
+      .color-dot-0{background:#fff;border:1px solid #777}.color-dot-1{background:#f44336}.color-dot-2{background:#212121}  
+      .prediction-accuracy{font-size:12px;margin-top:5px;opacity:.7}  
+      .prediction-waiting{color:#00e676;text-shadow:0 0 5px rgba(0,230,118,.7)}  
     `;
-    painel.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <h3 style="margin:0;">Blaze<br>Bot I.A</h3>
-        <button id="btn_minimizar" style="background:none;border:none;color:limegreen;font-weight:bold;font-size:20px;">−</button>
+    const style = document.createElement('style');
+    style.textContent = css;
+    document.head.appendChild(style);
+
+    this.bubble = document.createElement('div');
+    this.bubble.className = 'blaze-bubble';
+    document.body.appendChild(this.bubble);
+  }
+
+  initMonitorInterface() {
+    this.injectGlobalStyles();
+
+    this.overlay = document.createElement('div');
+    this.overlay.className = 'blaze-overlay';
+    this.overlay.innerHTML = `
+      <div class="blaze-monitor" id="blazeMonitorBox">  
+        <h3>App SHA256</h3>  
+        <button id="blazeMinBtn" class="blaze-min-btn">−</button>  
+        <div class="prediction-card" id="blazePrediction"></div>  
+        <div class="result-card" id="blazeResults"></div>  
       </div>
-      <div id="resultado_cor">🎯 Resultado: aguardando...</div>
-      <div id="resultado_hash" style="font-size: 10px; word-break: break-all;">Hash: --</div>
-      <div id="previsao_texto" style="margin-top: 10px;">🔮 Previsão: aguardando...</div>
-      <input type="file" id="import_csv" accept=".csv" style="margin:10px;" />
-      <button id="btn_prever" style="margin-top:5px;">🔁 Gerar previsão manual</button>
-      <button id="btn_baixar" style="margin-top:5px;">⬇️ Baixar CSV</button>
-      <div id="historico_resultados" style="margin-top:10px;max-height:100px;overflow:auto;text-align:left;font-size:12px;"></div>
     `;
-    document.body.appendChild(painel);
-    console.log("[Bot] Painel flutuante criado com sucesso!");
+    document.body.appendChild(this.overlay);
 
-    const icone = document.createElement("div");
-    icone.id = "icone_flutuante";
-    icone.style = `
-      display: none; position: fixed; bottom: 20px; right: 20px; z-index: 99999;
-      width: 60px; height: 60px; border-radius: 50%;
-      background-image: url('https://raw.githubusercontent.com/lerroydinno/Dolar-game-bot/main/Leonardo_Phoenix_10_A_darkskinned_male_hacker_dressed_in_a_bla_2.jpg');
-      background-size: cover; background-repeat: no-repeat; background-position: center;
-      border: 2px solid limegreen; box-shadow: 0 0 10px limegreen, 0 0 20px limegreen inset;
-      cursor: pointer; animation: neonPulse 1s infinite;
-    `;
-    document.body.appendChild(icone);
-    console.log("[Bot] Ícone flutuante criado com sucesso!");
+    document.getElementById('blazeMinBtn')
+      .addEventListener('click', () => {
+        document.getElementById('blazeMonitorBox').style.display = 'none';
+        this.bubble.style.display = 'block';
+      });
 
-    const estilo = document.createElement("style");
-    estilo.innerHTML = `
-      @keyframes neonPulse {
-        0% { box-shadow: 0 0 5px limegreen, 0 0 10px limegreen inset; }
-        50% { box-shadow: 0 0 20px limegreen, 0 0 40px limegreen inset; }
-        100% { box-shadow: 0 0 5px limegreen, 0 0 10px limegreen inset; }
-      }
-    `;
-    document.head.appendChild(estilo);
-    console.log("[Bot] Estilo CSS adicionado com sucesso!");
-
-    document.getElementById('btn_minimizar').onclick = () => {
-      painel.style.display = "none";
-      icone.style.display = "block";
-      console.log("[Bot] Painel minimizado.");
-    };
-
-    icone.onclick = () => {
-      painel.style.display = "block";
-      icone.style.display = "none";
-      console.log("[Bot] Painel restaurado.");
-    };
-
-    document.getElementById('btn_baixar').onclick = downloadCSV;
-
-    document.getElementById('btn_prever').onclick = async () => {
-      if (lastHash && lastHash !== "indefinido" && seedChain.length > chainIndex) {
-        console.log("[Bot] Gerando previsão manual...");
-        const previsao = await gerarPrevisao(seedChain[chainIndex], coresAnteriores);
-        document.getElementById('previsao_texto').innerText = `🔮 Próxima: ${previsao.color.toUpperCase()} (${previsao.number})\n🎯 Confiança: ${previsao.confianca}%\n💰 Apostar: ${previsao.aposta}x`;
-        chainIndex++;
-        console.log("[Bot] Previsão manual gerada:", previsao);
-      } else {
-        console.log("[Bot] Não foi possível gerar previsão manual: lastHash ou seedChain inválido.");
-      }
-    };
-
-    document.getElementById('import_csv').addEventListener('change', e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      console.log("[Bot] Importando arquivo CSV...");
-      const reader = new FileReader();
-      reader.onload = e => processarCSV(e.target.result);
-      reader.readAsText(file);
+    this.bubble.addEventListener('click', () => {
+      this.bubble.style.display = 'none';
+      document.getElementById('blazeMonitorBox').style.display = 'block';
     });
-  } catch (e) {
-    console.error("[Bot] Erro ao criar interface:", e);
+
+    this.results = [];
+    this.processedIds = new Set();
+    this.notifiedIds = new Set();
+    this.correctPredictions = 0;
+    this.totalPredictions = 0;
+
+    this.ws = new BlazeWebSocket();
+    this.ws.doubleTick((d) => this.updateResults(d));
   }
 
-  // Monitoramento da API
-  console.log("[Bot] Iniciando monitoramento da API...");
-  setInterval(async () => {
-    try {
-      const res = await fetch(apiURL);
-      const data = await res.json();
-      const ultimo = data[0];
-      const corNum = Number(ultimo.color);
-      const cor = corNum === 0 ? "BRANCO" : corNum <= 7 ? "VERMELHO" : "PRETO";
-      const numero = ultimo.roll;
-      const hash = ultimo.hash || ultimo.server_seed || "indefinido";
-
-      if (!document.getElementById(`log_${hash}`) && hash !== "indefinido" && seedChain.length > chainIndex) {
-        console.log("[Bot] Nova rodada detectada:", { cor, numero, hash });
-        atualizarLookup(hash, cor);
-        const previsao = await gerarPrevisao(seedChain[chainIndex], coresAnteriores);
-        updatePainel(cor, numero, hash, previsao);
-        historicoCSV += `${new Date().toLocaleString()};${cor};${numero};${hash};${previsao.color.toUpperCase()};${previsao.confianca}%\n`;
-        salvarHistoricoLocal();
-        coresAnteriores.push(cor);
-        if (coresAnteriores.length > 200) coresAnteriores.shift();
-        lastHash = hash;
-        document.getElementById('historico_resultados').innerHTML += `<div id="log_${hash}">${cor} (${numero})</div>`;
-        chainIndex++;
-      }
-    } catch (e) {
-      console.error("[Bot] Erro ao buscar API:", e);
-    }
-  }, 8000);
-
-  // Interceptação avançada
-  const OriginalWebSocket = window.WebSocket;
-  window.WebSocket = function (...args) {
-    const ws = new OriginalWebSocket(...args);
-    const originalAddEventListener = ws.addEventListener;
-    ws.addEventListener = function (type, listener, ...rest) {
-      if (type === 'message') {
-        const customListener = function (event) {
-          console.log("[Interceptação WebSocket] Mensagem recebida:", event.data);
-          listener.call(this, event);
-        };
-        return originalAddEventListener.call(ws, type, customListener, ...rest);
-      }
-      return originalAddEventListener.call(ws, type, listener, ...rest);
+  predictNextColor() {
+    if (!this.results.length) return null;
+    const waiting = this.results.find(r => r.status === 'waiting');
+    const last = this.results.find(r => r.status === 'complete');
+    if (!last) return null;
+    return {
+      color: last.color,
+      colorName: last.color === 0 ? 'Branco' : (last.color === 1 ? 'Vermelho' : 'Preto'),
+      isWaiting: Boolean(waiting)
     };
-    return ws;
-  };
+  }
 
-  const originalFetch = window.fetch;
-  window.fetch = async (...args) => {
-    const response = await originalFetch(...args);
-    const clone = response.clone();
-    clone.text().then(text => {
-      console.log("[Interceptação Fetch] URL:", args[0]);
-      console.log("[Interceptação Fetch] Resposta:", text);
-    });
-    return response;
-  };
+  updatePredictionStats(cur) {
+    if (this.results.length < 2 || cur.status !== 'complete') return;
+    const prev = this.results.filter(r => r.status === 'complete')[1];
+    if (!prev) return;
+    this.totalPredictions++;
+    if (prev.color === cur.color) this.correctPredictions++;
+  }
 
-  const originalOpen = XMLHttpRequest.prototype.open;
-  const originalSend = XMLHttpRequest.prototype.send;
+  updateResults(d) {
+    const id = d.id || `tmp-${Date.now()}-${d.color}-${d.roll}`;
+    const i = this.results.findIndex(r => (r.id || r.tmp) === id);
+    if (i >= 0) this.results[i] = { ...this.results[i], ...d };
+    else {
+      if (this.results.length > 5) this.results.pop();
+      this.results.unshift({ ...d, tmp: id });
+      if (d.status === 'complete') this.updatePredictionStats(d);
+    }
 
-  XMLHttpRequest.prototype.open = function (method, url, ...rest) {
-    this._url = url;
-    return originalOpen.call(this, method, url, ...rest);
-  };
+    const r = this.results[0];
+    const rDiv = document.getElementById('blazeResults');
+    if (rDiv && r) {
+      const stCls = r.status === 'waiting' ? 'result-status-waiting'
+        : r.status === 'rolling' ? 'result-status-rolling'
+          : 'result-status-complete';
+      const stTxt = r.status === 'waiting' ? 'Aguardando'
+        : r.status === 'rolling' ? 'Girando'
+          : 'Completo';
+      rDiv.innerHTML = `
+        <div class="result-number result-color-${r.color}">${r.roll ?? '-'}</div>
+        <div>${r.color === 0 ? 'Branco' : r.color === 1 ? 'Vermelho' : 'Preto'}</div>
+        <div class="result-status ${stCls}">${stTxt}</div>
+      `;
+    }
 
-  XMLHttpRequest.prototype.send = function (...args) {
-    this.addEventListener("load", function () {
-      console.log("[Interceptação XHR] URL:", this._url);
-      console.log("[Interceptação XHR] Resposta:", this.responseText);
-    });
-    return originalSend.apply(this, args);
-  };
-})();
+    const pred = this.predictNextColor();
+    const pDiv = document.getElementById('blazePrediction');
+    if (pDiv && pred) {
+      const acc = this.totalPredictions ? Math.round((this.correctPredictions / this.totalPredictions) * 100) : 0;
+      const waitCls = pred.isWaiting ? 'prediction-waiting' : '';
+      pDiv.innerHTML = `
+        <div class="prediction-title">${pred.isWaiting ? 'PREVISÃO PARA PRÓXIMA RODADA' : 'PRÓXIMA COR PREVISTA'}</div>
+        <div class="prediction-value ${waitCls}">
+          <span class="color-dot color-dot-${pred.color}"></span>${pred.colorName}
+        </div>
+        <div class="prediction-accuracy">Taxa de acerto: ${acc}% (${this.correctPredictions}/${this.totalPredictions})</div>
+      `;
+      this.nextPredColor = pred.color;
+    }
+
+    const needToast = (d.status === 'rolling' || d.status === 'complete') && !this.notifiedIds.has(id);
+    if (needToast && this.nextPredColor !== null) {
+      this.notifiedIds.add(id);
+      const win = d.color === this.nextPredColor;
+      this.showNotification(d, win);
+    }
+
+    // NOVA ANÁLISE (totalmente separada)
+    this.analyzePatterns();
+  }
+
+  showNotification(d, win) {
+    document.querySelectorAll('.blaze-notification').forEach(n => n.remove());
+    const n = document.createElement('div');
+    n.className = `blaze-notification ${win ? 'notification-win' : 'notification-loss'}`;
+    n.textContent = `${win ? 'GANHOU' : 'PERDEU'}! ${(d.color === 0 ? 'BRANCO' : d.color === 1 ? 'VERMELHO' : 'PRETO')} ${d.roll ?? ''}`;
+    document.body.appendChild(n);
+    setTimeout(() => n.classList.add('show'), 50);
+    setTimeout(() => { n.classList.remove('show'); setTimeout(() => n.remove(), 300); }, 3000);
+  }
+
+  // NOVA FUNÇÃO DE PADRÕES
+  analyzePatterns() {
+    const history = this.results.filter(r => r.status === 'complete');
+    if (history.length < 10) return;
+
+    const lastColors = history.slice(0, 10).map(r => r.color);
+    const brancoFreq = lastColors.filter(c => c === 0).length;
+    const vermelhoFreq = lastColors.filter(c => c === 1).length;
+    const pretoFreq = lastColors.filter(c => c === 2).length;
+
+    console.log('[Análise] Últimos 10 resultados:', lastColors);
+    console.log(`[Análise] Frequência - Branco: ${brancoFreq}, Vermelho: ${vermelhoFreq}, Preto: ${pretoFreq}`);
+  }
+}
+
+new BlazeInterface();
