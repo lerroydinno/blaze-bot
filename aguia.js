@@ -223,4 +223,151 @@ class BlazeInterface {
   }
 }
 
-new BlazeInterface();
+// Nova classe para automação de apostas
+class BlazeAutoBet {
+  constructor(blazeInterface) {
+    this.interface = blazeInterface;
+    this.baseBet = 0.10; // Aposta inicial
+    this.currentBet = this.baseBet; // Aposta atual
+    this.martingaleCount = 0; // Contador de Martingale
+    this.maxMartingale = 3; // Máximo de rodadas Martingale
+    this.targetBalance = 1500.00; // Meta de saldo
+    this.lastBetColor = null; // Cor da última aposta
+    this.isBetting = false; // Evita apostas duplicadas
+    this.lastResultId = null; // ID do último resultado processado
+    this.initAutoBet();
+  }
+
+  initAutoBet() {
+    // Sobrescreve updateResults para adicionar lógica de aposta
+    const originalUpdateResults = this.interface.updateResults.bind(this.interface);
+    this.interface.updateResults = (data) => {
+      originalUpdateResults(data); // Chama a função original
+      this.handleBet(data); // Processa a aposta
+    };
+  }
+
+  getBalance() {
+    // Tenta obter o saldo da interface da Blaze (seletor genérico, ajuste conforme necessário)
+    const balanceElement = document.querySelector('.balance-amount, [class*="balance"], [data-testid="balance"]');
+    if (balanceElement) {
+      const balanceText = balanceElement.textContent.replace('R$', '').replace(',', '.').trim();
+      return parseFloat(balanceText) || 0;
+    }
+    console.warn('[AutoBet] Não foi possível obter o saldo.');
+    return 0;
+  }
+
+  placeBet(amount, color) {
+    if (this.isBetting) {
+      console.log('[AutoBet] Aposta já em andamento, aguardando.');
+      return false;
+    }
+    this.isBetting = true;
+
+    // Converte a cor prevista (0: branco, 1: vermelho, 2: preto) para o seletor DOM
+    const colorMap = {
+      1: '[data-testid="bet-red"], [class*="red-button"], [title="Vermelho"]',
+      2: '[data-testid="bet-black"], [class*="black-button"], [title="Preto"]'
+    };
+    const colorSelector = colorMap[color];
+
+    if (!colorSelector) {
+      console.error('[AutoBet] Cor inválida para aposta:', color);
+      this.isBetting = false;
+      return false;
+    }
+
+    try {
+      // Localiza o input de valor da aposta
+      const betInput = document.querySelector('input[type="number"], input[class*="bet-amount"], input[placeholder*="valor"]');
+      if (!betInput) throw new Error('Input de aposta não encontrado');
+
+      // Define o valor da aposta
+      betInput.value = amount.toFixed(2);
+      betInput.dispatchEvent(new Event('input', { bubbles: true }));
+      betInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+      // Seleciona a cor
+      const colorButton = document.querySelector(colorSelector);
+      if (!colorButton) throw new Error(`Botão de cor (${color}) não encontrado`);
+
+      colorButton.click();
+
+      // Confirma a aposta
+      const confirmButton = document.querySelector('button[class*="confirm-bet"], button[data-testid="place-bet"], button[title="Apostar"]');
+      if (!confirmButton) throw new Error('Botão de confirmação não encontrado');
+
+      confirmButton.click();
+
+      console.log(`[AutoBet] Aposta colocada: R$${amount.toFixed(2)} em ${color === 1 ? 'Vermelho' : 'Preto'}`);
+      this.lastBetColor = color;
+      this.isBetting = false;
+      return true;
+    } catch (err) {
+      console.error('[AutoBet] Erro ao colocar aposta:', err);
+      this.isBetting = false;
+      return false;
+    }
+  }
+
+  handleBet(data) {
+    const { id, status, color } = data;
+    const pred = this.interface.predictNextColor();
+
+    // Ignora se não houver previsão ou se a rodada não for relevante
+    if (!pred || !pred.isWaiting || pred.color === 0) { // Ignora branco
+      return;
+    }
+
+    // Processa resultados de rodadas completas
+    if (status === 'complete' && id !== this.lastResultId && this.lastBetColor !== null) {
+      this.lastResultId = id;
+      const won = color === this.lastBetColor;
+
+      if (won) {
+        // Vitória: dobra a aposta
+        this.currentBet *= 2;
+        this.martingaleCount = 0;
+        console.log(`[AutoBet] Vitória! Nova aposta: R$${this.currentBet.toFixed(2)}`);
+      } else {
+        // Perda: aplica Martingale
+        if (this.martingaleCount < this.maxMartingale) {
+          this.martingaleCount++;
+          this.currentBet *= 2;
+          console.log(`[AutoBet] Perda! Martingale #${this.martingaleCount}: R$${this.currentBet.toFixed(2)}`);
+        } else {
+          // Após 3 Martingales, reinicia
+          this.currentBet = this.baseBet;
+          this.martingaleCount = 0;
+          console.log(`[AutoBet] Máximo de Martingale atingido. Reiniciando com R$${this.currentBet.toFixed(2)}`);
+        }
+      }
+
+      // Verifica o saldo
+      const balance = this.getBalance();
+      if (balance < this.currentBet) {
+        console.error('[AutoBet] Saldo insuficiente! Pausando apostas.');
+        return;
+      }
+      if (balance >= this.targetBalance) {
+        console.log('[AutoBet] Meta de R$1500 atingida! Pausando apostas.');
+        return;
+      }
+    }
+
+    // Coloca aposta na fase 'waiting'
+    if (status === 'waiting' && pred.isWaiting && pred.color !== 0) {
+      const balance = this.getBalance();
+      if (balance < this.currentBet) {
+        console.error('[AutoBet] Saldo insuficiente para aposta de R$${this.currentBet.toFixed(2)}');
+        return;
+      }
+      this.placeBet(this.currentBet, pred.color);
+    }
+  }
+}
+
+// Inicializa a interface e o bot de apostas automáticas
+const blazeInterface = new BlazeInterface();
+const autoBet = new BlazeAutoBet(blazeInterface);
